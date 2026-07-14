@@ -16,19 +16,27 @@ import {
 	IAgentDeleteChatRequest,
 	IAgentDeleteSessionRequest,
 	IAgentDescriptor,
+	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentExecutionProfile,
 	IAgentExecutionProfileRequest,
+	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
+	IAgentPrepareSessionConfigurationUpdateRequest,
 	IAgentReleaseChatRequest,
 	IAgentReleaseSessionRequest,
+	IAgentResolvedSessionConfiguration,
+	IAgentResolveSessionConfigurationRequest,
 	IAgentResumeMigrationRequest,
 	IAgentResumeState,
 	IAgentRuntimeRegistration,
+	IAgentSessionConfigurationCompletionRequest,
 	IAgentSessionBacking,
 	IAgentSteerRequest,
 } from './agent.js';
+import type { IAgentConfigurationCompletion } from './configuration.js';
+import type { IAgentCredentialReference } from './credentials.js';
 import {
 	AgentHostAuthorityId,
 	AgentHostClientConnectionId,
@@ -58,6 +66,10 @@ import {
 	IAgentHostOperationOutcomeRequest,
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostReconnectRequest,
+	IAgentHostResolveSessionConfigurationRequest,
+	IAgentHostResolveSessionConfigurationResult,
+	IAgentHostSessionConfigurationCompletionsRequest,
+	IAgentHostSessionConfigurationCompletionsResult,
 	IAgentHostSetSubscriptionsRequest,
 	IAgentHostSetSubscriptionsResult,
 } from './protocol.js';
@@ -92,6 +104,8 @@ export interface IAgentHostConnection extends IDisposable {
 	initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult>;
 	reconnect(request: IAgentHostReconnectRequest): Promise<AgentHostReconnectResult>;
 	setSubscriptions(request: IAgentHostSetSubscriptionsRequest): Promise<IAgentHostSetSubscriptionsResult>;
+	resolveSessionConfiguration(request: IAgentHostResolveSessionConfigurationRequest): Promise<IAgentHostResolveSessionConfigurationResult>;
+	completeSessionConfiguration(request: IAgentHostSessionConfigurationCompletionsRequest): Promise<IAgentHostSessionConfigurationCompletionsResult>;
 	prepareSubmission(request: IAgentHostPrepareSubmissionRequest): Promise<AgentHostPrepareSubmissionResult>;
 	mutate(request: IAgentHostMutationRequest): Promise<AgentHostMutationOutcome>;
 	getOperationOutcome(request: IAgentHostOperationOutcomeRequest): Promise<AgentHostMutationOutcome>;
@@ -202,6 +216,7 @@ export type AgentRuntimeHostOperation =
 	| { readonly kind: 'tool.execute'; readonly call: IAgentToolCall }
 	| { readonly kind: 'tool.cancel'; readonly call: IAgentToolCall }
 	| { readonly kind: 'tool.reconcile'; readonly call: IAgentToolCall }
+	| { readonly kind: 'credential.resolve'; readonly credential: IAgentCredentialReference }
 	| { readonly kind: 'content.open'; readonly request: IAgentContentResourceOpenRequest }
 	| { readonly kind: 'content.readBlob'; readonly request: IAgentContentBlobReadRequest }
 	| { readonly kind: 'content.readTreePage'; readonly request: IAgentContentTreePageRequest }
@@ -234,6 +249,7 @@ export interface IAgentRuntimeHostOperationProgress {
 export type AgentRuntimeHostOperationValue =
 	| AgentToolResult
 	| AgentToolEndpointReconciliation
+	| string
 	| IAgentContentResourceLease
 	| IAgentContentBlobReadResult
 	| IAgentContentTreePage
@@ -287,6 +303,12 @@ export interface IAgentRuntimeConnection extends IDisposable {
 	readonly onDidEmitAction: Event<IAgentRuntimeAction>;
 	readonly onDidRequestHostOperation: Event<IAgentRuntimeHostOperationRequest>;
 	initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult>;
+	resolveSessionConfiguration(request: IAgentRuntimeCall<IAgentResolveSessionConfigurationRequest>): Promise<IAgentRuntimeResponse<IAgentResolvedSessionConfiguration>>;
+	completeSessionConfiguration(request: IAgentRuntimeCall<IAgentSessionConfigurationCompletionRequest>): Promise<IAgentRuntimeResponse<readonly IAgentConfigurationCompletion[]>>;
+	prepareSessionConfigurationUpdate(request: IAgentRuntimeCall<IAgentPrepareSessionConfigurationUpdateRequest>): Promise<IAgentRuntimeResponse<null>>;
+	commitSessionConfigurationUpdate(request: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>): Promise<IAgentRuntimeResponse<null>>;
+	rollbackSessionConfigurationUpdate(request: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>): Promise<IAgentRuntimeResponse<null>>;
+	acknowledgeSessionConfigurationUpdate(request: IAgentRuntimeCall<IAgentAcknowledgeSessionConfigurationUpdateRequest>): Promise<IAgentRuntimeResponse<null>>;
 	resolveExecutionProfile(request: IAgentRuntimeCall<IAgentExecutionProfileRequest>): Promise<IAgentRuntimeResponse<IAgentExecutionProfile>>;
 	migrateResumeState(request: IAgentRuntimeCall<IAgentResumeMigrationRequest>): Promise<IAgentRuntimeResponse<IAgentResumeState>>;
 	createSession(request: IAgentRuntimeCall<IAgentCreateSessionOptions>): Promise<IAgentRuntimeResponse<IAgentSessionBacking>>;

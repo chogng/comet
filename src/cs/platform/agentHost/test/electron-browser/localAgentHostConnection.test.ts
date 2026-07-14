@@ -21,6 +21,13 @@ import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import { AppError } from 'cs/base/parts/sandbox/common/appError';
 import { ClientContentResourceService } from 'cs/platform/agentHost/browser/clientContentResources';
 import type { IAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
+import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCompletions,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
 import { localAgentHostClientToolChannelName } from 'cs/platform/agentHost/common/connectionChannel';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
@@ -32,12 +39,18 @@ import {
 	createAgentHostChannelId,
 	createAgentHostChannelRevision,
 	createAgentHostClientConnectionId,
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationStateRevision,
+	createAgentDescriptorRevision,
+	createAgentExecutionProfileDigest,
+	createAgentExecutionProfileRevision,
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentHostProtocolVersion,
 	createAgentHostSequence,
 	createAgentId,
 	createAgentModelId,
+	createAgentModelDescriptorRevision,
 	createAgentPackageId,
 	createAgentPackageOperationId,
 	createAgentRuntimeRegistrationRevision,
@@ -51,6 +64,7 @@ import {
 	createAgentToolId,
 	createAgentToolRegistrationId,
 	createAgentToolRegistrationRevision,
+	createAgentToolSchemaProfileId,
 	createAgentToolSetRevision,
 	createAgentTurnId,
 } from 'cs/platform/agentHost/common/identities';
@@ -70,8 +84,12 @@ import type {
 	IAgentHostOperationOutcomeRequest,
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostReconnectRequest,
+	IAgentHostResolveSessionConfigurationRequest,
+	IAgentHostResolveSessionConfigurationResult,
 	IAgentHostSetSubscriptionsRequest,
 	IAgentHostSetSubscriptionsResult,
+	IAgentHostSessionConfigurationCompletionsRequest,
+	IAgentHostSessionConfigurationCompletionsResult,
 } from 'cs/platform/agentHost/common/protocol';
 import {
 	COMET_TOOL_SCHEMA_PROFILE,
@@ -97,17 +115,65 @@ import { AgentToolRegistry } from 'cs/platform/agentHost/node/tools/agentToolReg
 
 const authority = createAgentHostAuthorityId('local');
 const connectionId = createAgentHostClientConnectionId('desktop-renderer');
-const protocolVersion = createAgentHostProtocolVersion('1');
+const protocolVersion = createAgentHostProtocolVersion('2');
 const sessionsChannel = createAgentHostChannelId('sessions');
 const sessionType = createAgentSessionTypeId('comet');
 const sessionId = createAgentSessionId('session-1');
 const modelId = createAgentModelId('model-1');
+const agentId = createAgentId('comet');
+const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
 const submissionId = createAgentSubmissionId('submission-1');
 const operationId = createAgentHostOperationId('operation-1');
 const payloadDigest = createAgentHostPayloadDigest(`sha256:${'1'.repeat(64)}`);
 const packageId = createAgentPackageId('optional-agent');
 const packageOperationId = createAgentPackageOperationId('package-operation-1');
 const packagePayloadDigest = createAgentHostPayloadDigest(`sha256:${'3'.repeat(64)}`);
+const configurationProperty = createAgentConfigurationPropertyId('comet.mode');
+const sessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'session',
+	revision: 'comet.session-configuration.v1',
+	properties: [{
+		id: configurationProperty,
+		owner: { kind: 'agent', agent: agentId },
+		scopes: ['session'],
+		value: { type: 'string' },
+		required: false,
+		sessionMutable: true,
+		dynamicCompletion: true,
+		display: { label: 'Mode' },
+		persistence: 'persisted',
+		redaction: 'public',
+	}],
+});
+const resolvedSessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	...sessionConfigurationSchema,
+	revision: 'comet.session-configuration.v2',
+});
+const modelConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'model',
+	revision: 'comet.model-configuration.v1',
+	properties: [],
+});
+const sessionConfigurationCandidate = validateAndFreezeAgentConfigurationCandidate(
+	sessionConfigurationSchema,
+	{ schema: sessionConfigurationSchema.revision, values: {} },
+	'session',
+);
+const modelConfigurationCandidate = validateAndFreezeAgentConfigurationCandidate(
+	modelConfigurationSchema,
+	{ schema: modelConfigurationSchema.revision, values: {} },
+	'model',
+	true,
+);
+const sessionConfigurationState = validateAndFreezeAgentConfigurationState({
+	schema: resolvedSessionConfigurationSchema,
+	revision: createAgentConfigurationStateRevision('comet.session-configuration.state.v1'),
+	values: {},
+});
 
 const initializeRequest: IAgentHostInitializeRequest = Object.freeze({
 	connection: connectionId,
@@ -137,16 +203,47 @@ const setSubscriptionsResult: IAgentHostSetSubscriptionsResult = Object.freeze({
 	missingChannels: Object.freeze([{ channel: sessionsChannel, reason: 'notFound' as const }]),
 });
 
+const resolveConfigurationRequest: IAgentHostResolveSessionConfigurationRequest = Object.freeze({
+	sessionType,
+	candidate: sessionConfigurationCandidate,
+});
+
+const resolveConfigurationResult: IAgentHostResolveSessionConfigurationResult = Object.freeze({
+	agent: agentId,
+	runtimeRegistration,
+	configuration: sessionConfigurationState,
+});
+
+const completionRequest: IAgentHostSessionConfigurationCompletionsRequest = Object.freeze({
+	sessionType,
+	candidate: sessionConfigurationCandidate,
+	resolvedSchema: sessionConfigurationSchema,
+	property: configurationProperty,
+	query: 'pre',
+	limit: 10,
+});
+
+const completionResult: IAgentHostSessionConfigurationCompletionsResult = Object.freeze({
+	agent: agentId,
+	runtimeRegistration,
+	schema: sessionConfigurationSchema.revision,
+	completions: validateAndFreezeAgentConfigurationCompletions(
+		sessionConfigurationSchema,
+		configurationProperty,
+		[{ label: 'Precise', value: 'precise' }],
+	),
+});
+
 const prepareRequest: IAgentHostPrepareSubmissionRequest = Object.freeze({
 	submission: submissionId,
-	target: Object.freeze({ kind: 'draft', sessionType }),
+	target: Object.freeze({ kind: 'draft', sessionType, configuration: sessionConfigurationCandidate }),
 	capture: Object.freeze({
 		message: 'hello',
 		attachments: Object.freeze([]),
 		interactionTargets: Object.freeze([]),
 	}),
 	captureDigest: payloadDigest,
-	executionSelection: Object.freeze({ kind: 'model', model: modelId }),
+	executionSelection: Object.freeze({ kind: 'model', model: modelId, configuration: modelConfigurationCandidate }),
 	toolPolicy: Object.freeze({ kind: 'all' }),
 });
 
@@ -263,7 +360,7 @@ function clientToolCall(id: string): IAgentToolCall {
 	return Object.freeze({
 		id: createAgentToolCallId(id),
 		agent: createAgentId('comet'),
-		registration: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
+		registration: createAgentRuntimeRegistrationRevision('comet.embedded.v2'),
 		session: sessionId,
 		chat: createAgentChatId('tool-chat'),
 		turn: createAgentTurnId('tool-turn'),
@@ -342,6 +439,8 @@ class TestAgentHostConnection extends Disposable implements IAgentHostConnection
 	readonly initializeRequests: IAgentHostInitializeRequest[] = [];
 	readonly reconnectRequests: IAgentHostReconnectRequest[] = [];
 	readonly setSubscriptionsRequests: IAgentHostSetSubscriptionsRequest[] = [];
+	readonly resolveConfigurationRequests: IAgentHostResolveSessionConfigurationRequest[] = [];
+	readonly completionRequests: IAgentHostSessionConfigurationCompletionsRequest[] = [];
 	readonly prepareRequests: IAgentHostPrepareSubmissionRequest[] = [];
 	readonly mutationRequests: IAgentHostMutationRequest[] = [];
 	readonly outcomeRequests: IAgentHostOperationOutcomeRequest[] = [];
@@ -350,6 +449,9 @@ class TestAgentHostConnection extends Disposable implements IAgentHostConnection
 	initializeError: unknown;
 	reconnectResponse: AgentHostReconnectResult = reconnectResult;
 	setSubscriptionsResponse: Promise<IAgentHostSetSubscriptionsResult> = Promise.resolve(setSubscriptionsResult);
+	resolveConfigurationResponse: IAgentHostResolveSessionConfigurationResult = resolveConfigurationResult;
+	completionResponse: IAgentHostSessionConfigurationCompletionsResult = completionResult;
+	prepareResponse: AgentHostPrepareSubmissionResult = prepareResult;
 	disposed = false;
 
 	constructor(readonly connection = connectionId) {
@@ -373,9 +475,23 @@ class TestAgentHostConnection extends Disposable implements IAgentHostConnection
 		return this.setSubscriptionsResponse;
 	}
 
+	resolveSessionConfiguration(
+		request: IAgentHostResolveSessionConfigurationRequest,
+	): Promise<IAgentHostResolveSessionConfigurationResult> {
+		this.resolveConfigurationRequests.push(request);
+		return Promise.resolve(this.resolveConfigurationResponse);
+	}
+
+	completeSessionConfiguration(
+		request: IAgentHostSessionConfigurationCompletionsRequest,
+	): Promise<IAgentHostSessionConfigurationCompletionsResult> {
+		this.completionRequests.push(request);
+		return Promise.resolve(this.completionResponse);
+	}
+
 	prepareSubmission(request: IAgentHostPrepareSubmissionRequest): Promise<AgentHostPrepareSubmissionResult> {
 		this.prepareRequests.push(request);
-		return Promise.resolve(prepareResult);
+		return Promise.resolve(this.prepareResponse);
 	}
 
 	mutate(request: IAgentHostMutationRequest): Promise<AgentHostMutationOutcome> {
@@ -522,6 +638,11 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 			assert.deepEqual(await client.initialize(initializeRequest), initializeResult);
 			assert.deepEqual(await client.reconnect(reconnectRequest), reconnectResult);
 			assert.deepEqual(await client.setSubscriptions(setSubscriptionsRequest), setSubscriptionsResult);
+			assert.deepEqual(
+				await client.resolveSessionConfiguration(resolveConfigurationRequest),
+				resolveConfigurationResult,
+			);
+			assert.deepEqual(await client.completeSessionConfiguration(completionRequest), completionResult);
 			assert.deepEqual(await client.prepareSubmission(prepareRequest), prepareResult);
 			assert.deepEqual(await client.mutate(mutationRequest), unknownOutcome);
 			assert.deepEqual(await client.getOperationOutcome(operationOutcomeRequest), unknownOutcome);
@@ -533,6 +654,8 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 			assert.deepEqual(host.initializeRequests, [initializeRequest]);
 			assert.deepEqual(host.reconnectRequests, [reconnectRequest]);
 			assert.deepEqual(host.setSubscriptionsRequests, [setSubscriptionsRequest]);
+			assert.deepEqual(host.resolveConfigurationRequests, [resolveConfigurationRequest]);
+			assert.deepEqual(host.completionRequests, [completionRequest]);
 			assert.deepEqual(host.prepareRequests, [prepareRequest]);
 			assert.deepEqual(host.mutationRequests, [mutationRequest]);
 			assert.deepEqual(host.outcomeRequests, [operationOutcomeRequest]);
@@ -559,7 +682,7 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 		host.initializeError = new AgentHostError(
 			AgentHostErrorCode.UnsupportedProtocolVersion,
 			'no common protocol',
-			{ offered: ['1'], supported: ['2'] },
+			{ offered: ['2'], supported: ['3'] },
 		);
 		try {
 			await assert.rejects(
@@ -568,7 +691,7 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 					assert.ok(error instanceof AgentHostError);
 					assert.equal(error.code, AgentHostErrorCode.UnsupportedProtocolVersion);
 					assert.equal(error.message, 'no common protocol');
-					assert.deepEqual(error.data, { offered: ['1'], supported: ['2'] });
+					assert.deepEqual(error.data, { offered: ['2'], supported: ['3'] });
 					return true;
 				},
 			);
@@ -658,6 +781,28 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 		const channel = new TestChannel(server, new TestWebContents(1));
 		try {
 			await assert.rejects(
+				channel.call('resolveSessionConfiguration', {
+					...resolveConfigurationRequest,
+					candidate: { ...sessionConfigurationCandidate, unexpected: true },
+				}),
+				error => {
+					assert.ok(error instanceof AppError);
+					assert.equal(error.code, 'AGENT_HOST_ERROR');
+					return true;
+				},
+			);
+			await assert.rejects(
+				channel.call('completeSessionConfiguration', {
+					...completionRequest,
+					resolvedSchema: { ...sessionConfigurationSchema, unexpected: true },
+				}),
+				error => {
+					assert.ok(error instanceof AppError);
+					assert.equal(error.code, 'AGENT_HOST_ERROR');
+					return true;
+				},
+			);
+			await assert.rejects(
 				channel.call('setSubscriptions', { subscriptions: [sessionsChannel], unexpected: true }),
 				error => {
 					assert.ok(error instanceof AppError);
@@ -680,6 +825,46 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 
 			const client = await LocalAgentHostConnection.create(channel, 16);
 			try {
+				const agentDescriptor = createAgentDescriptorRevision('comet.descriptor.v2');
+				const modelDescriptor = createAgentModelDescriptorRevision('comet.model.v1');
+				host.prepareResponse = Object.freeze({
+					kind: 'prepared',
+					submission: Object.freeze({
+						submission: submissionId,
+						payloadDigest,
+						message: 'hello',
+						attachments: Object.freeze([]),
+						interactionTargets: Object.freeze([]),
+						sessionConfiguration: Object.freeze({
+							...sessionConfigurationState,
+							unexpected: true,
+						}),
+						modelConfiguration: modelConfigurationCandidate,
+						credentials: Object.freeze([]),
+						executionProfile: Object.freeze({
+							revision: createAgentExecutionProfileRevision('profile.v1'),
+							digest: createAgentExecutionProfileDigest(`sha256:${'4'.repeat(64)}`),
+							agentDescriptor,
+							modelDescriptor,
+							data: '{}',
+						}),
+						runtimeRegistration,
+						toolSet: Object.freeze({
+							revision: createAgentToolSetRevision('tools.v1'),
+							schemaProfile: createAgentToolSchemaProfileId('comet.tools'),
+							runtimeRegistration,
+							agentDescriptor,
+							modelDescriptor,
+							registrations: Object.freeze([]),
+						}),
+						requestedDeadline: 100,
+						outputConstraints: Object.freeze({}),
+					}),
+				});
+				await assert.rejects(
+					client.prepareSubmission(prepareRequest),
+					error => assertAgentHostError(error, AgentHostErrorCode.InvalidConfigurationValue),
+				);
 				host.setSubscriptionsResponse = Promise.resolve(Object.freeze({
 					...setSubscriptionsResult,
 					missingChannels: Object.freeze([]),

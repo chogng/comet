@@ -11,6 +11,12 @@ import { DeferredPromise } from 'cs/base/common/async';
 import { CancellationError, CancellationToken, CancellationTokenNone } from 'cs/base/common/cancellation';
 import type { IAgentAction, IAgentChatRequest, IAgentExecutionProfile, IAgentModelDescriptor } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostAttachment, IAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
+import {
+	collectAgentConfigurationCredentialReferences,
+	resolveAgentModelConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
 import type {
 	AgentContentTreeEntry,
 	IAgentContentBlobReadRequest,
@@ -37,6 +43,8 @@ import {
 	createAgentContentMaterializationId,
 	createAgentContentReferenceId,
 	createAgentContentVersion,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentInteractionTargetId,
@@ -81,6 +89,15 @@ import {
 	CometAgent,
 } from 'cs/platform/agentHost/node/agents/comet/cometAgent';
 import { prepareCometModelAttachments } from 'cs/platform/agentHost/node/agents/comet/cometAttachments';
+import {
+	COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+	COMET_MODEL_CREDENTIAL_CONFIGURATION_PROPERTY,
+	COMET_MODEL_ENDPOINT_CONFIGURATION_PROPERTY,
+	COMET_MODEL_PROVIDER_MODEL_CONFIGURATION_PROPERTY,
+	COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+	COMET_SESSION_CONFIGURATION_SCHEMA,
+	createCometModelConfigurationSchema,
+} from 'cs/platform/agentHost/node/agents/comet/cometConfiguration';
 import { CometModelError } from 'cs/platform/agentHost/node/agents/comet/cometModel';
 import { COMET_AGENT_RESUME_SCHEMA } from 'cs/platform/agentHost/node/agents/comet/cometResume';
 import {
@@ -105,6 +122,40 @@ const chatId = createAgentChatId('chat-1');
 const turnId = createAgentTurnId('turn-1');
 const toolId = createAgentToolId('comet.read-target');
 const toolCallId = createAgentToolCallId('tool-call-1');
+const hostDefaultsConfiguration = validateAndFreezeAgentConfigurationState({
+	schema: COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+	revision: createAgentConfigurationStateRevision('comet.test.host-defaults.state.v1'),
+	values: {},
+});
+const sessionConfiguration = validateAndFreezeAgentConfigurationState({
+	schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+	revision: createAgentConfigurationStateRevision('comet.test.session.state.v1'),
+	values: {},
+});
+const sessionConfigurationCandidate = validateAndFreezeAgentConfigurationCandidate(
+	COMET_SESSION_CONFIGURATION_SCHEMA,
+	{ schema: COMET_SESSION_CONFIGURATION_SCHEMA.revision, values: {} },
+	'session',
+	true,
+);
+const modelEndpoint = 'https://models.example.test/v1/responses';
+const providerModel = 'test-provider-model';
+const credentialReference = 'test-provider';
+const modelConfigurationSchema = createCometModelConfigurationSchema({
+	revision: createAgentConfigurationSchemaRevision('comet.test.model.v1'),
+	endpoint: modelEndpoint,
+	providerModel,
+	credentialReference,
+});
+const modelConfiguration = resolveAgentModelConfigurationCandidate(
+	modelConfigurationSchema,
+	{ schema: modelConfigurationSchema.revision, values: {} },
+);
+const modelCredentials = Object.freeze(collectAgentConfigurationCredentialReferences(
+	modelConfigurationSchema,
+	modelConfiguration.values,
+	'model',
+).map(binding => binding.credential));
 
 function createMigrationCompanion(): IAgentHostLegacyCatalogMigrationCompanion {
 	let completed: AgentHostPayloadDigest | undefined;
@@ -128,6 +179,7 @@ const modelDescriptor: IAgentModelDescriptor = {
 	revision: modelRevision,
 	displayName: 'Test model',
 	enabled: true,
+	configurationSchema: modelConfigurationSchema,
 	toolSchemaProfiles: [schemaProfile],
 	attachments: {
 		carriers: ['inline', 'reference'],
@@ -292,7 +344,7 @@ function createFixture(
 	};
 	const agent = new CometAgent({
 		runtimeRegistration,
-		authenticationRequired: false,
+		requiresAgentAuthentication: false,
 		models: [model],
 		executionProfileResolver,
 		toolExecution,
@@ -312,13 +364,14 @@ async function resolveProfile(
 	submission = createAgentSubmissionId('submission-1'),
 	model = modelId,
 ) {
-	const selection = { kind: 'user' as const, value: { model } };
+	const selection = { kind: 'user' as const, value: { model }, configuration: modelConfiguration };
 	const selectionDigest = await computeAgentHostPayloadDigest(selection);
 	return agent.executionProfiles.resolve({
 		submission,
 		selection,
 		selectionDigest,
 		runtimeRegistration,
+		sessionConfiguration,
 	});
 }
 
@@ -327,6 +380,7 @@ async function createSessionAndChat(agent: CometAgent) {
 		operation: createAgentHostOperationId('create-session-1'),
 		payloadDigest: payloadDigest('1'),
 		session: sessionId,
+		configuration: sessionConfiguration,
 		workspace: {
 			resource: 'workspace://test',
 			label: 'Test workspace',
@@ -493,6 +547,8 @@ async function createTurnRequest(
 		interactionTargets: options.interactionTargets ?? [],
 		binding: {
 			profile: options.profile ?? await resolveProfile(agent, submission),
+			modelConfiguration,
+			credentials: modelCredentials,
 			runtimeRegistration,
 			toolSet: options.toolSet ?? createToolSet(),
 			deadline: 10_000,
@@ -510,7 +566,17 @@ suite('CometAgent', { concurrency: false }, () => {
 		assert.equal(fixture.agent.registration.packageId, COMET_AGENT_PACKAGE_ID);
 		assert.equal(fixture.agent.registration.agentId, COMET_AGENT_ID);
 		assert.equal(descriptor.revision, COMET_AGENT_DESCRIPTOR_REVISION);
+		assert.equal(descriptor.revision, 'comet.descriptor.v2');
 		assert.equal(descriptor.capabilities.revision, COMET_AGENT_CAPABILITY_REVISION);
+		assert.equal(fixture.agent.registration.hostDefaultsSchema, COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA);
+		assert.equal(
+			fixture.agent.registration.initialSessionConfigurationSchema,
+			COMET_SESSION_CONFIGURATION_SCHEMA.revision,
+		);
+		assert.ok(fixture.agent.registration.supportedSessionConfigurationSchemas.includes(
+			fixture.agent.registration.initialSessionConfigurationSchema,
+		));
+		assert.deepEqual(descriptor.models[0].configurationSchema, modelConfigurationSchema);
 		assert.deepEqual(fixture.agent.registration.supportedResumeSchemas, [COMET_AGENT_RESUME_SCHEMA]);
 
 		const submission = createAgentSubmissionId('profile-submission');
@@ -526,13 +592,18 @@ suite('CometAgent', { concurrency: false }, () => {
 			version: 1,
 		});
 
-		const otherSelection = { kind: 'user' as const, value: { model: 'another-model' } };
+		const otherSelection = {
+			kind: 'user' as const,
+			value: { model: 'another-model' },
+			configuration: modelConfiguration,
+		};
 		await assert.rejects(
 			fixture.agent.executionProfiles.resolve({
 				submission,
 				selection: otherSelection,
 				selectionDigest: await computeAgentHostPayloadDigest(otherSelection),
 				runtimeRegistration,
+				sessionConfiguration,
 			}),
 			error => assertErrorCode(error, AgentHostErrorCode.OperationDigestConflict),
 		);
@@ -549,70 +620,451 @@ suite('CometAgent', { concurrency: false }, () => {
 		);
 	});
 
-	test('atomically replaces the active model catalog while accepted profiles retain their exact runtime', async t => {
+	test('resolves the exact Comet Session configuration surface', async t => {
 		const fixture = createFixture(t);
-		await createSessionAndChat(fixture.agent);
-		const oldSubmission = createAgentSubmissionId('old-catalog-submission');
-		const oldRequest = await createTurnRequest(fixture.agent, {
-			operation: 'old-catalog-turn',
-			digestCharacter: 'c',
-			turn: createAgentTurnId('old-catalog-turn'),
-			submission: oldSubmission,
+		const resolved = await fixture.agent.configuration.resolveSession({
+			runtimeRegistration,
+			hostDefaults: hostDefaultsConfiguration,
+			candidate: sessionConfigurationCandidate,
 		});
-		const oldProfile = oldRequest.binding.profile;
+		assert.equal(resolved.schema, COMET_SESSION_CONFIGURATION_SCHEMA);
+		assert.deepEqual(resolved.values, {});
+		assert.ok(Object.isFrozen(resolved));
+		assert.ok(Object.isFrozen(resolved.values));
 
-		const nextModelId = createAgentModelId('next-comet-model');
-		const nextModelRevision = createAgentModelDescriptorRevision('next-comet-model.v1');
-		const nextDescriptor: IAgentModelDescriptor = Object.freeze({
-			...modelDescriptor,
-			id: nextModelId,
-			revision: nextModelRevision,
-			displayName: 'Next test model',
-		});
-		const nextModel = new TestModelRuntime(
-			async () => ({ stopReason: 'completed', parts: [{ kind: 'text', text: 'next' }] }),
-			'test.next-model-runtime',
-			nextDescriptor,
+		await assert.rejects(
+			fixture.agent.configuration.resolveSession({
+				runtimeRegistration,
+				hostDefaults: hostDefaultsConfiguration,
+				candidate: {
+					schema: createAgentConfigurationSchemaRevision('comet.session.stale'),
+					values: {},
+				},
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.StaleConfigurationSchema),
 		);
-		const nextResolver: ICometExecutionProfileResolver = {
-			async resolve() {
-				return {
-					modelRuntime: nextModel.id,
-					settings: { reasoning: 'next' },
-					maximumSteps: 3,
-				};
-			},
-		};
-		const update = fixture.agent.prepareConfiguration({
-			authenticationRequired: true,
-			models: Object.freeze([nextModel]),
-			executionProfileResolver: nextResolver,
+	});
+
+	test('retains exact configuration state across Session create and materialize', async t => {
+		const fixture = createFixture(t);
+		const createdConfiguration = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.created'),
+			values: {},
 		});
-		assert.deepEqual(fixture.agent.descriptor.get().models.map(model => model.id), [modelId]);
-		assert.deepEqual(update.descriptor.models.map(model => model.id), [nextModelId]);
-		update.commit();
-		assert.equal(fixture.agent.descriptor.get(), update.descriptor);
-		assert.equal(fixture.agent.descriptor.get().authenticationRequired, true);
+		const createProbe = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.create-probe'),
+			values: {},
+		});
+		const backing = await fixture.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-create-session'),
+			payloadDigest: payloadDigest('0'),
+			session: sessionId,
+			configuration: createdConfiguration,
+		});
+		const createProbeOperation = createAgentHostOperationId('configuration-create-probe');
+		const createProbeDigest = payloadDigest('1');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation: createProbeOperation,
+			payloadDigest: createProbeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			current: createdConfiguration,
+			candidate: createProbe,
+		});
+		await fixture.agent.configuration.rollbackSessionUpdate({
+			operation: createProbeOperation,
+			payloadDigest: createProbeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: createProbe.revision,
+		});
 
-		await fixture.agent.chats.send(oldRequest);
-		assert.equal(fixture.model.requests.length, 1);
-		assert.equal(nextModel.requests.length, 0);
-		assert.equal(oldRequest.binding.profile.modelDescriptor, modelRevision);
-		assert.deepEqual(await resolveProfile(fixture.agent, oldSubmission, modelId), oldProfile);
+		await fixture.agent.sessions.release({
+			operation: createAgentHostOperationId('configuration-release-session'),
+			payloadDigest: payloadDigest('2'),
+			session: sessionId,
+		});
+		const materializedConfiguration = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.materialized'),
+			values: {},
+		});
+		assert.ok(backing.resume);
+		await fixture.agent.sessions.materialize({
+			operation: createAgentHostOperationId('configuration-materialize-session'),
+			payloadDigest: payloadDigest('3'),
+			session: sessionId,
+			configuration: materializedConfiguration,
+			resume: backing.resume,
+		});
+		const materializeProbe = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.materialize-probe'),
+			values: {},
+		});
+		const materializeProbeOperation = createAgentHostOperationId('configuration-materialize-probe');
+		const materializeProbeDigest = payloadDigest('4');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation: materializeProbeOperation,
+			payloadDigest: materializeProbeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			current: materializedConfiguration,
+			candidate: materializeProbe,
+		});
+		await fixture.agent.configuration.rollbackSessionUpdate({
+			operation: materializeProbeOperation,
+			payloadDigest: materializeProbeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: materializeProbe.revision,
+		});
+	});
 
-		const nextSubmission = createAgentSubmissionId('next-catalog-submission');
-		const nextProfile = await resolveProfile(fixture.agent, nextSubmission, nextModelId);
-		assert.equal(nextProfile.modelDescriptor, nextModelRevision);
-		await fixture.agent.chats.send(await createTurnRequest(fixture.agent, {
-			operation: 'next-catalog-turn',
-			digestCharacter: 'd',
-			turn: createAgentTurnId('next-catalog-turn'),
-			submission: nextSubmission,
-			profile: nextProfile,
-			toolSet: createToolSet([], nextModelRevision),
-		}));
+	test('commits one prepared Session configuration and rejects rollback afterward', async t => {
+		const fixture = createFixture(t);
+		const current = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.commit-current'),
+			values: {},
+		});
+		const candidate = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.commit-candidate'),
+			values: {},
+		});
+		await fixture.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-commit-create'),
+			payloadDigest: payloadDigest('5'),
+			session: sessionId,
+			configuration: current,
+		});
+		const operation = createAgentHostOperationId('configuration-commit');
+		const digest = payloadDigest('6');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation,
+			payloadDigest: digest,
+			runtimeRegistration,
+			session: sessionId,
+			current,
+			candidate,
+		});
+		const finalize = {
+			operation,
+			payloadDigest: digest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: candidate.revision,
+		};
+		await fixture.agent.configuration.commitSessionUpdate(finalize);
+		await fixture.agent.configuration.commitSessionUpdate(finalize);
+		await assert.rejects(
+			fixture.agent.configuration.rollbackSessionUpdate(finalize),
+			error => assertErrorCode(error, AgentHostErrorCode.OperationNotPending),
+		);
+		await fixture.agent.configuration.acknowledgeSessionUpdate({ ...finalize, decision: 'commit' });
+
+		const probe = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.commit-probe'),
+			values: {},
+		});
+		const probeOperation = createAgentHostOperationId('configuration-commit-probe');
+		const probeDigest = payloadDigest('7');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation: probeOperation,
+			payloadDigest: probeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			current: candidate,
+			candidate: probe,
+		});
+		const probeFinalization = {
+			operation: probeOperation,
+			payloadDigest: probeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: probe.revision,
+		};
+		await fixture.agent.configuration.rollbackSessionUpdate(probeFinalization);
+		await fixture.agent.configuration.acknowledgeSessionUpdate({ ...probeFinalization, decision: 'rollback' });
+	});
+
+	test('rolls one prepared Session configuration back and rejects commit afterward', async t => {
+		const fixture = createFixture(t);
+		const current = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.rollback-current'),
+			values: {},
+		});
+		const candidate = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.rollback-candidate'),
+			values: {},
+		});
+		await fixture.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-rollback-create'),
+			payloadDigest: payloadDigest('8'),
+			session: sessionId,
+			configuration: current,
+		});
+		const operation = createAgentHostOperationId('configuration-rollback');
+		const digest = payloadDigest('9');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation,
+			payloadDigest: digest,
+			runtimeRegistration,
+			session: sessionId,
+			current,
+			candidate,
+		});
+		const finalize = {
+			operation,
+			payloadDigest: digest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: candidate.revision,
+		};
+		await fixture.agent.configuration.rollbackSessionUpdate(finalize);
+		await fixture.agent.configuration.rollbackSessionUpdate(finalize);
+		await assert.rejects(
+			fixture.agent.configuration.commitSessionUpdate(finalize),
+			error => assertErrorCode(error, AgentHostErrorCode.OperationNotPending),
+		);
+		await fixture.agent.configuration.acknowledgeSessionUpdate({ ...finalize, decision: 'rollback' });
+
+		const probe = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.rollback-probe'),
+			values: {},
+		});
+		const probeOperation = createAgentHostOperationId('configuration-rollback-probe');
+		const probeDigest = payloadDigest('a');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation: probeOperation,
+			payloadDigest: probeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			current,
+			candidate: probe,
+		});
+		const probeFinalization = {
+			operation: probeOperation,
+			payloadDigest: probeDigest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: probe.revision,
+		};
+		await fixture.agent.configuration.rollbackSessionUpdate(probeFinalization);
+		await fixture.agent.configuration.acknowledgeSessionUpdate({ ...probeFinalization, decision: 'rollback' });
+	});
+
+	test('acknowledges an unapplied rollback intent and rejects unknown commit or mismatched finalization', async t => {
+		const fixture = createFixture(t);
+		await assert.rejects(
+			fixture.agent.configuration.commitSessionUpdate({
+				operation: createAgentHostOperationId('configuration-finalize-unknown'),
+				payloadDigest: payloadDigest('b'),
+				runtimeRegistration,
+				session: sessionId,
+				configuration: sessionConfiguration.revision,
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.OperationNotPending),
+		);
+
+		await fixture.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-finalize-create'),
+			payloadDigest: payloadDigest('c'),
+			session: sessionId,
+			configuration: sessionConfiguration,
+		});
+		const candidate = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.finalize-candidate'),
+			values: {},
+		});
+		await fixture.agent.configuration.rollbackSessionUpdate({
+			operation: createAgentHostOperationId('configuration-finalize-unapplied-rollback'),
+			payloadDigest: payloadDigest('e'),
+			runtimeRegistration,
+			session: sessionId,
+			configuration: candidate.revision,
+		});
+		const operation = createAgentHostOperationId('configuration-finalize-mismatch');
+		const digest = payloadDigest('d');
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation,
+			payloadDigest: digest,
+			runtimeRegistration,
+			session: sessionId,
+			current: sessionConfiguration,
+			candidate,
+		});
+		await assert.rejects(
+			fixture.agent.configuration.commitSessionUpdate({
+				operation,
+				payloadDigest: digest,
+				runtimeRegistration,
+				session: sessionId,
+				configuration: createAgentConfigurationStateRevision('comet.test.session.wrong-finalize'),
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.OperationNotPending),
+		);
+	});
+
+	test('idempotently acknowledges an already-cleaned configuration terminal record after cold materialization', async t => {
+		const source = createFixture(t);
+		const backing = await source.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-cold-acknowledgement-create'),
+			payloadDigest: payloadDigest('a'),
+			session: sessionId,
+			configuration: sessionConfiguration,
+		});
+		assert.ok(backing.resume);
+		const restored = createFixture(t);
+		await restored.agent.sessions.materialize({
+			operation: createAgentHostOperationId('configuration-cold-acknowledgement-materialize'),
+			payloadDigest: payloadDigest('b'),
+			session: sessionId,
+			configuration: sessionConfiguration,
+			resume: backing.resume,
+		});
+		await restored.agent.configuration.acknowledgeSessionUpdate({
+			operation: createAgentHostOperationId('configuration-cold-acknowledgement'),
+			payloadDigest: payloadDigest('c'),
+			runtimeRegistration,
+			session: sessionId,
+			configuration: createAgentConfigurationStateRevision('comet.test.session.cold-acknowledgement'),
+			decision: 'commit',
+		});
+		const internal = restored.agent as unknown as {
+			readonly sessionConfigurationTransactions: ReadonlyMap<unknown, unknown>;
+		};
+		assert.equal(internal.sessionConfigurationTransactions.size, 0);
+	});
+
+	test('pins an unacknowledged Session configuration through retention and reconciles a lost acknowledgement', async t => {
+		const fixture = createFixture(t);
+		const maximumRetainedOperations = 16_384;
+		const churnSession = createAgentSessionId('session-configuration-retention-churn');
+		await fixture.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-retention-create'),
+			payloadDigest: payloadDigest('f'),
+			session: sessionId,
+			configuration: sessionConfiguration,
+		});
+		await fixture.agent.sessions.create({
+			operation: createAgentHostOperationId('configuration-retention-churn-create'),
+			payloadDigest: payloadDigest('0'),
+			session: churnSession,
+			configuration: sessionConfiguration,
+		});
+		const retainedOperation = createAgentHostOperationId('configuration-retention-unacknowledged');
+		const retainedDigest = payloadDigest('e');
+		const retainedCandidate = validateAndFreezeAgentConfigurationState({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			revision: createAgentConfigurationStateRevision('comet.test.session.retention.unacknowledged'),
+			values: {},
+		});
+		await fixture.agent.configuration.prepareSessionUpdate({
+			operation: retainedOperation,
+			payloadDigest: retainedDigest,
+			runtimeRegistration,
+			session: sessionId,
+			current: sessionConfiguration,
+			candidate: retainedCandidate,
+		});
+		const retainedFinalization = Object.freeze({
+			operation: retainedOperation,
+			payloadDigest: retainedDigest,
+			runtimeRegistration,
+			session: sessionId,
+			configuration: retainedCandidate.revision,
+		});
+		await fixture.agent.configuration.commitSessionUpdate(retainedFinalization);
+
+		let current = sessionConfiguration;
+		const churn = async (phase: string): Promise<void> => {
+			for (let index = 0; index <= maximumRetainedOperations; index += 1) {
+				const operation = createAgentHostOperationId(`configuration-retention-${phase}-${index}`);
+				const digest = createAgentHostPayloadDigest(`sha256:${index.toString(16).padStart(64, '0')}`);
+				const candidate = validateAndFreezeAgentConfigurationState({
+					schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+					revision: createAgentConfigurationStateRevision(`comet.test.session.retention.${phase}.${index}`),
+					values: {},
+				});
+				await fixture.agent.configuration.prepareSessionUpdate({
+					operation,
+					payloadDigest: digest,
+					runtimeRegistration,
+					session: churnSession,
+					current,
+					candidate,
+				});
+				const finalization = Object.freeze({
+					operation,
+					payloadDigest: digest,
+					runtimeRegistration,
+					session: churnSession,
+					configuration: candidate.revision,
+				});
+				await fixture.agent.configuration.commitSessionUpdate(finalization);
+				await fixture.agent.configuration.acknowledgeSessionUpdate({
+					...finalization,
+					decision: 'commit',
+				});
+				current = candidate;
+			}
+		};
+		await churn('before-acknowledgement');
+
+		const internal = fixture.agent as unknown as {
+			readonly operations: { readonly records: ReadonlyMap<unknown, unknown> };
+			readonly sessionConfigurationTransactions: ReadonlyMap<string, Readonly<Record<string, unknown>>>;
+		};
+		assert.ok(internal.operations.records.size <= maximumRetainedOperations);
+		assert.equal(internal.sessionConfigurationTransactions.size, 1);
+		assert.deepEqual(
+			Object.keys(internal.sessionConfigurationTransactions.get(retainedOperation) ?? {}).sort(),
+			['configuration', 'decision', 'digest', 'session', 'status'],
+		);
+		await fixture.agent.configuration.commitSessionUpdate(retainedFinalization);
+		const acknowledgement = Object.freeze({ ...retainedFinalization, decision: 'commit' as const });
+		await fixture.agent.configuration.acknowledgeSessionUpdate(acknowledgement);
+		assert.equal(internal.sessionConfigurationTransactions.size, 0);
+
+		await churn('after-acknowledgement');
+		await fixture.agent.configuration.acknowledgeSessionUpdate(acknowledgement);
+		assert.ok(internal.operations.records.size <= maximumRetainedOperations);
+	});
+
+	test('binds the exact resolved model configuration and credential references to each model step', async t => {
+		const fixture = createFixture(t, async request => {
+			assert.deepEqual(request.modelConfiguration, {
+				schema: modelConfigurationSchema.revision,
+				values: {
+					[COMET_MODEL_ENDPOINT_CONFIGURATION_PROPERTY]: modelEndpoint,
+					[COMET_MODEL_PROVIDER_MODEL_CONFIGURATION_PROPERTY]: providerModel,
+					[COMET_MODEL_CREDENTIAL_CONFIGURATION_PROPERTY]: {
+						provider: COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+						scope: 'llm',
+						reference: credentialReference,
+					},
+				},
+			});
+			assert.deepEqual(request.credentials, [{
+				provider: COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+				scope: 'llm',
+				reference: credentialReference,
+			}]);
+			assert.equal(request.runtimeRegistration, runtimeRegistration);
+			return { stopReason: 'completed', parts: [{ kind: 'text', text: 'configured' }] };
+		});
+		await createSessionAndChat(fixture.agent);
+		await fixture.agent.chats.send(await createTurnRequest(fixture.agent));
 		assert.equal(fixture.model.requests.length, 1);
-		assert.equal(nextModel.requests.length, 1);
 	});
 
 	test('keeps Session and equal-status Chat backing exact across release, materialize, fork, and delete', async t => {
@@ -622,6 +1074,7 @@ suite('CometAgent', { concurrency: false }, () => {
 			operation: createAgentHostOperationId('create-session-1'),
 			payloadDigest: payloadDigest('1'),
 			session: sessionId,
+			configuration: sessionConfiguration,
 		});
 		assert.deepEqual(repeatedSession, backing.sessionBacking);
 		await assert.rejects(
@@ -629,6 +1082,7 @@ suite('CometAgent', { concurrency: false }, () => {
 				operation: createAgentHostOperationId('create-session-1'),
 				payloadDigest: payloadDigest('f'),
 				session: sessionId,
+				configuration: sessionConfiguration,
 			}),
 			error => assertErrorCode(error, AgentHostErrorCode.OperationDigestConflict),
 		);
@@ -703,6 +1157,7 @@ suite('CometAgent', { concurrency: false }, () => {
 			operation: createAgentHostOperationId('materialize-session-1'),
 			payloadDigest: payloadDigest('a'),
 			session: sessionId,
+			configuration: sessionConfiguration,
 			resume: backing.sessionBacking.resume,
 		});
 		await fixture.agent.sessions.delete({
@@ -781,6 +1236,7 @@ suite('CometAgent', { concurrency: false }, () => {
 			operation: createAgentHostOperationId('cold-materialize-session'),
 			payloadDigest: payloadDigest('d'),
 			session: sessionId,
+			configuration: sessionConfiguration,
 			resume: backing.sessionBacking.resume,
 		});
 		const malformedResumeData = structuredClone(resumeData);
@@ -889,9 +1345,13 @@ suite('CometAgent', { concurrency: false }, () => {
 			agentId: COMET_AGENT_ID,
 			sessionType: createAgentSessionTypeId('comet.session'),
 			resumeSchema: COMET_AGENT_RESUME_SCHEMA,
+			agentDefaults: [hostDefaultsConfiguration],
+			sessionConfiguration,
 		});
 		const record = catalog?.sessions[0];
+		assert.deepEqual(catalog?.agentDefaults, [hostDefaultsConfiguration]);
 		assert.ok(record?.resume);
+		assert.deepEqual(record.state.configuration, sessionConfiguration);
 		assert.ok(record.chats[0].resume);
 		assert.equal(record.chats[0].state.turns[0].user.attachments[0].id, createAgentAttachmentId('legacy-image'));
 
@@ -911,6 +1371,7 @@ suite('CometAgent', { concurrency: false }, () => {
 			operation: createAgentHostOperationId('legacy-materialize-session'),
 			payloadDigest: payloadDigest('c'),
 			session: legacySession,
+			configuration: sessionConfiguration,
 			resume: record.resume,
 		});
 		await restored.agent.chats.materialize({
@@ -940,6 +1401,7 @@ suite('CometAgent', { concurrency: false }, () => {
 			operation: createOperation,
 			payloadDigest: createDigest,
 			session: sessionId,
+			configuration: sessionConfiguration,
 		});
 		const firstChat = await fixture.agent.chats.create({
 			operation: createOperation,

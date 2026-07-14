@@ -15,7 +15,7 @@ import './observable.test';
 import './resources.test';
 import './uri.test';
 import 'cs/platform/action/tests/action.test';
-import 'cs/platform/actions/tests/actions.test';
+import 'cs/platform/actions/test/actions.test';
 import 'cs/platform/commands/tests/commands.test';
 import 'cs/platform/contextkey/test/contextkey.test';
 import 'cs/platform/instantiation/tests/instantiation.test';

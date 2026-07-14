@@ -245,7 +245,7 @@ Configuration has three explicit scopes:
 |---|---|---|
 | Host Agent defaults | Agent Host root state for one Host authority, authenticated user scope, and Agent ID | persisted independently from Sessions and used when resolving new Session configuration |
 | Session configuration | Agent Host Session state | resolved and committed with the Session, then changed only through an addressed configuration operation |
-| Model execution settings | normalized execution selection and the addressed model descriptor | resolved into one immutable Agent execution profile for one submission |
+| Model execution settings | normalized execution selection and the addressed model descriptor | resolved into one immutable Turn binding alongside the Agent execution profile |
 
 Host Agent defaults and Session configuration use the common Agent
 configuration schema. A present candidate Session value takes precedence over
@@ -257,11 +257,13 @@ Session implicitly.
 
 Model execution settings are not another mutable Session configuration bag.
 Each model descriptor publishes the exact configuration schema revision that
-its selection accepts. Workbench Chat captures the selected values as part of
-the normalized execution selection, and the addressed Agent combines that
-selection with the committed Session configuration while resolving the
-immutable execution profile. The accepted profile remains unchanged when a
-Host default, Session value, model descriptor, or later selection changes.
+its selection accepts. Workbench Chat captures a candidate as part of the
+normalized execution selection. Agent Host validates it against that exact
+descriptor, materializes every declared default, and passes the complete model
+configuration with the committed Session configuration while resolving the
+immutable execution profile. The Host binds the complete model configuration
+separately from the opaque profile. Both remain unchanged when a Host default,
+Session value, model descriptor, or later selection changes.
 
 Host defaults are namespaced by Agent ID. Session property identity includes
 its platform or Agent owner and stable property ID. Platform-owned property
@@ -282,12 +284,19 @@ canonical protocol values. A schema identifies:
 - which properties are valid as Host defaults or Session values;
 - which Session properties may change after Session creation;
 - which properties support bounded dynamic completions;
+- exact provider, scope, and reference sets for credential-reference values;
 - display metadata and explicit persistence or redaction policy.
 
 An activated Agent registration publishes its Host-default configuration
-schema revision. `IAgent.configuration` resolves the dynamic Session schema and
-values for an exact runtime registration, workspace, model descriptor,
-Host-default revision, and candidate Session values. It also provides bounded
+schema, its initial Session configuration schema revision, and the bounded set
+of Session schema revisions it may resolve. The initial revision lets a client
+form the first exact candidate without guessing from the supported set.
+`IAgent.configuration` resolves the dynamic Session schema and values for an
+exact runtime registration, workspace, Host-default revision, and candidate
+Session values. The resolved revision may change only to another revision
+declared by that registration. Model configuration is resolved separately
+against the exact model descriptor selected for a submission. The Session
+configuration surface also provides bounded
 completions only for properties whose schema declares dynamic completion. A
 completion is presentation data, not acceptance authority; the selected value
 still passes the exact schema before use.
@@ -307,11 +316,14 @@ provider option bags, and filesystem layout never cross the Agent Runtime
 Port.
 
 Configuration values contain no raw credential material. A schema may accept
-a typed credential reference when the Agent authentication contract declares
-that reference kind, but only the addressed runtime resolves it through the
-Agent authentication boundary. Credentials never enter configuration
-snapshots, actions, completion results, execution profiles, package manifests,
-logs, or diagnostics.
+a typed credential reference when the package and Agent declare that reference
+kind. Preparation collects the exact references declared by the committed
+Session and resolved model configuration. Agent Host binds that set to the
+accepted package, Agent, runtime registration, Session, Chat, and Turn and
+checks the installed package's secret grants before execution. Only the
+addressed active Turn may resolve one of those references. Credentials never
+enter configuration snapshots, actions, completion results, execution
+profiles, package manifests, logs, or diagnostics.
 
 ### Mutation and protocol state
 
@@ -323,13 +335,34 @@ partial patch.
 
 A property that is not declared Session-mutable is fixed after Session
 creation. Updating a mutable property addresses the exact Session and Agent
-runtime registration. For materialized backing, the runtime applies the full
-validated candidate under the same operation identity before Host state
-commits; runtime rejection leaves the prior Host state authoritative. Released
-backing receives the committed configuration during materialization. An
-uncertain runtime result is reconciled under the same operation identity before
-another mutation, and reconnection never repeats an applied SDK change under a
-new identity.
+runtime registration. For materialized backing, Agent Host first persists an
+operation-owned rollback intent and only then asks the runtime to prepare the
+full validated candidate. The runtime retains the prior configuration until
+Agent Host records the transaction decision. Agent Host atomically replaces
+the intent with the candidate and commit decision, or retains the rollback
+decision when candidate persistence fails, before requesting runtime
+finalization. Rollback finalization treats an intent whose preparation never
+applied as an idempotent no-op. Runtime rejection leaves the prior Host state
+authoritative.
+
+A lost commit or rollback response is reconciled from the persisted
+decision under the same operation identity; neither side invents a replacement
+operation. On cold Host and runtime restoration, the Host first materializes
+the backing from its authoritative committed configuration and then completes
+the retained decision and outcome without requiring a transaction record from
+the previous runtime process. After runtime finalization, Agent Host persists
+the completed outcome before sending an exact cleanup acknowledgement to the
+runtime. The runtime keeps the terminal transaction pinned until that cleanup
+call and treats an already absent terminal record as an idempotent cleanup.
+Only after the cleanup response does Agent Host persist the operation as
+acknowledged and eligible for eviction.
+
+Pending decisions are never evicted and block package mutation for their exact
+Agent registration. Terminal decisions retain their logical connection owner
+and are kept in a bounded reconciliation ledger; once an oldest acknowledged
+outcome leaves that ledger, a later reconciliation is explicitly unknown.
+Released backing requires no runtime preparation and receives the committed
+configuration during materialization.
 
 Host root snapshots contain Agent-default schemas, revisions, and values.
 Session snapshots contain the exact resolved Session schema revision and
@@ -357,6 +390,8 @@ negotiating one Agent Runtime Protocol version. Initialization exchanges:
 - the exact Agent IDs and descriptor revisions being registered;
 - capability revisions and supported Tool Schema Profiles;
 - configuration-schema capabilities and exact Host-default schema revisions;
+- one exact initial Session configuration schema revision and its supported
+  resolution set;
 - supported opaque resume-schema IDs and exact migration edges;
 - informational runtime implementation and build identity.
 
@@ -526,6 +561,25 @@ an Agent and credential scope and is routed through a typed Host challenge.
 Failure in one scope never causes the Host to try another runtime, Agent, or
 credential source.
 
+`IAgentDescriptor.requiresAgentAuthentication` reports only whether the Agent
+requires that typed Agent authentication challenge. It never reports
+model-provider credential presence or availability.
+
+Raw secret resolution is a short-lived Turn operation, not authentication
+state. Embedded runtimes call the Host credential resolver directly; connected
+runtimes use the corresponding reverse Agent Runtime operation. Both paths
+must echo the exact package, Agent, runtime registration, Session, Chat, Turn,
+provider, scope, and reference. Turn completion, cancellation, deletion,
+release, disconnect, or Host shutdown retires the binding. A cancelled or
+unauthorized request reaches no secret source, and source failures produce only
+typed redacted errors.
+
+Desktop provider secrets persist only in versioned ciphertext envelopes
+protected by an approved operating-system-backed Electron safe-storage backend.
+Unavailable or unapproved encryption, malformed envelopes, unknown envelope
+versions, or decryption failure stop startup. There is no plaintext, in-memory,
+environment, or alternate-store fallback.
+
 Tool permission requests are scoped to the exact Session, Chat, Turn, Tool
 call, and request ID. User-input requests address the exact Session, Chat,
 Turn, and request ID plus an optional parent Tool call. Each resolves once. An
@@ -558,7 +612,10 @@ interface IAgent {
 interface IAgentConfiguration {
 	resolveSession(request: IAgentResolveSessionConfigurationRequest): Promise<IAgentResolvedSessionConfiguration>;
 	completeSession(request: IAgentSessionConfigurationCompletionRequest): Promise<readonly IAgentConfigurationCompletion[]>;
-	updateSession(request: IAgentUpdateSessionConfigurationRequest): Promise<void>;
+	prepareSessionUpdate(request: IAgentPrepareSessionConfigurationUpdateRequest): Promise<void>;
+	commitSessionUpdate(request: IAgentFinalizeSessionConfigurationUpdateRequest): Promise<void>;
+	rollbackSessionUpdate(request: IAgentFinalizeSessionConfigurationUpdateRequest): Promise<void>;
+	acknowledgeSessionUpdate(request: IAgentAcknowledgeSessionConfigurationUpdateRequest): Promise<void>;
 }
 
 interface IAgentExecutionProfile {
@@ -621,8 +678,12 @@ the summary above omits those fields.
 The configuration surface is required even when an Agent publishes no
 user-editable properties. Its resolution returns the exact bounded schema and
 values for the addressed context; completion is valid only for a property that
-declares it; and update accepts the complete validated candidate for one
-Session. Callers do not probe for configuration methods or route configuration
+declares it; and a Session update prepares one complete validated candidate
+before Agent Host records the commit or rollback decision. The finalize calls
+are idempotent for the same operation and digest. The cleanup acknowledgement
+is also idempotent and applies no configuration state; it releases only the
+matching terminal transaction after the Host has persisted its completed
+outcome. Callers do not probe for configuration methods or route configuration
 through Agent-specific services.
 
 Execution-profile resolution is the common pre-Turn Agent port for Comet,
@@ -664,13 +725,14 @@ package ownership from the currently active Agent registry alone.
 
 `IAgentChatRequest` carries the normalized user message, submitted attachments,
 bound interaction targets, and one immutable Host Turn execution binding. That
-binding contains the resolved Agent execution profile and is the sole authority
-for the exact Agent runtime registration, Tool-set revision, deadline,
+binding contains the resolved Agent execution profile, complete model
+configuration, and exact authorized credential references, and is the sole
+authority for the Agent runtime registration, Tool-set revision, deadline,
 cancellation identity, output constraints, and optional resume state. An Agent
 runtime receives that one common request. It projects the request into its SDK,
 model provider, or internal orchestration engine. Neither the embedded Comet
 runtime nor a connected runtime queries Workbench state or reconstructs the
-profile or Tool set from Agent identity.
+profile, model configuration, credentials, or Tool set from Agent identity.
 
 The Host catalog and normalized Turn history are authoritative. Runtime-owned
 Session discovery or import, when supported, is an explicit capability and

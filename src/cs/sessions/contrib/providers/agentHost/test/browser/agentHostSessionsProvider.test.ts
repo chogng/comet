@@ -8,10 +8,15 @@ import { suite, test } from 'node:test';
 
 import { Emitter } from 'cs/base/common/event';
 import { createTestChatStorageService } from 'cs/workbench/contrib/chat/test/common/testChatStorage';
+import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationSchema,
+} from 'cs/platform/agentHost/common/configuration';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
 import {
 	createAgentCapabilityRevision,
 	createAgentChatId,
+	createAgentConfigurationStateRevision,
 	createAgentDescriptorRevision,
 	createAgentExecutionPresetId,
 	createAgentExecutionProfileDigest,
@@ -59,11 +64,15 @@ import {
 	type IAgentHostOperationOutcomeRequest,
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostReconnectRequest,
+	type IAgentHostResolveSessionConfigurationRequest,
+	type IAgentHostResolveSessionConfigurationResult,
 	type IAgentHostRootState,
 	type IAgentHostSessionCatalogState,
 	type IAgentHostSessionState,
 	type IAgentHostSetSubscriptionsRequest,
 	type IAgentHostSetSubscriptionsResult,
+	type IAgentHostSessionConfigurationCompletionsRequest,
+	type IAgentHostSessionConfigurationCompletionsResult,
 } from 'cs/platform/agentHost/common/protocol';
 import { AgentHostSessionsProvider } from 'cs/sessions/contrib/providers/agentHost/browser/agentHostSessionsProvider';
 import { resolveAgentHostDisplayText } from 'cs/sessions/contrib/providers/agentHost/browser/agentHostSessionProjection';
@@ -82,6 +91,42 @@ const sessionType = createAgentSessionTypeId('comet.chat');
 const modelId = createAgentModelId('comet-model');
 const automaticPreset = createAgentExecutionPresetId('automatic');
 const payloadDigest = createAgentHostPayloadDigest(`sha256:${'a'.repeat(64)}`);
+const registrationRevision = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
+const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'hostDefault',
+	revision: 'comet.host-defaults.v1',
+	properties: [],
+});
+const sessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'session',
+	revision: 'comet.session-configuration.v1',
+	properties: [],
+});
+const resolvedSessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	...sessionConfigurationSchema,
+	revision: 'comet.session-configuration.v2',
+});
+const modelConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'model',
+	revision: 'comet.model-configuration.v1',
+	properties: [],
+});
+const hostDefaultsState = Object.freeze({
+	schema: hostDefaultsSchema,
+	revision: createAgentConfigurationStateRevision('comet.host-defaults.state.v1'),
+	values: Object.freeze({}),
+});
+const sessionConfigurationState = Object.freeze({
+	schema: resolvedSessionConfigurationSchema,
+	revision: createAgentConfigurationStateRevision('comet.session-configuration.state.v1'),
+	values: Object.freeze({}),
+});
 
 function createRootState(): IAgentHostRootState {
 	return {
@@ -125,6 +170,7 @@ function createRootState(): IAgentHostRootState {
 				revision: createAgentModelDescriptorRevision('model-revision-1'),
 				displayName: 'Comet Model',
 				enabled: true,
+				configurationSchema: modelConfigurationSchema,
 				toolSchemaProfiles: [createAgentToolSchemaProfileId('comet.tools')],
 				attachments: {
 					carriers: ['inline', 'reference'],
@@ -138,8 +184,25 @@ function createRootState(): IAgentHostRootState {
 					supportsClientContentForBackgroundExecution: true,
 				},
 			}],
-			authenticationRequired: false,
+			requiresAgentAuthentication: false,
 		}],
+		agentRegistrations: [{
+			packageId,
+			agentId,
+			revision: registrationRevision,
+			descriptorRevision: createAgentDescriptorRevision('agent-revision-1'),
+			capabilityRevision: createAgentCapabilityRevision('capabilities-1'),
+			hostDefaultsSchema,
+			initialSessionConfigurationSchema: sessionConfigurationSchema.revision,
+			supportedSessionConfigurationSchemas: [
+				resolvedSessionConfigurationSchema.revision,
+				sessionConfigurationSchema.revision,
+			],
+			supportedToolSchemaProfiles: [createAgentToolSchemaProfileId('comet.tools')],
+			supportedResumeSchemas: [],
+			resumeMigrationEdges: [],
+		}],
+		agentDefaults: [hostDefaultsState],
 		sessionTypes: [{
 			id: sessionType,
 			packageId,
@@ -233,6 +296,7 @@ function createSessionState(
 		status: 'completed',
 		isRead: true,
 		modifiedAt: 2,
+		configuration: sessionConfigurationState,
 		capabilities: {
 			supportsCreateChat: true,
 			maximumChatCount: 5,
@@ -278,8 +342,26 @@ class TestAgentHostConnection implements IAgentHostConnection {
 	readonly activeSubscriptions = new Set<AgentHostChannelId>();
 	readonly setSubscriptionsRequests: IAgentHostSetSubscriptionsRequest[] = [];
 	readonly reconnectRequests: IAgentHostReconnectRequest[] = [];
+	readonly resolveConfigurationRequests: IAgentHostResolveSessionConfigurationRequest[] = [];
+	readonly completionRequests: IAgentHostSessionConfigurationCompletionsRequest[] = [];
+	readonly prepareRequests: IAgentHostPrepareSubmissionRequest[] = [];
 	readonly mutationRequests: IAgentHostMutationRequest[] = [];
 	reconnectResult: AgentHostReconnectResult | undefined;
+	resolveConfiguration: (
+		request: IAgentHostResolveSessionConfigurationRequest,
+	) => Promise<IAgentHostResolveSessionConfigurationResult> = async () => ({
+		agent: agentId,
+		runtimeRegistration: registrationRevision,
+		configuration: sessionConfigurationState,
+	});
+	completeConfiguration: (
+		request: IAgentHostSessionConfigurationCompletionsRequest,
+	) => Promise<IAgentHostSessionConfigurationCompletionsResult> = async request => ({
+		agent: agentId,
+		runtimeRegistration: registrationRevision,
+		schema: request.resolvedSchema.revision,
+		completions: [],
+	});
 	prepare: (request: IAgentHostPrepareSubmissionRequest) => ReturnType<IAgentHostConnection['prepareSubmission']> = async () => ({
 		kind: 'rejected',
 		failure: {
@@ -311,9 +393,10 @@ class TestAgentHostConnection implements IAgentHostConnection {
 
 	async initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {
 		assert.deepStrictEqual(request.subscriptions, [getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('2')]);
 		this.replaceActiveSubscriptions(request.subscriptions);
 		return {
-			protocolVersion: createAgentHostProtocolVersion('1'),
+			protocolVersion: createAgentHostProtocolVersion('2'),
 			capabilities: [],
 			implementation: { name: 'test-host', build: '1' },
 			hostSequence: createAgentHostSequence(this.sequence),
@@ -352,7 +435,22 @@ class TestAgentHostConnection implements IAgentHostConnection {
 		};
 	}
 
+	resolveSessionConfiguration(
+		request: IAgentHostResolveSessionConfigurationRequest,
+	): Promise<IAgentHostResolveSessionConfigurationResult> {
+		this.resolveConfigurationRequests.push(request);
+		return this.resolveConfiguration(request);
+	}
+
+	completeSessionConfiguration(
+		request: IAgentHostSessionConfigurationCompletionsRequest,
+	): Promise<IAgentHostSessionConfigurationCompletionsResult> {
+		this.completionRequests.push(request);
+		return this.completeConfiguration(request);
+	}
+
 	prepareSubmission(request: IAgentHostPrepareSubmissionRequest): ReturnType<IAgentHostConnection['prepareSubmission']> {
+		this.prepareRequests.push(request);
 		return this.prepare(request);
 	}
 
@@ -474,6 +572,51 @@ function waitForSessionsChange(provider: AgentHostSessionsProvider) {
 }
 
 suite('AgentHostSessionsProvider', { concurrency: false }, () => {
+	test('rejects a root snapshot with non-exact runtime registration fields', async () => {
+		const { connection, chatService } = createFixture();
+		connection.root = {
+			...connection.root,
+			agentRegistrations: [{
+				...connection.root.agentRegistrations[0],
+				unexpected: true,
+			} as typeof connection.root.agentRegistrations[number]],
+		};
+
+		await assert.rejects(createProvider(connection, chatService), /invalid runtime registration fields/);
+	});
+
+	test('rejects Host defaults whose validated schema differs from the registration at the same revision', async () => {
+		const { connection, chatService } = createFixture();
+		const conflictingSchema = validateAndFreezeAgentConfigurationSchema({
+			...hostDefaultsSchema,
+			properties: [{
+				id: 'comet.endpoint',
+				owner: { kind: 'agent', agent: agentId },
+				scopes: ['hostDefault'],
+				value: { type: 'string', maximumLength: 512 },
+				required: false,
+				sessionMutable: false,
+				dynamicCompletion: false,
+				display: { label: 'Endpoint' },
+				persistence: 'persisted',
+				redaction: 'public',
+			}],
+		});
+		connection.root = {
+			...connection.root,
+			agentDefaults: [{
+				schema: conflictingSchema,
+				revision: hostDefaultsState.revision,
+				values: {},
+			}],
+		};
+
+		await assert.rejects(
+			createProvider(connection, chatService),
+			/Host defaults for Agent 'comet' do not match its runtime registration schema/,
+		);
+	});
+
 	test('reprojects provider, Session type, draft, and preset display across consecutive locale changes without changing identity', async () => {
 		const { connection, chatService } = createFixture();
 		connection.root = {
@@ -775,11 +918,45 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			const draftChat = draft.chats.get()[0];
 			chatService.setInput(draftChat.resource, 'immutable prompt');
 			await assert.rejects(provider.sendRequest(draft, draftChat), /Preparation is not configured/);
+			assert.equal(connection.resolveConfigurationRequests.length, 1);
+			assert.equal(
+				connection.resolveConfigurationRequests[0].candidate.schema,
+				sessionConfigurationSchema.revision,
+			);
+			assert.notEqual(
+				connection.resolveConfigurationRequests[0].candidate.schema,
+				connection.root.agentRegistrations[0].supportedSessionConfigurationSchemas[0],
+			);
+			assert.equal(connection.prepareRequests[0].target.kind, 'draft');
+			if (connection.prepareRequests[0].target.kind !== 'draft') {
+				throw new Error('Expected draft preparation target.');
+			}
+			assert.strictEqual(
+				connection.prepareRequests[0].target.configuration,
+				connection.resolveConfigurationRequests[0].candidate,
+			);
+			assert.equal(connection.prepareRequests[0].executionSelection.kind, 'preset');
+			assert.equal(
+				connection.prepareRequests[0].executionSelection.configuration.schema,
+				modelConfigurationSchema.revision,
+			);
 			const preserved = chatService.acquireModel(draftChat.resource);
 			assert.equal(preserved.object.getSnapshot().input, 'immutable prompt');
 			preserved.dispose();
+			await provider.setChatModel(draft, draftChat, modelId);
 
 			connection.prepare = async request => {
+				assert.equal(request.target.kind, 'draft');
+				if (request.target.kind !== 'draft') {
+					throw new Error('Expected draft preparation target.');
+				}
+				const resolveRequest = connection.resolveConfigurationRequests[
+					connection.resolveConfigurationRequests.length - 1
+				];
+				assert.strictEqual(request.target.configuration, resolveRequest.candidate);
+				assert.equal(request.executionSelection.kind, 'model');
+				assert.equal(request.executionSelection.configuration.schema, modelConfigurationSchema.revision);
+				assert.deepStrictEqual(request.executionSelection.configuration.values, {});
 				const runtimeRegistration = createAgentRuntimeRegistrationRevision('runtime-1');
 				const agentDescriptor = createAgentDescriptorRevision('agent-revision-1');
 				const modelDescriptor = createAgentModelDescriptorRevision('model-revision-1');
@@ -791,6 +968,9 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 					message: request.capture.message,
 					attachments: request.capture.attachments,
 					interactionTargets: request.capture.interactionTargets,
+					sessionConfiguration: sessionConfigurationState,
+					modelConfiguration: request.executionSelection.configuration,
+					credentials: [],
 					executionProfile: {
 						revision: createAgentExecutionProfileRevision('profile-1'),
 						digest: createAgentExecutionProfileDigest(`sha256:${'d'.repeat(64)}`),
@@ -818,6 +998,11 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 					throw new Error('Expected createSession.');
 				}
 				assert.equal(request.payload.chats.length, 1);
+				const prepareRequest = connection.prepareRequests[connection.prepareRequests.length - 1];
+				if (prepareRequest.target.kind !== 'draft') {
+					throw new Error('Expected draft preparation target.');
+				}
+				assert.strictEqual(request.payload.configuration, prepareRequest.target.configuration);
 				assert.equal(request.payload.chats[0].initialSubmission?.message, 'immutable prompt');
 				const sessionId = createAgentSessionId('committed-session');
 				const chat = createChatState(sessionId, 'committed-chat', 'Committed', {
@@ -854,6 +1039,7 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			await provider.sendRequest(draft, draftChat);
 			const event = await changed;
 			assert.deepStrictEqual(event.transitions.map(transition => transition.kind), [SessionTransitionKind.Replaced]);
+			assert.equal(connection.resolveConfigurationRequests.length, 2);
 			assert.equal(connection.mutationRequests.length, 1);
 			assert.equal(provider.getSessions().length, 1);
 			assert.equal(provider.getSessions()[0].chats.get().length, 1);

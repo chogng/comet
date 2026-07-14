@@ -111,7 +111,7 @@ const target: IAgentHostInteractionTarget = Object.freeze({
 const call: IAgentToolCall = Object.freeze({
 	id: createAgentToolCallId('tool-call-1'),
 	agent: createAgentId('comet'),
-	registration: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
+	registration: createAgentRuntimeRegistrationRevision('comet.embedded.v2'),
 	session: createAgentSessionId('session-1'),
 	chat: createAgentChatId('chat-1'),
 	turn: createAgentTurnId('turn-1'),

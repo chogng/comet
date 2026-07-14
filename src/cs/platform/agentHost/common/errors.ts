@@ -15,6 +15,11 @@ export const AgentHostErrorCode = {
 	OperationNotPending: 'operationNotPending',
 	ResourceMissing: 'resourceMissing',
 	CapabilityUnsupported: 'capabilityUnsupported',
+	InvalidConfigurationSchema: 'invalidConfigurationSchema',
+	InvalidConfigurationValue: 'invalidConfigurationValue',
+	StaleConfigurationSchema: 'staleConfigurationSchema',
+	CredentialUnauthorized: 'credentialUnauthorized',
+	CredentialUnavailable: 'credentialUnavailable',
 } as const;
 
 export type AgentHostErrorCode = typeof AgentHostErrorCode[keyof typeof AgentHostErrorCode];
@@ -60,6 +65,26 @@ export interface IAgentHostErrorDataByCode {
 	};
 	readonly capabilityUnsupported: {
 		readonly capability: string;
+	};
+	readonly invalidConfigurationSchema: {
+		readonly field: string;
+		readonly reason: string;
+	};
+	readonly invalidConfigurationValue: {
+		readonly property: string;
+		readonly reason: string;
+	};
+	readonly staleConfigurationSchema: {
+		readonly expected: string;
+		readonly received: string;
+	};
+	readonly credentialUnauthorized: {
+		readonly provider: string;
+		readonly scope: string;
+	};
+	readonly credentialUnavailable: {
+		readonly provider: string;
+		readonly scope: string;
 	};
 }
 

@@ -11,6 +11,7 @@ import { Disposable, type IDisposable, toDisposable } from 'cs/base/common/lifec
 import type {
 	IAgent,
 	IAgentAction,
+	AgentSessionConfigurationUpdateDecision,
 	IAgentBackingIdentity,
 	IAgentCancelTurnRequest,
 	IAgentChatRequest,
@@ -18,9 +19,22 @@ import type {
 	IAgentExecutionProfile,
 	IAgentRuntimeRegistration,
 	IAgentSteerRequest,
+	IAgentWorkspace,
 	AgentTurnProgress,
 } from 'cs/platform/agentHost/common/agent';
 import { assertAgentHostAttachment, assertAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
+import {
+	IAgentConfigurationCandidate,
+	IAgentConfigurationSchema,
+	IAgentConfigurationState,
+	collectAgentConfigurationCredentialReferences,
+	resolveAgentModelConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCompletions,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
+import type { IAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
 import type { IAgentContentResourcePort } from 'cs/platform/agentHost/common/contentResources';
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
@@ -38,6 +52,8 @@ import {
 	AgentHostProtocolVersion,
 	AgentHostSequence,
 	AgentId,
+	AgentConfigurationSchemaRevision,
+	AgentConfigurationStateRevision,
 	AgentPackageOperationId,
 	AgentRuntimeRegistrationRevision,
 	AgentSessionId,
@@ -48,6 +64,8 @@ import {
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentHostSequence,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
 	createAgentPackageOperationId,
 	createAgentToolCallId,
 	createAgentToolId,
@@ -91,11 +109,15 @@ import {
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostPreparedSubmission,
 	IAgentHostReconnectRequest,
+	IAgentHostResolveSessionConfigurationRequest,
+	IAgentHostResolveSessionConfigurationResult,
 	IAgentHostRootState,
 	IAgentHostRootStateAction,
 	IAgentHostSessionCatalogState,
 	IAgentHostSessionCatalogStateAction,
 	IAgentHostSessionState,
+	IAgentHostSessionConfigurationCompletionsRequest,
+	IAgentHostSessionConfigurationCompletionsResult,
 	IAgentHostSessionStateAction,
 	IAgentHostSessionTypeDescriptor,
 	IAgentHostSetSubscriptionsRequest,
@@ -128,21 +150,24 @@ import {
 } from 'cs/platform/agentHost/node/packages/agentPackageLifecycle';
 import type { IAgentToolTurnAuthorityPort } from 'cs/platform/agentHost/node/tools/agentToolCallAuthority';
 import type { IAgentToolSetPreparationPort } from 'cs/platform/agentHost/node/tools/agentToolSetPreparation';
+import type { IAgentCredentialAuthority } from 'cs/platform/agentHost/node/credentials/agentCredentialService';
 import {
 	IAgentHostCatalogStore,
 	IAgentHostPersistedCatalog,
 	IAgentHostBackingRemovalOperation,
 	IAgentHostPersistedChatRecord,
 	IAgentHostPersistedSessionRecord,
+	type AgentHostSessionConfigurationFinalizationOutcome,
+	type IAgentHostSessionConfigurationFinalization,
 	assertAgentHostPersistedCatalog,
 	createEmptyAgentHostCatalog,
+	maximumRetainedAgentHostSessionConfigurationFinalizations,
 } from './agentHostCatalog.js';
 
 const terminalTurnStates: ReadonlySet<AgentHostTurnState> = new Set(['completed', 'cancelled', 'failed']);
 const activeTurnStates: ReadonlySet<AgentHostTurnState> = new Set([
 	'accepted', 'queued', 'running', 'waitingForPermission', 'waitingForInput', 'cancelling',
 ]);
-
 export interface IAgentHostIdentityFactory {
 	createSession(): AgentSessionId;
 	createChat(): AgentChatId;
@@ -180,6 +205,7 @@ export interface IAgentHostAuthorityOptions {
 	readonly agentRuntimes: IAgentHostRuntimeResolver;
 	readonly packageLifecycle: AgentPackageLifecycle;
 	readonly authentication?: IAgentAuthenticationPort;
+	readonly credentials?: IAgentCredentialAuthority;
 	readonly catalogStore: IAgentHostCatalogStore;
 	readonly identityFactory: IAgentHostIdentityFactory;
 	readonly submissionPolicy: IAgentHostSubmissionPolicy;
@@ -227,6 +253,31 @@ interface IRuntimeSessionRecord {
 	readonly chats: ReadonlyMap<AgentChatId, IRuntimeChatRecord>;
 }
 
+interface IPendingSessionConfigurationFinalizationBase {
+	readonly connection: AgentHostClientConnectionId;
+	readonly request: Parameters<IAgent['configuration']['commitSessionUpdate']>[0];
+	readonly decision: AgentSessionConfigurationUpdateDecision;
+	readonly outcome: AgentHostSessionConfigurationFinalizationOutcome;
+}
+
+type IPendingSessionConfigurationFinalization = IPendingSessionConfigurationFinalizationBase & (
+	| { readonly finalize: 'complete' }
+	| {
+		readonly agent: IAgent;
+		readonly finalize: 'acknowledge';
+	}
+	| {
+		readonly agent: IAgent;
+		readonly finalize: 'commit';
+		readonly decision: 'commit';
+	}
+	| {
+		readonly agent: IAgent;
+		readonly finalize: 'rollback';
+		readonly decision: 'rollback';
+	}
+);
+
 type HostStateAction =
 	| {
 		readonly channel: AgentHostChannelId;
@@ -254,6 +305,10 @@ interface ICommittedHostState {
 	readonly revisions: readonly IAgentHostCommittedChannelRevision[];
 }
 
+type SessionConfigurationFinalizationCommit =
+	| readonly IAgentHostSessionConfigurationFinalization[]
+	| ((committed: ICommittedHostState) => readonly IAgentHostSessionConfigurationFinalization[]);
+
 interface IMutationExecution {
 	readonly result: AgentHostMutationResult;
 	readonly afterCommit: readonly (() => void)[];
@@ -267,6 +322,13 @@ class HostOperationFailure extends Error {
 	constructor(readonly failure: IAgentHostOperationFailure) {
 		super(failure.message);
 		this.name = 'HostOperationFailure';
+	}
+}
+
+class PendingSessionConfigurationFinalization extends Error {
+	constructor() {
+		super('Session configuration finalization requires reconciliation');
+		this.name = 'PendingSessionConfigurationFinalization';
 	}
 }
 
@@ -345,12 +407,70 @@ function payloadDigest(value: object): AgentHostPayloadDigest {
 	return createAgentHostPayloadDigest(`sha256:${digest}`);
 }
 
+function configurationStateRevision(
+	schema: IAgentConfigurationSchema,
+	values: IAgentConfigurationState['values'],
+): AgentConfigurationStateRevision {
+	const digest = createHash('sha256').update(encodeAgentHostProtocolValue({ schema, values })).digest('hex');
+	return createAgentConfigurationStateRevision(`sha256:${digest}`);
+}
+
+function createConfigurationState(
+	schema: IAgentConfigurationSchema,
+	values: IAgentConfigurationState['values'],
+): IAgentConfigurationState {
+	return validateAndFreezeAgentConfigurationState(Object.freeze({
+		schema,
+		revision: configurationStateRevision(schema, values),
+		values,
+	}), {
+		agent: schema.agent,
+		scope: schema.scope,
+		revision: schema.revision,
+	});
+}
+
+function createInitialAgentDefaults(registrations: readonly IAgentRuntimeRegistration[]): readonly IAgentConfigurationState[] {
+	return Object.freeze(registrations.map(registration => {
+		const schema = validateAndFreezeAgentConfigurationSchema(registration.hostDefaultsSchema, {
+			agent: registration.agentId,
+			scope: 'hostDefault',
+		});
+		return createConfigurationState(schema, Object.freeze({}));
+	}));
+}
+
 function turnKey(session: AgentSessionId, chat: AgentChatId, turn: AgentTurnId): string {
 	return `${session}\u0000${chat}\u0000${turn}`;
 }
 
 function sameProtocolValue(left: object, right: object): boolean {
 	return encodeAgentHostProtocolValue(left) === encodeAgentHostProtocolValue(right);
+}
+
+type AgentConfigurationSchemaRegistry = Map<AgentId, Map<AgentConfigurationSchemaRevision, IAgentConfigurationSchema>>;
+
+function cloneConfigurationSchemaRegistry(
+	registry: ReadonlyMap<AgentId, ReadonlyMap<AgentConfigurationSchemaRevision, IAgentConfigurationSchema>>,
+): AgentConfigurationSchemaRegistry {
+	return new Map([...registry].map(([agent, schemas]) => [agent, new Map(schemas)]));
+}
+
+function recordExactConfigurationSchema(
+	registry: AgentConfigurationSchemaRegistry,
+	schema: IAgentConfigurationSchema,
+	field: string,
+): void {
+	let schemas = registry.get(schema.agent);
+	if (schemas === undefined) {
+		schemas = new Map();
+		registry.set(schema.agent, schemas);
+	}
+	const existing = schemas.get(schema.revision);
+	if (existing !== undefined && !sameProtocolValue(existing, schema)) {
+		throw new Error(`${field} reuses configuration schema revision '${schema.revision}' with different content`);
+	}
+	schemas.set(schema.revision, schema);
 }
 
 function hasExactKeys(
@@ -402,13 +522,18 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	private readonly operationOwners = new Map<AgentHostOperationId, AgentHostClientConnectionId>();
 	private readonly packageOperationOwners = new Map<AgentPackageOperationId, AgentHostClientConnectionId>();
 	private readonly preparations = new Map<AgentSubmissionId, IPreparedSubmissionRecord>();
+	private readonly pendingSessionConfigurationFinalizations = new Map<AgentHostOperationId, IPendingSessionConfigurationFinalization>();
 	private readonly packageMutationGates = new Map<AgentId, AgentPackageOperationId>();
 	private readonly lifecycleActivities = new Map<AgentId, number>();
 	private readonly quiescenceWaiters = new Set<() => void>();
 	private readonly toolTurnBindings = new Map<string, IDisposable>();
+	private readonly credentialTurnBindings = new Map<string, IDisposable>();
 	private readonly turnContentAnchors = new Map<string, readonly AgentContentLeaseId[]>();
 	private readonly replay: AgentHostChannelAction[] = [];
 	private sessions = new Map<AgentSessionId, IRuntimeSessionRecord>();
+	private agentDefaults = new Map<AgentId, IAgentConfigurationState>();
+	private modelConfigurationSchemas: AgentConfigurationSchemaRegistry = new Map();
+	private sessionConfigurationSchemas: AgentConfigurationSchemaRegistry = new Map();
 	private catalog: IAgentHostPersistedCatalog;
 	private catalogTail = Promise.resolve();
 	private closing = false;
@@ -428,6 +553,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	) {
 		super();
 		this._register(toDisposable(() => {
+			for (const binding of [...this.credentialTurnBindings.values()]) {
+				binding.dispose();
+			}
 			for (const binding of [...this.toolTurnBindings.values()]) {
 				binding.dispose();
 			}
@@ -435,6 +563,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		this.catalog = catalog;
 		this.loadCatalog(catalog);
 		this.validateComposition();
+		this.restoreSessionConfigurationFinalizationLedger();
 		for (const agent of this.agents.values()) {
 			this.subscribeAgentActions(agent);
 		}
@@ -455,7 +584,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		}
 		let catalog = await options.catalogStore.read();
 		if (catalog === undefined) {
-			catalog = createEmptyAgentHostCatalog();
+			catalog = createEmptyAgentHostCatalog(createInitialAgentDefaults(
+				options.packageLifecycle.snapshot().activeRegistrations,
+			));
 			await options.catalogStore.commit(undefined, catalog);
 		}
 		assertAgentHostPersistedCatalog(catalog);
@@ -463,6 +594,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		try {
 			options.packageLifecycle.bindLifecyclePort(authority);
 			await authority.restoreCatalogBackings();
+			await authority.completeRestoredSessionConfigurationFinalizations();
 			await options.packageLifecycle.reconcileHostBackingState(authority.packageBackingState(authority.sessions));
 			await authority.reconcilePackageCatalogRevision();
 			return authority;
@@ -596,6 +728,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 					throw new Error('Package mutation cannot complete before it drains');
 				}
 				const previous = new Map<AgentId, IAgent>();
+				const previousAgentDefaults = new Map(this.agentDefaults);
 				for (const agentId of affected) {
 					const agent = this.agents.get(agentId);
 					if (agent !== undefined) {
@@ -616,6 +749,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 						if (stagedActivation !== undefined) {
 							try {
 								this.activateAgentRuntimes(affected, previous);
+								this.agentDefaults = previousAgentDefaults;
 							} catch (rollbackError) {
 								throw new AggregateError([error, rollbackError], 'Agent runtime activation and rollback both failed');
 							}
@@ -756,6 +890,74 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		}));
 	}
 
+	async resolveSessionConfiguration(
+		connection: AgentHostClientConnectionId,
+		request: IAgentHostResolveSessionConfigurationRequest,
+	): Promise<IAgentHostResolveSessionConfigurationResult> {
+		this.requireInitializedConnection(connection);
+		const sessionType = this.requireSessionType(request.sessionType);
+		this.validateWorkspace(sessionType, request.workspace);
+		const agent = this.requireActiveAgent(sessionType.agentId, sessionType.packageId);
+		const configuration = await this.resolveSessionConfigurationState(agent, request.workspace, request.candidate);
+		return Object.freeze({
+			agent: agent.id,
+			runtimeRegistration: agent.registration.revision,
+			configuration,
+		});
+	}
+
+	async completeSessionConfiguration(
+		connection: AgentHostClientConnectionId,
+		request: IAgentHostSessionConfigurationCompletionsRequest,
+	): Promise<IAgentHostSessionConfigurationCompletionsResult> {
+		this.requireInitializedConnection(connection);
+		if (
+			request.query.length > 4_096
+			|| !Number.isSafeInteger(request.limit)
+			|| request.limit < 1
+			|| request.limit > 100
+		) {
+			throw operationFailure('invalidPayload', 'Session configuration completion request exceeds protocol bounds');
+		}
+		const sessionType = this.requireSessionType(request.sessionType);
+		this.validateWorkspace(sessionType, request.workspace);
+		const agent = this.requireActiveAgent(sessionType.agentId, sessionType.packageId);
+		const resolved = await this.resolveSessionConfigurationState(agent, request.workspace, request.candidate);
+		const requestedSchema = validateAndFreezeAgentConfigurationSchema(request.resolvedSchema, {
+			agent: agent.id,
+			scope: 'session',
+			revision: request.candidate.schema,
+		});
+		if (!sameProtocolValue(resolved.schema, requestedSchema)) {
+			throw operationFailure('conflict', 'Session configuration schema changed before completion');
+		}
+		const candidate = validateAndFreezeAgentConfigurationCandidate(
+			requestedSchema,
+			request.candidate,
+			'session',
+		);
+		const completions = validateAndFreezeAgentConfigurationCompletions(
+			requestedSchema,
+			request.property,
+			await agent.configuration.completeSession({
+				runtimeRegistration: agent.registration.revision,
+				...(request.workspace === undefined ? {} : { workspace: request.workspace }),
+				hostDefaults: this.requireAgentDefaults(agent),
+				candidate,
+				resolvedSchema: requestedSchema,
+				property: request.property,
+				query: request.query,
+				limit: request.limit,
+			}),
+		);
+		return Object.freeze({
+			agent: agent.id,
+			runtimeRegistration: agent.registration.revision,
+			schema: requestedSchema.revision,
+			completions,
+		});
+	}
+
 	updateRootConfiguration(update: IAgentHostRootConfigurationUpdate): Promise<void> {
 		return this.enqueueCatalogMutation(async () => {
 			if (this.closing) {
@@ -771,7 +973,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				updatedAgents.add(descriptorUpdate.agent.id);
 				descriptors.set(descriptorUpdate.agent.id, descriptorUpdate.descriptor);
 			}
-			this.validateRootConfiguration(descriptors, update.sessionTypes);
+			const modelConfigurationSchemas = this.validateRootConfiguration(descriptors, update.sessionTypes);
 			const sessionTypes = new Map(update.sessionTypes.map(sessionType => [sessionType.id, sessionType] as const));
 			for (const session of this.sessions.values()) {
 				const sessionType = sessionTypes.get(session.state.type);
@@ -789,6 +991,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				[this.rootAction(state)],
 				Object.freeze({ kind: 'host' }),
 				() => {
+					this.modelConfigurationSchemas = modelConfigurationSchemas;
 					for (const descriptorUpdate of update.agents) {
 						descriptorUpdate.commit();
 					}
@@ -900,6 +1103,16 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			});
 		}
 		const computedDigest = await computeAgentHostMutationDigest(request.payload);
+		if (computedDigest !== request.digest) {
+			return Object.freeze({
+				kind: 'failed',
+				failure: Object.freeze({
+					code: 'invalidPayload',
+					message: 'Mutation digest does not match its payload',
+					reconciliation: 'terminal',
+				}),
+			});
+		}
 		const owner = this.operationOwners.get(request.operation);
 		if (owner !== undefined && owner !== connection) {
 			return Object.freeze({ kind: 'unknown' });
@@ -923,17 +1136,22 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		return this.enqueueCatalogMutation(async () => {
 			let outcome: AgentHostMutationOutcome;
 			let afterCommit: readonly (() => void)[] = [];
+			let commitOutcome = true;
 			try {
-				if (computedDigest !== request.digest) {
-					throw operationFailure('invalidPayload', 'Mutation digest does not match its payload');
-				}
 				const execution = await this.executeMutation(connection, request);
 				outcome = Object.freeze({ kind: 'succeeded', result: execution.result });
 				afterCommit = execution.afterCommit;
 			} catch (error) {
+				if (error instanceof PendingSessionConfigurationFinalization) {
+					outcome = Object.freeze({ kind: 'pending' });
+					commitOutcome = false;
+				} else {
 				outcome = Object.freeze({ kind: 'failed', failure: toOperationFailure(error) });
+				}
 			}
-			this.operations.commit(request.operation, request.digest, outcome);
+			if (commitOutcome) {
+				this.operations.commit(request.operation, request.digest, outcome);
+			}
 			for (const startAfterCommit of afterCommit) {
 				startAfterCommit();
 			}
@@ -941,26 +1159,33 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		});
 	}
 
-	getOperationOutcome(
+	async getOperationOutcome(
 		connection: AgentHostClientConnectionId,
 		request: IAgentHostOperationOutcomeRequest,
 	): Promise<AgentHostMutationOutcome> {
 		this.requireInitializedConnection(connection);
 		const owner = this.operationOwners.get(request.operation);
 		if (owner !== undefined && owner !== connection) {
-			return Promise.resolve(Object.freeze({ kind: 'unknown' }));
+			return Object.freeze({ kind: 'unknown' });
+		}
+		const pendingConfiguration = this.pendingSessionConfigurationFinalizations.get(request.operation);
+		if (pendingConfiguration !== undefined) {
+			if (pendingConfiguration.request.payloadDigest !== request.digest) {
+				return Object.freeze({ kind: 'conflict', recordedDigest: pendingConfiguration.request.payloadDigest });
+			}
+			return this.enqueueCatalogMutation(() => this.reconcileSessionConfigurationFinalization(request.operation, pendingConfiguration));
 		}
 		try {
 			const outcome = this.operations.reconcile(request.operation, request.digest);
 			if (outcome.kind === 'committed') {
-				return Promise.resolve(outcome.outcome);
+				return outcome.outcome;
 			}
-			return Promise.resolve(Object.freeze({ kind: outcome.kind }));
+			return Object.freeze({ kind: outcome.kind });
 		} catch (error) {
 			if (error instanceof AgentHostError && error.code === AgentHostErrorCode.OperationDigestConflict) {
-				return Promise.resolve(Object.freeze({ kind: 'conflict', recordedDigest: error.data.recordedDigest as AgentHostPayloadDigest }));
+				return Object.freeze({ kind: 'conflict', recordedDigest: error.data.recordedDigest as AgentHostPayloadDigest });
 			}
-			return Promise.reject(error);
+			throw error;
 		}
 	}
 
@@ -1064,7 +1289,10 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			const agent = this.resolveAgentRuntime(registration);
 			this.agents.set(agent.id, agent);
 		}
-		this.validateRootConfiguration(
+		for (const agent of this.agents.values()) {
+			this.requireAgentDefaults(agent);
+		}
+		this.modelConfigurationSchemas = this.validateRootConfiguration(
 			new Map([...this.agents].map(([agentId, agent]) => [agentId, agent.descriptor.get()])),
 			this.options.sessionTypes,
 		);
@@ -1073,7 +1301,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	private validateRootConfiguration(
 		descriptors: ReadonlyMap<AgentId, IAgentDescriptor>,
 		sessionTypes: readonly IAgentHostSessionTypeDescriptor[],
-	): void {
+	): AgentConfigurationSchemaRegistry {
+		const modelConfigurationSchemas = cloneConfigurationSchemaRegistry(this.modelConfigurationSchemas);
 		if (descriptors.size !== this.agents.size) {
 			throw new Error('Agent Host root configuration does not describe every active Agent');
 		}
@@ -1087,6 +1316,14 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				|| descriptor.capabilities.revision !== agent.registration.capabilityRevision
 			) {
 				throw new Error(`Agent Host root descriptor '${agentId}' has invalid ownership`);
+			}
+			for (const model of descriptor.models) {
+				const schema = validateAndFreezeAgentConfigurationSchema(model.configurationSchema, {
+					agent: agentId,
+					scope: 'model',
+					revision: model.configurationSchema.revision,
+				});
+				recordExactConfigurationSchema(modelConfigurationSchemas, schema, `Agent '${agentId}' model '${model.id}'`);
 			}
 		}
 		const typeIds = new Set<string>();
@@ -1130,9 +1367,11 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				throw new Error(`Agent Host Session type '${sessionType.id}' automatic execution preset is invalid`);
 			}
 		}
+		return modelConfigurationSchemas;
 	}
 
 	private resolveAgentRuntime(registration: IAgentRuntimeRegistration): IAgent {
+		this.validateRuntimeRegistrationConfiguration(registration);
 		const agent = this.options.agentRuntimes.resolve(registration);
 		if (agent.id !== registration.agentId || !sameProtocolValue(agent.registration, registration)) {
 			throw new Error(`Resolved Agent runtime '${registration.agentId}' does not match its exact registration`);
@@ -1147,6 +1386,45 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			throw new Error(`Resolved Agent runtime '${registration.agentId}' descriptor ownership is invalid`);
 		}
 		return agent;
+	}
+
+	private validateRuntimeRegistrationConfiguration(registration: IAgentRuntimeRegistration): void {
+		validateAndFreezeAgentConfigurationSchema(registration.hostDefaultsSchema, {
+			agent: registration.agentId,
+			scope: 'hostDefault',
+			revision: registration.hostDefaultsSchema.revision,
+		});
+		createAgentConfigurationSchemaRevision(registration.initialSessionConfigurationSchema);
+		for (const revision of registration.supportedSessionConfigurationSchemas) {
+			createAgentConfigurationSchemaRevision(revision);
+		}
+		if (
+			registration.supportedSessionConfigurationSchemas.length === 0
+			|| new Set(registration.supportedSessionConfigurationSchemas).size !== registration.supportedSessionConfigurationSchemas.length
+			|| !registration.supportedSessionConfigurationSchemas.includes(registration.initialSessionConfigurationSchema)
+		) {
+			throw new Error(`Agent runtime '${registration.agentId}' Session configuration schemas are invalid`);
+		}
+	}
+
+	private requireAgentDefaults(agent: IAgent): IAgentConfigurationState {
+		const state = this.agentDefaults.get(agent.id);
+		if (state === undefined) {
+			throw new Error(`Agent Host catalog has no Agent-default configuration for '${agent.id}'`);
+		}
+		const schema = validateAndFreezeAgentConfigurationSchema(agent.registration.hostDefaultsSchema, {
+			agent: agent.id,
+			scope: 'hostDefault',
+		});
+		const configuration = validateAndFreezeAgentConfigurationState(state, {
+			agent: agent.id,
+			scope: 'hostDefault',
+			revision: schema.revision,
+		});
+		if (!sameProtocolValue(configuration.schema, schema)) {
+			throw new Error(`Agent Host catalog Agent-default schema for '${agent.id}' does not match its exact runtime registration`);
+		}
+		return configuration;
 	}
 
 	private subscribeAgentActions(agent: IAgent): void {
@@ -1178,11 +1456,53 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			this.agents.set(agentId, agent);
 			this.subscribeAgentActions(agent);
 		}
+		this.agentDefaults = this.reconcileAgentDefaults(this.agentDefaults);
+	}
+
+	private reconcileAgentDefaults(
+		current: ReadonlyMap<AgentId, IAgentConfigurationState>,
+	): Map<AgentId, IAgentConfigurationState> {
+		const reconciled = new Map(current);
+		for (const agent of this.agents.values()) {
+			const existing = reconciled.get(agent.id);
+			if (existing === undefined) {
+				const schema = validateAndFreezeAgentConfigurationSchema(agent.registration.hostDefaultsSchema, {
+					agent: agent.id,
+					scope: 'hostDefault',
+				});
+				reconciled.set(agent.id, createConfigurationState(schema, Object.freeze({})));
+				continue;
+			}
+			const schema = validateAndFreezeAgentConfigurationSchema(agent.registration.hostDefaultsSchema, {
+				agent: agent.id,
+				scope: 'hostDefault',
+			});
+			const configuration = validateAndFreezeAgentConfigurationState(existing, {
+				agent: agent.id,
+				scope: 'hostDefault',
+				revision: schema.revision,
+			});
+			if (!sameProtocolValue(configuration.schema, schema)) {
+				throw new Error(`Agent Host catalog Agent-default schema for '${agent.id}' does not match its exact runtime registration`);
+			}
+			reconciled.set(agent.id, configuration);
+		}
+		return reconciled;
 	}
 
 	private loadCatalog(catalog: IAgentHostPersistedCatalog): void {
+		this.agentDefaults = new Map(catalog.agentDefaults.map(state => [state.schema.agent, state]));
 		const sessions = new Map<AgentSessionId, IRuntimeSessionRecord>();
 		for (const record of catalog.sessions) {
+			const configuration = validateAndFreezeAgentConfigurationState(record.state.configuration, {
+				agent: record.state.agentId,
+				scope: 'session',
+			});
+			recordExactConfigurationSchema(
+				this.sessionConfigurationSchemas,
+				configuration.schema,
+				`Persisted Session '${record.state.id}'`,
+			);
 			sessions.set(record.state.id, {
 				state: record.state,
 				resume: record.resume,
@@ -1191,6 +1511,70 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			});
 		}
 		this.sessions = sessions;
+	}
+
+	private restoreSessionConfigurationFinalizationLedger(): void {
+		for (const record of this.catalog.sessionConfigurationFinalizations) {
+			this.operationOwners.set(record.operation, record.connection);
+			const started = this.operations.begin(record.operation, record.digest);
+			if (started.kind !== 'execute') {
+				throw new Error(`Duplicate Agent Host Session configuration operation '${record.operation}'`);
+			}
+			if (record.status === 'acknowledged') {
+				this.operations.commit(record.operation, record.digest, record.outcome);
+				continue;
+			}
+			const session = this.requireSession(record.session);
+			const agent = this.requireActiveAgent(record.agentId, record.packageId);
+			if (
+				session.state.agentId !== record.agentId
+				|| session.state.packageId !== record.packageId
+				|| agent.registration.revision !== record.runtimeRegistration
+			) {
+				throw new Error(`Persisted Session configuration operation '${record.operation}' has no exact active runtime`);
+			}
+			const base = {
+				connection: record.connection,
+				request: Object.freeze({
+					operation: record.operation,
+					payloadDigest: record.digest,
+					runtimeRegistration: record.runtimeRegistration,
+					session: record.session,
+					configuration: record.configuration,
+				}),
+				decision: record.decision,
+				outcome: record.outcome,
+			} as const;
+			let pending: IPendingSessionConfigurationFinalization;
+			if (record.status === 'intent') {
+				pending = Object.freeze({ ...base, finalize: 'complete' });
+			} else if (record.status === 'completed') {
+				pending = Object.freeze({ ...base, agent, finalize: 'acknowledge' });
+			} else if (record.decision === 'commit') {
+				pending = Object.freeze({ ...base, agent, decision: 'commit', finalize: 'commit' });
+			} else {
+				pending = Object.freeze({ ...base, agent, decision: 'rollback', finalize: 'rollback' });
+			}
+			this.pendingSessionConfigurationFinalizations.set(record.operation, pending);
+		}
+	}
+
+	private async completeRestoredSessionConfigurationFinalizations(): Promise<void> {
+		for (const [operation, pending] of [...this.pendingSessionConfigurationFinalizations]) {
+			const restored = pending.finalize === 'acknowledge'
+				? pending
+				: Object.freeze({
+					connection: pending.connection,
+					request: pending.request,
+					decision: pending.decision,
+					outcome: pending.outcome,
+					finalize: 'complete' as const,
+				});
+			const outcome = await this.reconcileSessionConfigurationFinalization(operation, restored);
+			if (outcome.kind === 'pending') {
+				throw new Error(`Session configuration operation '${operation}' could not persist cold recovery`);
+			}
+		}
 	}
 
 	private requireConnectionState(connection: AgentHostClientConnectionId): IAgentHostConnectionState {
@@ -1260,6 +1644,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			[...this.agents].map(([agentId, agent]) => [agentId, agent.descriptor.get()]),
 		),
 		sessionTypes: ReadonlyMap<string, IAgentHostSessionTypeDescriptor> = this.sessionTypes,
+		agentDefaults: ReadonlyMap<AgentId, IAgentConfigurationState> = this.agentDefaults,
 	): IAgentHostRootState {
 		return Object.freeze({
 			authority: this.options.authority,
@@ -1271,6 +1656,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			}),
 			packages: this.createPackageCatalogState(),
 			agents: Object.freeze([...descriptors.values()]),
+			agentRegistrations: Object.freeze([...this.agents.values()].map(agent => agent.registration)),
+			agentDefaults: Object.freeze([...agentDefaults.values()]),
 			sessionTypes: Object.freeze([...sessionTypes.values()]),
 		});
 	}
@@ -1399,6 +1786,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				return undefined;
 			case 'createSession':
 				return this.requireSessionType(payload.sessionType).agentId;
+			case 'updateAgentDefaults':
+				return payload.agent;
 			case 'authenticateAgent':
 				return payload.agentId;
 			default:
@@ -1443,6 +1832,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			) {
 				return false;
 			}
+			if (agentIds.has(session.state.agentId) && this.hasPendingSessionConfigurationFinalization(session.state.id)) {
+				return false;
+			}
 		}
 		return true;
 	}
@@ -1453,6 +1845,10 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		for (const resolve of waiters) {
 			resolve();
 		}
+	}
+
+	private hasPendingSessionConfigurationFinalization(session: AgentSessionId): boolean {
+		return [...this.pendingSessionConfigurationFinalizations.values()].some(pending => pending.request.session === session);
 	}
 
 	private requireSession(session: AgentSessionId): IRuntimeSessionRecord {
@@ -1479,25 +1875,103 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		return sessionType;
 	}
 
-	private resolvePreparationTarget(target: AgentHostSubmissionTarget): {
+	private async resolveSessionConfigurationState(
+		agent: IAgent,
+		workspace: IAgentWorkspace | undefined,
+		candidate: IAgentConfigurationCandidate,
+	): Promise<IAgentConfigurationState> {
+		if (!agent.registration.supportedSessionConfigurationSchemas.includes(candidate.schema)) {
+			throw operationFailure('invalidPayload', `Session configuration schema '${candidate.schema}' is not supported`);
+		}
+		const resolved = await agent.configuration.resolveSession({
+			runtimeRegistration: agent.registration.revision,
+			...(workspace === undefined ? {} : { workspace }),
+			hostDefaults: this.requireAgentDefaults(agent),
+			candidate,
+		});
+		const schema = validateAndFreezeAgentConfigurationSchema(resolved.schema, {
+			agent: agent.id,
+			scope: 'session',
+		});
+		if (
+			!agent.registration.supportedSessionConfigurationSchemas.includes(schema.revision)
+			|| agent.registration.revision !== this.requireActiveAgent(agent.id).registration.revision
+		) {
+			throw operationFailure('conflict', 'Resolved Session configuration does not match the active runtime registration');
+		}
+		recordExactConfigurationSchema(
+			this.sessionConfigurationSchemas,
+			schema,
+			`Agent runtime '${agent.id}'`,
+		);
+		return createConfigurationState(schema, resolved.values);
+	}
+
+	private requireSessionConfiguration(agent: IAgent, state: IAgentConfigurationState): IAgentConfigurationState {
+		const configuration = validateAndFreezeAgentConfigurationState(state, {
+			agent: agent.id,
+			scope: 'session',
+		});
+		if (!agent.registration.supportedSessionConfigurationSchemas.includes(configuration.schema.revision)) {
+			throw operationFailure(
+				'conflict',
+				`Session configuration schema '${configuration.schema.revision}' is not supported by the active runtime`,
+			);
+		}
+		recordExactConfigurationSchema(
+			this.sessionConfigurationSchemas,
+			configuration.schema,
+			`Persisted Session for Agent '${agent.id}'`,
+		);
+		return configuration;
+	}
+
+	private async requireRuntimeExactSessionConfiguration(
+		agent: IAgent,
+		workspace: IAgentWorkspace | undefined,
+		state: IAgentConfigurationState,
+	): Promise<IAgentConfigurationState> {
+		const current = this.requireSessionConfiguration(agent, state);
+		const resolved = await this.resolveSessionConfigurationState(agent, workspace, Object.freeze({
+			schema: current.schema.revision,
+			values: current.values,
+		}));
+		if (!sameProtocolValue(current.schema, resolved.schema) || !sameProtocolValue(current.values, resolved.values)) {
+			throw operationFailure('conflict', 'Persisted Session configuration does not match the active runtime resolution');
+		}
+		return current;
+	}
+
+	private async resolvePreparationTarget(target: AgentHostSubmissionTarget): Promise<{
 		readonly sessionType: IAgentHostSessionTypeDescriptor;
 		readonly agent: IAgent;
+		readonly sessionConfiguration: IAgentConfigurationState;
 		readonly chat?: IRuntimeChatRecord;
-	} {
+	}> {
 		if (target.kind === 'draft') {
 			const sessionType = this.requireSessionType(target.sessionType);
 			this.validateWorkspace(sessionType, target.workspace);
-			return { sessionType, agent: this.requireActiveAgent(sessionType.agentId, sessionType.packageId) };
+			const agent = this.requireActiveAgent(sessionType.agentId, sessionType.packageId);
+			return {
+				sessionType,
+				agent,
+				sessionConfiguration: await this.resolveSessionConfigurationState(agent, target.workspace, target.configuration),
+			};
 		}
 		const session = this.requireSession(target.session);
+		if (this.hasPendingSessionConfigurationFinalization(session.state.id)) {
+			throw operationFailure('invalidState', 'Session configuration finalization requires reconciliation');
+		}
 		const chat = this.requireChat(session, target.chat);
 		const sessionType = this.requireSessionType(session.state.type);
 		if (chat.state.lifecycle !== 'available' || !chat.state.capabilities.supportsSubmit) {
 			throw operationFailure('invalidState', `Chat '${target.chat}' cannot accept a submission`);
 		}
+		const agent = this.requireActiveAgent(session.state.agentId, session.state.packageId);
 		return {
 			sessionType,
-			agent: this.requireActiveAgent(session.state.agentId, session.state.packageId),
+			agent,
+			sessionConfiguration: await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration),
 			chat,
 		};
 	}
@@ -1517,18 +1991,19 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			if (request.capture.message.length === 0 && request.capture.attachments.length === 0) {
 				throw operationFailure('invalidPayload', 'Submission must include a message or attachment');
 			}
-			const target = this.resolvePreparationTarget(request.target);
+			const target = await this.resolvePreparationTarget(request.target);
 			return await this.runLifecycleActivity(target.agent.id, async () => {
 			const descriptor = target.agent.descriptor.get();
 			const model = this.resolveExecutionModel(target.sessionType, descriptor, request.executionSelection, target.chat);
 			this.validateCapture(connection, descriptor, model, request);
-			const selection = this.toAgentExecutionSelection(request.executionSelection);
+			const selection = this.toAgentExecutionSelection(request.executionSelection, model.configurationSchema);
 			const selectionDigest = await computeAgentHostPayloadDigest(selection);
 			const profile = await target.agent.executionProfiles.resolve({
 				submission: request.submission,
 				selection,
 				selectionDigest,
 				runtimeRegistration: target.agent.registration.revision,
+				sessionConfiguration: target.sessionConfiguration,
 			});
 			if (
 				profile.agentDescriptor !== descriptor.revision
@@ -1537,6 +2012,22 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			) {
 				throw operationFailure('conflict', 'Execution profile does not match the exact Agent and model descriptors');
 			}
+			const credentialsByIdentity = new Map<string, IAgentCredentialReference>();
+			for (const binding of [
+				...collectAgentConfigurationCredentialReferences(
+					target.sessionConfiguration.schema,
+					target.sessionConfiguration.values,
+					'session',
+				),
+				...collectAgentConfigurationCredentialReferences(
+					model.configurationSchema,
+					selection.configuration.values,
+					'model',
+				),
+			]) {
+				credentialsByIdentity.set(encodeAgentHostProtocolValue(binding.credential), binding.credential);
+			}
+			const credentials = Object.freeze([...credentialsByIdentity.values()]);
 			const toolSet = await this.options.toolSets.prepare({
 				submission: request.submission,
 				agent: descriptor,
@@ -1557,6 +2048,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				message: request.capture.message,
 				attachments: Object.freeze([...request.capture.attachments]),
 				interactionTargets: Object.freeze([...request.capture.interactionTargets]),
+				sessionConfiguration: target.sessionConfiguration,
+				modelConfiguration: selection.configuration,
+				credentials,
 				executionProfile: Object.freeze({ ...profile }),
 				runtimeRegistration: target.agent.registration.revision,
 				toolSet,
@@ -1602,13 +2096,23 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		return model;
 	}
 
-	private toAgentExecutionSelection(selection: AgentHostExecutionSelection): {
+	private toAgentExecutionSelection(
+		selection: AgentHostExecutionSelection,
+		modelSchema: IAgentConfigurationSchema,
+	): {
 		readonly kind: 'user' | 'product';
 		readonly value: AgentHostProtocolValue;
+		readonly configuration: IAgentConfigurationCandidate;
 	} {
+		const schema = validateAndFreezeAgentConfigurationSchema(modelSchema, {
+			agent: modelSchema.agent,
+			scope: 'model',
+			revision: modelSchema.revision,
+		});
+		const configuration = resolveAgentModelConfigurationCandidate(schema, selection.configuration);
 		return selection.kind === 'model'
-			? Object.freeze({ kind: 'user', value: Object.freeze({ model: selection.model }) })
-			: Object.freeze({ kind: 'product', value: Object.freeze({ preset: selection.preset }) });
+			? Object.freeze({ kind: 'user', value: Object.freeze({ model: selection.model }), configuration })
+			: Object.freeze({ kind: 'product', value: Object.freeze({ preset: selection.preset }), configuration });
 	}
 
 	private validateCapture(
@@ -1731,9 +2235,18 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		connection: AgentHostClientConnectionId,
 		request: IAgentHostMutationRequest,
 	): Promise<IMutationExecution> {
+		if (
+			'session' in request.payload
+			&& request.payload.kind !== 'updateSessionConfiguration'
+			&& this.hasPendingSessionConfigurationFinalization(request.payload.session)
+		) {
+			throw operationFailure('invalidState', 'Session configuration finalization requires reconciliation');
+		}
 		const execute = () => {
-			switch (request.payload.kind) {
+				switch (request.payload.kind) {
 				case 'createSession': return this.createSession(connection, request);
+				case 'updateAgentDefaults': return this.updateAgentDefaults(request);
+				case 'updateSessionConfiguration': return this.updateSessionConfiguration(request);
 				case 'createChat': return this.createChat(request);
 				case 'forkChat': return this.forkChat(request);
 				case 'renameSession': return this.renameSession(request);
@@ -1754,6 +2267,422 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		};
 		const agentId = this.runtimeMutationAgent(request.payload);
 		return agentId === undefined ? execute() : this.runLifecycleActivity(agentId, execute);
+	}
+
+	private async reconcileSessionConfigurationFinalization(
+		operation: AgentHostOperationId,
+		pending: IPendingSessionConfigurationFinalization,
+	): Promise<AgentHostMutationOutcome> {
+		let current = pending;
+		if (current.finalize === 'commit' || current.finalize === 'rollback') {
+			try {
+				if (current.finalize === 'commit') {
+					await current.agent.configuration.commitSessionUpdate(current.request);
+				} else {
+					await current.agent.configuration.rollbackSessionUpdate(current.request);
+				}
+			} catch {
+				return Object.freeze({ kind: 'pending' });
+			}
+			const completed: IAgentHostSessionConfigurationFinalization = Object.freeze({
+				operation,
+				digest: current.request.payloadDigest,
+				connection: current.connection,
+				status: 'completed',
+				packageId: current.agent.registration.packageId,
+				agentId: current.agent.id,
+				runtimeRegistration: current.request.runtimeRegistration,
+				session: current.request.session,
+				configuration: current.request.configuration,
+				decision: current.decision,
+				outcome: current.outcome,
+			});
+			try {
+				await this.commitHostState(
+					this.sessions,
+					Object.freeze([]),
+					Object.freeze({ kind: 'operation', operation, payloadDigest: current.request.payloadDigest }),
+					undefined,
+					this.catalog.backingRemovalOperations,
+					this.agentDefaults,
+					this.withSessionConfigurationFinalization(completed),
+				);
+			} catch {
+				return Object.freeze({ kind: 'pending' });
+			}
+			current = Object.freeze({
+				connection: current.connection,
+				request: current.request,
+				decision: current.decision,
+				outcome: current.outcome,
+				agent: current.agent,
+				finalize: 'acknowledge',
+			});
+			this.pendingSessionConfigurationFinalizations.set(operation, current);
+		}
+		if (current.finalize === 'acknowledge') {
+			try {
+				await current.agent.configuration.acknowledgeSessionUpdate(Object.freeze({
+					...current.request,
+					decision: current.decision,
+				}));
+			} catch {
+				return Object.freeze({ kind: 'pending' });
+			}
+		}
+		const acknowledged: IAgentHostSessionConfigurationFinalization = Object.freeze({
+			operation,
+			digest: current.request.payloadDigest,
+			connection: current.connection,
+			status: 'acknowledged',
+			outcome: current.outcome,
+		});
+		try {
+			await this.commitHostState(
+				this.sessions,
+				Object.freeze([]),
+				Object.freeze({ kind: 'operation', operation, payloadDigest: current.request.payloadDigest }),
+				undefined,
+				this.catalog.backingRemovalOperations,
+				this.agentDefaults,
+				this.withSessionConfigurationFinalization(acknowledged),
+			);
+		} catch {
+			return Object.freeze({ kind: 'pending' });
+		}
+		this.pendingSessionConfigurationFinalizations.delete(operation);
+		this.notifyQuiescenceChanged();
+		this.operations.commit(operation, current.request.payloadDigest, current.outcome);
+		return current.outcome;
+	}
+
+	private withSessionConfigurationFinalization(
+		record: IAgentHostSessionConfigurationFinalization,
+	): readonly IAgentHostSessionConfigurationFinalization[] {
+		const existing = this.catalog.sessionConfigurationFinalizations.find(candidate => (
+			candidate.operation === record.operation
+		));
+		if (existing !== undefined) {
+			if (existing.digest !== record.digest || existing.connection !== record.connection) {
+				throw new Error(`Session configuration operation '${record.operation}' changed its durable owner or payload`);
+			}
+			const acceptsPreparedCommit = (existing.status === 'intent' || existing.status === 'pending')
+				&& existing.decision === 'rollback'
+				&& record.status === 'pending'
+				&& record.decision === 'commit';
+			if (!sameProtocolValue(existing.outcome, record.outcome) && !acceptsPreparedCommit) {
+				throw new Error(`Session configuration operation '${record.operation}' changed its durable outcome`);
+			}
+			if (existing.status === 'acknowledged') {
+				if (record.status !== 'acknowledged' || !sameProtocolValue(existing, record)) {
+					throw new Error(`Acknowledged Session configuration operation '${record.operation}' cannot transition`);
+				}
+				return this.catalog.sessionConfigurationFinalizations;
+			}
+			if (record.status !== 'acknowledged') {
+				if (
+					existing.packageId !== record.packageId
+					|| existing.agentId !== record.agentId
+					|| existing.runtimeRegistration !== record.runtimeRegistration
+					|| existing.session !== record.session
+					|| existing.configuration !== record.configuration
+					|| (existing.decision !== record.decision && !acceptsPreparedCommit)
+					|| record.status === 'intent'
+					|| (existing.status === 'completed' && record.status !== 'completed')
+				) {
+					throw new Error(`Session configuration operation '${record.operation}' has an invalid durable transition`);
+				}
+				if (existing.status === record.status && !sameProtocolValue(existing, record) && !acceptsPreparedCommit) {
+					throw new Error(`Session configuration operation '${record.operation}' changed within one durable state`);
+				}
+			}
+		}
+		const retained = this.catalog.sessionConfigurationFinalizations.filter(candidate => candidate.operation !== record.operation);
+		if (existing === undefined && retained.length >= maximumRetainedAgentHostSessionConfigurationFinalizations) {
+			const oldestAcknowledged = retained.findIndex(candidate => candidate.status === 'acknowledged');
+			if (oldestAcknowledged < 0) {
+				throw operationFailure('capacityExceeded', 'Session configuration operation ledger is full');
+			}
+			retained.splice(oldestAcknowledged, 1);
+		}
+		return Object.freeze([
+			...retained,
+			record,
+		]);
+	}
+
+	private async updateAgentDefaults(request: IAgentHostMutationRequest): Promise<IMutationExecution> {
+		const payload = request.payload;
+		if (payload.kind !== 'updateAgentDefaults') {
+			throw new Error('Mismatched update Agent defaults mutation');
+		}
+		const agent = this.requireActiveAgent(payload.agent);
+		const current = this.requireAgentDefaults(agent);
+		if (current.revision !== payload.expectedRevision) {
+			throw operationFailure('conflict', 'Agent-default configuration revision changed before update');
+		}
+		const schema = validateAndFreezeAgentConfigurationSchema(agent.registration.hostDefaultsSchema, {
+			agent: agent.id,
+			scope: 'hostDefault',
+			revision: current.schema.revision,
+		});
+		const candidate = validateAndFreezeAgentConfigurationCandidate(schema, payload.candidate, 'hostDefault');
+		const configuration = createConfigurationState(schema, candidate.values);
+		if (sameProtocolValue(current, configuration)) {
+			return this.simpleMutationResult(request, {
+				hostSequence: this.catalog.hostSequence,
+				revisions: Object.freeze([]),
+			}, {
+				kind: 'updateAgentDefaults',
+				agent: agent.id,
+				configuration: current.revision,
+			});
+		}
+		const agentDefaults = new Map(this.agentDefaults);
+		agentDefaults.set(agent.id, configuration);
+		const state = this.createRootState(undefined, undefined, agentDefaults);
+		const committed = await this.commitHostState(
+			this.sessions,
+			[this.rootAction(state)],
+			this.operationCause(request),
+			undefined,
+			this.catalog.backingRemovalOperations,
+			agentDefaults,
+		);
+		return this.simpleMutationResult(request, committed, {
+			kind: 'updateAgentDefaults',
+			agent: agent.id,
+			configuration: configuration.revision,
+		});
+	}
+
+	private async updateSessionConfiguration(request: IAgentHostMutationRequest): Promise<IMutationExecution> {
+		const payload = request.payload;
+		if (payload.kind !== 'updateSessionConfiguration') {
+			throw new Error('Mismatched update Session configuration mutation');
+		}
+		const session = this.requireSession(payload.session);
+		if (this.hasPendingSessionConfigurationFinalization(payload.session)) {
+			throw operationFailure('invalidState', 'Another Session configuration operation requires reconciliation');
+		}
+		if (session.state.configuration.revision !== payload.expectedRevision) {
+			throw operationFailure('conflict', 'Session configuration revision changed before update');
+		}
+		if ([...session.chats.values()].some(chat => chat.state.turns.some(turn => activeTurnStates.has(turn.state)))) {
+			throw operationFailure('invalidState', 'Session configuration cannot change while a Turn is active');
+		}
+		const agent = this.requireActiveAgent(session.state.agentId, session.state.packageId);
+		const connection = this.operationOwners.get(request.operation);
+		if (connection === undefined) {
+			throw new Error(`Session configuration operation '${request.operation}' has no logical connection owner`);
+		}
+		const current = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
+		const candidate = validateAndFreezeAgentConfigurationCandidate(current.schema, payload.candidate, 'session', true);
+		for (const property of current.schema.properties) {
+			if (property.sessionMutable) {
+				continue;
+			}
+			const currentHasValue = Object.hasOwn(current.values, property.id);
+			const candidateHasValue = Object.hasOwn(candidate.values, property.id);
+			if (
+				currentHasValue !== candidateHasValue
+				|| (currentHasValue && encodeAgentHostProtocolValue(current.values[property.id]) !== encodeAgentHostProtocolValue(candidate.values[property.id]))
+			) {
+				throw operationFailure('invalidPayload', `Session configuration property '${property.id}' is immutable`);
+			}
+		}
+		const configuration = createConfigurationState(current.schema, candidate.values);
+		const resultShape = Object.freeze({
+			kind: 'updateSessionConfiguration' as const,
+			session: payload.session,
+			configuration: configuration.revision,
+		});
+		if (sameProtocolValue(current, configuration)) {
+			const execution = this.simpleMutationResult(request, {
+				hostSequence: this.catalog.hostSequence,
+				revisions: Object.freeze([]),
+			}, resultShape);
+			const completed: IAgentHostSessionConfigurationFinalization = Object.freeze({
+				operation: request.operation,
+				digest: request.digest,
+				connection,
+				status: 'acknowledged',
+				outcome: Object.freeze({ kind: 'succeeded', result: execution.result }),
+			});
+			await this.commitHostState(
+				this.sessions,
+				Object.freeze([]),
+				this.operationCause(request),
+				undefined,
+				this.catalog.backingRemovalOperations,
+				this.agentDefaults,
+				this.withSessionConfigurationFinalization(completed),
+			);
+			return execution;
+		}
+		const finalizationRequest = Object.freeze({
+			operation: request.operation,
+			payloadDigest: request.digest,
+			runtimeRegistration: agent.registration.revision,
+			session: payload.session,
+			configuration: configuration.revision,
+		});
+		const rollbackFailure = Object.freeze({
+			code: 'invalidState' as const,
+			message: 'Session configuration update did not commit',
+			reconciliation: 'terminal' as const,
+		});
+		const rollbackOutcome = Object.freeze({ kind: 'failed' as const, failure: rollbackFailure });
+		const rollbackIntent: IAgentHostSessionConfigurationFinalization = Object.freeze({
+			operation: request.operation,
+			digest: request.digest,
+			connection,
+			status: 'intent',
+			packageId: session.state.packageId,
+			agentId: session.state.agentId,
+			runtimeRegistration: agent.registration.revision,
+			session: payload.session,
+			configuration: configuration.revision,
+			decision: 'rollback',
+			outcome: rollbackOutcome,
+		});
+		const pendingRollback: IAgentHostSessionConfigurationFinalization = Object.freeze({
+			...rollbackIntent,
+			status: 'pending',
+		});
+		const finalizeRollback = async (): Promise<never> => {
+			const pending: IPendingSessionConfigurationFinalization = Object.freeze({
+				connection,
+				agent,
+				request: finalizationRequest,
+				decision: 'rollback',
+				finalize: 'rollback',
+				outcome: rollbackOutcome,
+			});
+			this.pendingSessionConfigurationFinalizations.set(request.operation, pending);
+			const reconciled = await this.reconcileSessionConfigurationFinalization(request.operation, pending);
+			if (reconciled.kind === 'pending') {
+				throw new PendingSessionConfigurationFinalization();
+			}
+			throw new HostOperationFailure(rollbackFailure);
+		};
+		if (session.materialized) {
+			await this.commitHostState(
+				this.sessions,
+				Object.freeze([]),
+				this.operationCause(request),
+				undefined,
+				this.catalog.backingRemovalOperations,
+				this.agentDefaults,
+				this.withSessionConfigurationFinalization(rollbackIntent),
+			);
+			try {
+				await agent.configuration.prepareSessionUpdate({
+					operation: request.operation,
+					payloadDigest: request.digest,
+					runtimeRegistration: agent.registration.revision,
+					session: payload.session,
+					current,
+					candidate: configuration,
+				});
+			} catch {
+				try {
+					await this.commitHostState(
+						this.sessions,
+						Object.freeze([]),
+						this.operationCause(request),
+						undefined,
+						this.catalog.backingRemovalOperations,
+						this.agentDefaults,
+						this.withSessionConfigurationFinalization(pendingRollback),
+					);
+				} catch {
+					// The durable intent remains the authoritative rollback decision.
+				}
+				return finalizeRollback();
+			}
+			try {
+				await this.commitHostState(
+					this.sessions,
+					Object.freeze([]),
+					this.operationCause(request),
+					undefined,
+					this.catalog.backingRemovalOperations,
+					this.agentDefaults,
+					this.withSessionConfigurationFinalization(pendingRollback),
+				);
+			} catch {
+				return finalizeRollback();
+			}
+		}
+		const state = Object.freeze({
+			...session.state,
+			configuration,
+			modifiedAt: this.checkedNow(),
+		});
+		const next = new Map(this.sessions);
+		next.set(payload.session, { ...session, state });
+		let execution: IMutationExecution | undefined;
+		try {
+			await this.commitHostState(
+				next,
+				[this.sessionsAction(next), this.sessionAction(state)],
+				this.operationCause(request),
+				undefined,
+				this.catalog.backingRemovalOperations,
+				this.agentDefaults,
+				committed => {
+					execution = this.simpleMutationResult(request, committed, resultShape);
+					const outcome = Object.freeze({ kind: 'succeeded' as const, result: execution.result });
+					const finalization: IAgentHostSessionConfigurationFinalization = session.materialized
+						? Object.freeze({
+							operation: request.operation,
+							digest: request.digest,
+							connection,
+							status: 'pending' as const,
+							packageId: session.state.packageId,
+							agentId: session.state.agentId,
+							runtimeRegistration: agent.registration.revision,
+							session: payload.session,
+							configuration: configuration.revision,
+							decision: 'commit' as const,
+							outcome,
+						})
+						: Object.freeze({
+							operation: request.operation,
+							digest: request.digest,
+							connection,
+							status: 'acknowledged' as const,
+							outcome,
+						});
+					return this.withSessionConfigurationFinalization(finalization);
+				},
+			);
+		} catch {
+			if (session.materialized) {
+				return finalizeRollback();
+			}
+			throw new HostOperationFailure(rollbackFailure);
+		}
+		if (execution === undefined) {
+			throw new Error('Session configuration commit did not construct a mutation result');
+		}
+		if (session.materialized) {
+			const pending: IPendingSessionConfigurationFinalization = Object.freeze({
+				connection,
+				agent,
+				request: finalizationRequest,
+				decision: 'commit',
+				finalize: 'commit' as const,
+				outcome: Object.freeze({ kind: 'succeeded' as const, result: execution.result }),
+			});
+			this.pendingSessionConfigurationFinalizations.set(request.operation, pending);
+			const reconciled = await this.reconcileSessionConfigurationFinalization(request.operation, pending);
+			if (reconciled.kind === 'pending') {
+				throw new PendingSessionConfigurationFinalization();
+			}
+		}
+		return execution;
 	}
 
 	private async authenticateAgent(request: IAgentHostMutationRequest): Promise<IMutationExecution> {
@@ -1810,6 +2739,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		const sessionType = this.requireSessionType(payload.sessionType);
 		const agent = this.requireActiveAgent(sessionType.agentId, sessionType.packageId);
 		this.validateWorkspace(sessionType, payload.workspace);
+		const configuration = await this.resolveSessionConfigurationState(agent, payload.workspace, payload.configuration);
 		if (payload.chats.length === 0 && (!sessionType.capabilities.supportsEmptySession || !agent.descriptor.get().capabilities.supportsEmptySession)) {
 			throw operationFailure('unsupportedCapability', 'Session type does not support an empty Session');
 		}
@@ -1819,8 +2749,13 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		}
 		const initialSubmissions = new Set<AgentSubmissionId>();
 		const preparationTarget: AgentHostSubmissionTarget = payload.workspace === undefined
-			? Object.freeze({ kind: 'draft', sessionType: payload.sessionType })
-			: Object.freeze({ kind: 'draft', sessionType: payload.sessionType, workspace: payload.workspace });
+			? Object.freeze({ kind: 'draft', sessionType: payload.sessionType, configuration: payload.configuration })
+			: Object.freeze({
+				kind: 'draft',
+				sessionType: payload.sessionType,
+				workspace: payload.workspace,
+				configuration: payload.configuration,
+			});
 		for (const chat of payload.chats) {
 			this.validateChatModel(sessionType, agent, chat.model);
 			if ((chat.title?.length ?? 0) > 1_024) {
@@ -1835,6 +2770,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				}
 				initialSubmissions.add(chat.initialSubmission.submission);
 				this.requirePreparedSubmission(connection, chat.initialSubmission, preparationTarget);
+				if (!sameProtocolValue(chat.initialSubmission.sessionConfiguration, configuration)) {
+					throw operationFailure('conflict', 'Prepared submission Session configuration changed before Session creation');
+				}
 			}
 		}
 		const session = this.options.identityFactory.createSession();
@@ -1851,6 +2789,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			operation: request.operation,
 			payloadDigest: request.digest,
 			session,
+			configuration,
 			...(payload.workspace === undefined ? {} : { workspace: payload.workspace }),
 		});
 		if (sessionBacking.session !== session) {
@@ -1900,7 +2839,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				createdResults.push({ chat: created.id });
 			}
 		}
-		const state = this.createSessionState(agent, sessionType, session, payload.workspace, '', now, runtimeChats);
+		const state = this.createSessionState(agent, sessionType, session, payload.workspace, configuration, '', now, runtimeChats);
 		const next = new Map(this.sessions);
 		next.set(session, { state, resume: sessionBacking.resume, materialized: true, chats: runtimeChats });
 		const cause = this.operationCause(request);
@@ -1910,14 +2849,22 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			...([...runtimeChats.values()].map(chat => this.chatAction(chat.state))),
 		];
 		const turnBindings: IDisposable[] = [];
+		const credentialTurnBindings: IDisposable[] = [];
 		let committed: ICommittedHostState;
 		try {
 			for (const start of starts) {
 				await this.bindTurnContent(start);
 				turnBindings.push(this.bindToolTurn(agent, start));
+				const credentialBinding = this.bindCredentialTurn(agent, start);
+				if (credentialBinding !== undefined) {
+					credentialTurnBindings.push(credentialBinding);
+				}
 			}
 			committed = await this.commitHostAndBackingState(next, actions, cause);
 		} catch (error) {
+			for (const binding of credentialTurnBindings) {
+				binding.dispose();
+			}
 			for (const binding of turnBindings) {
 				binding.dispose();
 			}
@@ -2106,10 +3053,12 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		const materializedChats: IRuntimeChatRecord[] = [];
 		let sessionMaterialized = false;
 		try {
+			const configuration = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
 			await agent.sessions.materialize({
 				operation: request.operation,
 				payloadDigest: request.digest,
 				session: payload.session,
+				configuration,
 				resume: session.resume,
 			});
 			sessionMaterialized = true;
@@ -2181,7 +3130,14 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		let chatMaterialized = false;
 		try {
 			if (!session.materialized) {
-				await agent.sessions.materialize({ operation: request.operation, payloadDigest: request.digest, session: payload.session, resume: session.resume });
+				const configuration = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
+				await agent.sessions.materialize({
+					operation: request.operation,
+					payloadDigest: request.digest,
+					session: payload.session,
+					configuration,
+					resume: session.resume,
+				});
 				sessionMaterialized = true;
 			}
 			await agent.chats.materialize({ operation: request.operation, payloadDigest: request.digest, session: payload.session, chat: payload.chat, resume: chat.resume });
@@ -2253,6 +3209,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			throw error;
 		}
 		this.retireSessionToolBindings(payload.session);
+		this.retireSessionCredentialBindings(payload.session);
 		return this.simpleMutationResult(request, committed, { kind: 'releaseSession', session: payload.session });
 	}
 
@@ -2278,6 +3235,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		try {
 			const committed = await this.commitHostAndBackingState(next, [this.sessionsAction(next), this.sessionAction(updated.state), this.chatAction(state)], this.operationCause(request));
 			this.retireChatToolBindings(payload.session, payload.chat);
+			this.retireChatCredentialBindings(payload.session, payload.chat);
 			return this.simpleMutationResult(request, committed, { kind: 'releaseChat', session: payload.session, chat: payload.chat });
 		} catch (error) {
 			await agent.chats.materialize({ operation: request.operation, payloadDigest: request.digest, session: payload.session, chat: payload.chat, resume: chat.resume });
@@ -2301,6 +3259,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		next.delete(payload.session);
 		const committed = await this.commitHostAndBackingState(next, [this.sessionsAction(next)], this.operationCause(request));
 		this.retireSessionToolBindings(payload.session);
+		this.retireSessionCredentialBindings(payload.session);
 		return this.simpleMutationResult(request, committed, { kind: 'deleteSession', session: payload.session });
 	}
 
@@ -2321,6 +3280,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		next.set(payload.session, updated);
 		const committed = await this.commitHostAndBackingState(next, [this.sessionsAction(next), this.sessionAction(updated.state)], this.operationCause(request));
 		this.retireChatToolBindings(payload.session, payload.chat);
+		this.retireChatCredentialBindings(payload.session, payload.chat);
 		return this.simpleMutationResult(request, committed, { kind: 'deleteChat', session: payload.session, chat: payload.chat });
 	}
 
@@ -2346,14 +3306,17 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			status: 'running', isRead: false, modifiedAt: this.checkedNow(),
 		});
 		const agentRequest = this.createAgentChatRequest(agent, request, payload.session, payload.chat, turn, payload.submission);
-		let binding: IDisposable | undefined;
+		let toolBinding: IDisposable | undefined;
+		let credentialBinding: IDisposable | undefined;
 		let committed: ICommittedHostState;
 		try {
 			await this.bindTurnContent(agentRequest);
-			binding = this.bindToolTurn(agent, agentRequest);
+			toolBinding = this.bindToolTurn(agent, agentRequest);
+			credentialBinding = this.bindCredentialTurn(agent, agentRequest);
 			committed = await this.commitChatState(request, session, chat, state);
 		} catch (error) {
-			binding?.dispose();
+			credentialBinding?.dispose();
+			toolBinding?.dispose();
 			try {
 				await this.releaseTurnContent(agentRequest.session, agentRequest.chat, agentRequest.turn);
 			} catch (releaseError) {
@@ -2506,6 +3469,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			interactionTargets: submission.interactionTargets,
 			binding: Object.freeze({
 				profile: submission.executionProfile,
+				modelConfiguration: submission.modelConfiguration,
+				credentials: submission.credentials,
 				runtimeRegistration: agent.registration.revision,
 				toolSet: submission.toolSet,
 				deadline: submission.requestedDeadline,
@@ -2608,8 +3573,55 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		return tracked;
 	}
 
+	private bindCredentialTurn(agent: IAgent, request: IAgentChatRequest): IDisposable | undefined {
+		if (request.binding.credentials.length === 0) {
+			return undefined;
+		}
+		const authority = this.options.credentials;
+		if (authority === undefined) {
+			throw new AgentHostError(
+				AgentHostErrorCode.CapabilityUnsupported,
+				'Agent Host does not expose a credential authority',
+				{ capability: 'agentCredentials' },
+			);
+		}
+		const installed = this.options.packageLifecycle.snapshot().installedPackages.filter(candidate => (
+			candidate.packageId === agent.registration.packageId
+		));
+		if (installed.length !== 1) {
+			throw new Error(`Agent package '${agent.registration.packageId}' is not installed exactly once`);
+		}
+		const key = turnKey(request.session, request.chat, request.turn);
+		if (this.credentialTurnBindings.has(key)) {
+			throw new Error(`Credential authority already has Turn '${request.turn}'`);
+		}
+		const binding = authority.bindTurn({
+			packageId: agent.registration.packageId,
+			agentId: agent.id,
+			runtimeRegistration: request.binding.runtimeRegistration,
+			session: request.session,
+			chat: request.chat,
+			turn: request.turn,
+			credentials: request.binding.credentials,
+			grantedPrivileges: installed[0].grantedPrivileges,
+		});
+		let tracked: IDisposable;
+		tracked = toDisposable(() => {
+			if (this.credentialTurnBindings.get(key) === tracked) {
+				this.credentialTurnBindings.delete(key);
+			}
+			binding.dispose();
+		});
+		this.credentialTurnBindings.set(key, tracked);
+		return tracked;
+	}
+
 	private retireTurnToolBinding(session: AgentSessionId, chat: AgentChatId, turn: AgentTurnId): void {
 		this.toolTurnBindings.get(turnKey(session, chat, turn))?.dispose();
+	}
+
+	private retireTurnCredentialBinding(session: AgentSessionId, chat: AgentChatId, turn: AgentTurnId): void {
+		this.credentialTurnBindings.get(turnKey(session, chat, turn))?.dispose();
 	}
 
 	private retireChatToolBindings(session: AgentSessionId, chat: AgentChatId): void {
@@ -2621,9 +3633,27 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		}
 	}
 
+	private retireChatCredentialBindings(session: AgentSessionId, chat: AgentChatId): void {
+		const prefix = `${session}\u0000${chat}\u0000`;
+		for (const [key, binding] of [...this.credentialTurnBindings]) {
+			if (key.startsWith(prefix)) {
+				binding.dispose();
+			}
+		}
+	}
+
 	private retireSessionToolBindings(session: AgentSessionId): void {
 		const prefix = `${session}\u0000`;
 		for (const [key, binding] of [...this.toolTurnBindings]) {
+			if (key.startsWith(prefix)) {
+				binding.dispose();
+			}
+		}
+	}
+
+	private retireSessionCredentialBindings(session: AgentSessionId): void {
+		const prefix = `${session}\u0000`;
+		for (const [key, binding] of [...this.credentialTurnBindings]) {
 			if (key.startsWith(prefix)) {
 				binding.dispose();
 			}
@@ -2725,6 +3755,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		await this.commitHostState(next, [this.sessionsAction(next), this.sessionAction(updated.state), this.chatAction(state)], this.runtimeCause(agent, action.session, action.chat, action.turn));
 		if (action.kind === 'turnTerminal') {
 			this.retireTurnToolBinding(action.session, action.chat, action.turn);
+			this.retireTurnCredentialBinding(action.session, action.chat, action.turn);
 			try {
 				await this.releaseTurnContent(action.session, action.chat, action.turn);
 			} finally {
@@ -2838,6 +3869,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		sessionType: IAgentHostSessionTypeDescriptor,
 		session: AgentSessionId,
 		workspace: IAgentHostSessionState['workspace'],
+		configuration: IAgentConfigurationState,
 		title: string,
 		now: number,
 		chats: ReadonlyMap<AgentChatId, IRuntimeChatRecord>,
@@ -2847,6 +3879,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			id: session, packageId: agent.registration.packageId, agentId: agent.id, type: sessionType.id,
 			createdAt: now, title, archived: false, lifecycle: 'available', status: this.aggregateStatus(chats),
 			isRead: [...chats.values()].every(chat => chat.state.isRead), modifiedAt: now,
+			configuration,
 			capabilities: Object.freeze({
 				supportsCreateChat: capabilities.supportsCreateChat && sessionType.capabilities.supportsCreateChat,
 				maximumChatCount: this.maximumChatCount(sessionType, agent),
@@ -3280,8 +4313,10 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		for (const identity of records) {
 			if (identity.chatId === undefined) {
 				this.retireSessionToolBindings(identity.sessionId);
+				this.retireSessionCredentialBindings(identity.sessionId);
 			} else {
 				this.retireChatToolBindings(identity.sessionId, identity.chatId);
+				this.retireChatCredentialBindings(identity.sessionId, identity.chatId);
 			}
 		}
 	}
@@ -3322,7 +4357,14 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			const materializedChats: AgentChatId[] = [];
 			let sessionMaterialized = false;
 			try {
-				await agent.sessions.materialize({ operation, payloadDigest: digest, session: sessionId, resume: session.resume });
+				const configuration = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
+				await agent.sessions.materialize({
+					operation,
+					payloadDigest: digest,
+					session: sessionId,
+					configuration,
+					resume: session.resume,
+				});
 				sessionMaterialized = true;
 				const chats = new Map(session.chats);
 				for (const [chatId, chat] of session.chats) {
@@ -3432,7 +4474,15 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		for (const record of records.filter(candidate => candidate.identity.chatId === undefined)) {
 			const identity = record.identity;
 			const agent = this.requireActiveAgent(identity.agentId, identity.packageId);
-			await agent.sessions.materialize({ operation, payloadDigest: digest, session: identity.sessionId, resume: record.resumeState });
+			const session = this.requireSession(identity.sessionId);
+			const configuration = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
+			await agent.sessions.materialize({
+				operation,
+				payloadDigest: digest,
+				session: identity.sessionId,
+				configuration,
+				resume: record.resumeState,
+			});
 			this.setBackingMaterialized(identity, true);
 		}
 		for (const record of records.filter(candidate => candidate.identity.chatId !== undefined)) {
@@ -3449,7 +4499,14 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		operation: AgentHostOperationId,
 		digest: AgentHostPayloadDigest,
 	): Promise<void> {
-		await agent.sessions.materialize({ operation, payloadDigest: digest, session: session.state.id, resume: session.resume });
+		const configuration = await this.requireRuntimeExactSessionConfiguration(agent, session.state.workspace, session.state.configuration);
+		await agent.sessions.materialize({
+			operation,
+			payloadDigest: digest,
+			session: session.state.id,
+			configuration,
+			resume: session.resume,
+		});
 		for (const chat of session.chats.values()) {
 			if (chat.materialized) {
 				await agent.chats.materialize({ operation, payloadDigest: digest, session: session.state.id, chat: chat.state.id, resume: chat.resume });
@@ -3500,6 +4557,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		cause: AgentHostChannelAction['cause'],
 		commitConfiguration?: () => void,
 		backingRemovalOperations: readonly IAgentHostBackingRemovalOperation[] = this.catalog.backingRemovalOperations,
+		agentDefaults: ReadonlyMap<AgentId, IAgentConfigurationState> = this.agentDefaults,
+		sessionConfigurationFinalizations: SessionConfigurationFinalizationCommit = this.catalog.sessionConfigurationFinalizations,
 	): Promise<ICommittedHostState> {
 		let hostSequence = this.catalog.hostSequence;
 		const channelRevisions: Record<string, AgentHostChannelRevision> = { ...this.catalog.channelRevisions };
@@ -3512,15 +4571,33 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			revisions.push(Object.freeze({ channel: action.channel, revision }));
 			envelopes.push(this.createEnvelope(action, hostSequence, revision, cause));
 		}
+		const committed = Object.freeze({ hostSequence, revisions: Object.freeze(revisions) });
+		const committedSessionConfigurationFinalizations = typeof sessionConfigurationFinalizations === 'function'
+			? sessionConfigurationFinalizations(committed)
+			: sessionConfigurationFinalizations;
 		const persisted = this.serializeCatalog(
 			sessions,
 			hostSequence,
 			Object.freeze(channelRevisions),
 			backingRemovalOperations,
+			agentDefaults,
+			committedSessionConfigurationFinalizations,
 		);
+		const retainedFinalizationOperations = new Set(
+			persisted.sessionConfigurationFinalizations.map(record => record.operation),
+		);
+		const evictedFinalizationOperations = this.catalog.sessionConfigurationFinalizations
+			.filter(record => !retainedFinalizationOperations.has(record.operation))
+			.map(record => record.operation);
 		await this.options.catalogStore.commit(this.catalog.revision, persisted);
 		this.catalog = persisted;
+		for (const operation of evictedFinalizationOperations) {
+			this.operations.delete(operation);
+			this.operationOwners.delete(operation);
+			this.pendingSessionConfigurationFinalizations.delete(operation);
+		}
 		this.sessions = new Map(sessions);
+		this.agentDefaults = new Map(agentDefaults);
 		commitConfiguration?.();
 		for (const envelope of envelopes) {
 			this.replay.push(envelope);
@@ -3529,7 +4606,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			}
 			this._onDidPublishAction.fire(envelope);
 		}
-		return Object.freeze({ hostSequence, revisions: Object.freeze(revisions) });
+		return committed;
 	}
 
 	private createEnvelope(
@@ -3549,6 +4626,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		hostSequence: AgentHostSequence,
 		channelRevisions: Readonly<Record<string, AgentHostChannelRevision>>,
 		backingRemovalOperations: readonly IAgentHostBackingRemovalOperation[] = this.catalog.backingRemovalOperations,
+		agentDefaults: ReadonlyMap<AgentId, IAgentConfigurationState> = this.agentDefaults,
+		sessionConfigurationFinalizations: readonly IAgentHostSessionConfigurationFinalization[] = this.catalog.sessionConfigurationFinalizations,
 	): IAgentHostPersistedCatalog {
 		const records = Object.freeze([...sessions.values()].map(record => {
 			const chats = Object.freeze([...record.chats.values()].map(chat => Object.freeze({
@@ -3562,13 +4641,15 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			});
 		}));
 		const catalog: IAgentHostPersistedCatalog = Object.freeze({
-			schemaVersion: 1,
+			schemaVersion: 2,
 			revision: this.catalog.revision + 1,
 			packageCatalogRevision: this.options.packageLifecycle.snapshot().catalogRevision,
 			hostSequence,
 			channelRevisions,
+			agentDefaults: Object.freeze([...agentDefaults.values()]),
 			sessions: records,
 			backingRemovalOperations,
+			sessionConfigurationFinalizations,
 			completedMigrations: this.catalog.completedMigrations,
 		});
 		assertAgentHostPersistedCatalog(catalog);
@@ -3618,6 +4699,14 @@ class AgentHostConnection extends Disposable implements IAgentHostConnection {
 
 	setSubscriptions(request: IAgentHostSetSubscriptionsRequest): Promise<IAgentHostSetSubscriptionsResult> {
 		return this.host.setSubscriptions(this.connection, request);
+	}
+
+	resolveSessionConfiguration(request: IAgentHostResolveSessionConfigurationRequest): Promise<IAgentHostResolveSessionConfigurationResult> {
+		return this.host.resolveSessionConfiguration(this.connection, request);
+	}
+
+	completeSessionConfiguration(request: IAgentHostSessionConfigurationCompletionsRequest): Promise<IAgentHostSessionConfigurationCompletionsResult> {
+		return this.host.completeSessionConfiguration(this.connection, request);
 	}
 
 	prepareSubmission(request: IAgentHostPrepareSubmissionRequest): Promise<AgentHostPrepareSubmissionResult> {

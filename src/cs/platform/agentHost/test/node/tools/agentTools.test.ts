@@ -17,6 +17,10 @@ import type {
 } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
 import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationSchema,
+} from 'cs/platform/agentHost/common/configuration';
+import {
 	AgentToolCallId,
 	createAgentCapabilityRevision,
 	createAgentChatId,
@@ -99,6 +103,30 @@ const executorId = createAgentToolExecutorId('test.executor');
 const contributorId = createAgentToolContributorId('test.contributor');
 const clientTargetType = createAgentInteractionTargetTypeId('test.client-target');
 
+const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'hostDefault',
+	revision: 'test.host-defaults.v1',
+	properties: [],
+});
+
+const sessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'session',
+	revision: 'test.session-configuration.v1',
+	properties: [],
+});
+
+const modelConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'model',
+	revision: 'test.model-configuration.v1',
+	properties: [],
+});
+
 const inputSchemaValue = Object.freeze({
 	type: 'object',
 	properties: Object.freeze({
@@ -122,6 +150,7 @@ const model: IAgentModelDescriptor = Object.freeze({
 	revision: modelRevision,
 	displayName: 'Test model',
 	enabled: true,
+	configurationSchema: modelConfigurationSchema,
 	toolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
 	attachments: Object.freeze({
 		carriers: Object.freeze(['inline'] as const),
@@ -157,7 +186,7 @@ const agent: IAgentDescriptor = Object.freeze({
 		supportsDeleteChat: true,
 	}),
 	models: Object.freeze([model]),
-	authenticationRequired: false,
+	requiresAgentAuthentication: false,
 });
 
 const runtimeRegistration: IAgentRuntimeRegistration = Object.freeze({
@@ -166,6 +195,9 @@ const runtimeRegistration: IAgentRuntimeRegistration = Object.freeze({
 	revision: runtimeRevision,
 	descriptorRevision,
 	capabilityRevision,
+	hostDefaultsSchema,
+	initialSessionConfigurationSchema: sessionConfigurationSchema.revision,
+	supportedSessionConfigurationSchemas: Object.freeze([sessionConfigurationSchema.revision]),
 	supportedToolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
 	supportedResumeSchemas: Object.freeze([]),
 	resumeMigrationEdges: Object.freeze([]),

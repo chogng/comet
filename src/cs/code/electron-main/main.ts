@@ -1,7 +1,6 @@
-import { app } from 'electron';
+import { app, safeStorage } from 'electron';
 import { fileURLToPath } from 'node:url';
 
-import { CancellationError } from 'cs/base/common/errors';
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
 import {
   configureDevelopmentEnvironmentMain,
@@ -42,6 +41,8 @@ app.whenReady().then(async () => {
       ragCacheDir: environmentMainPaths.ragCacheDir,
     },
     {
+      safeStorage,
+      platform: process.platform,
       defaultLocale: resolveEnvironmentMainLocale(),
     },
   );
@@ -50,17 +51,7 @@ app.whenReady().then(async () => {
   const settings = await storage.loadSettings();
   const agentHost = await LocalAgentHostMain.create({
     storage: storage.applicationStorage,
-    settings: settings.llm,
-    loadSettings: async (signal) => {
-      if (signal.aborted) {
-        throw new CancellationError();
-      }
-      const currentSettings = await storage.loadSettings();
-      if (signal.aborted) {
-        throw new CancellationError();
-      }
-      return currentSettings.llm;
-    },
+    providerApiKeySecretStorage: storage.providerApiKeySecretStorage,
     contentMaterializationRoot: environmentMainPaths.agentHostContentDir,
     bundledArtifactPath: fileURLToPath(import.meta.url),
     channelServer: electronMainChannelServer,
@@ -107,7 +98,7 @@ app.whenReady().then(async () => {
   if (isDevelopmentEnvironmentMain()) {
     registerDevShortcuts({ getMainWindow });
   }
-  registerAppIpc(storage, nativeHostMainService, themeMainService, settings => agentHost.updateSettings(settings));
+  registerAppIpc(storage, nativeHostMainService, themeMainService);
   await windowsMainService.openMainWindow(settings);
   setMenuBarIconEnabled(settings.menuBarIconEnabled);
 });

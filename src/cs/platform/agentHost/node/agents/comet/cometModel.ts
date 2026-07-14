@@ -10,6 +10,8 @@ import type {
 	IAgentModelDescriptor,
 	IAgentWorkspace,
 } from 'cs/platform/agentHost/common/agent';
+import type { IAgentConfigurationCandidate } from 'cs/platform/agentHost/common/configuration';
+import type { IAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
 import type {
 	IAgentHostAttachment,
 	IAgentHostContentReference,
@@ -22,6 +24,7 @@ import type {
 	AgentHostPayloadDigest,
 	AgentChatId,
 	AgentInteractionTargetId,
+	AgentRuntimeRegistrationRevision,
 	AgentSessionId,
 	AgentToolCallId,
 	AgentToolRegistrationId,
@@ -37,7 +40,7 @@ export type CometModelErrorCode =
 	| 'invalidConfiguration'
 	| 'invalidExecutionSelection'
 	| 'invalidExecutionSettings'
-	| 'authenticationRequired'
+	| 'providerCredentialRequired'
 	| 'executionConnectionChanged'
 	| 'connectionResolutionFailed'
 	| 'invalidCanonicalMessage'
@@ -132,6 +135,9 @@ export interface ICometModelAttachment {
 
 export interface ICometModelStepRequest {
 	readonly profile: IAgentExecutionProfile;
+	readonly modelConfiguration: IAgentConfigurationCandidate;
+	readonly credentials: readonly IAgentCredentialReference[];
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
 	readonly settings: AgentHostProtocolValue;
 	readonly systemPrompt: string;
 	readonly session: AgentSessionId;

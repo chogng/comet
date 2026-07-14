@@ -44,12 +44,17 @@ The scoped files and final locations are:
 - `src/cs/workbench/contrib/draftEditor/**` where Editor context migrates to
   the common composer-attachment API;
 - `src/cs/platform/agentHost/**`;
+- `src/cs/platform/secrets/**` where provider credentials move to encrypted
+  persistent ownership;
 - `src/cs/agent/**`;
 - `src/cs/code/electron-main/agent/**`;
 - `src/cs/code/electron-main/llm/**` and
   `src/cs/code/electron-main/rag/**` where runtime services move behind
   Platform Agent Host contracts;
 - `src/cs/code/electron-main/ipc.ts`;
+- `src/cs/code/electron-main/main.ts` and
+  `src/cs/code/electron-main/storageService.ts` where encrypted secret storage
+  is composed;
 - the `run_main_agent_turn` contracts in
   `src/cs/base/parts/sandbox/common/sandboxTypes.ts`;
 - `src/cs/workbench/services/llm/mainAgentPayload.ts`;
@@ -259,9 +264,14 @@ names. No target registration imports or dispatches through the legacy path.
    update every call site directly. Register exactly one Comet endpoint for
    each Agent Host composition; do not retain the command path or dual-register
    embedded and connected runtimes.
-   Add the common Agent configuration surface, migrate Comet model-provider
-   settings into SDK-neutral Host-default, Session, and model-selection
-   schemas, and keep their native provider projection inside the Comet runtime.
+   Add the common Agent configuration surface, including operation-scoped
+   Session prepare, commit, rollback, and reconciliation, migrate Comet
+   model-provider settings into SDK-neutral Host-default, Session, and
+   model-selection schemas, and keep their native provider projection inside
+   the Comet runtime. Move provider credentials into the common secret-storage
+   owner, migrate each recognized plaintext predecessor to an operating-system
+   encrypted envelope before Agent Host startup completes, and fail startup
+   without mutating storage when that encryption authority is unavailable.
 4. Replace Comet Agent imports of Editor, Workbench Chat, Fetch, RAG, and other
    higher-layer types with bounded Host context, content-resource contracts,
    and model-facing Tool contracts with explicit executor bindings.
@@ -390,7 +400,11 @@ names. No target registration imports or dispatches through the legacy path.
     Protocol negotiation, common execution-profile resolution, resolution
     retry stability, Host-default and Session configuration resolution,
     dynamic completion, schema-revision validation, atomic mutable updates,
-    retained-config activation rejection, runtime-call correlation,
+    durable pre-prepare rollback intent, commit and rollback response
+    loss across cold Host and runtime restart, terminal-ledger commit and
+    cleanup-acknowledgement retry, logical-operation owner restoration,
+    retained-config activation rejection,
+    runtime-call correlation,
     resume-schema rejection, exact
     Turn resumption, runtime disconnect without implementation failover,
     bundled-Comet-only initial package state, explicit optional-package
@@ -538,9 +552,17 @@ The migration is complete only when:
 22. Host Agent defaults, Session configuration, and model execution settings
     use separate exact schema revisions. Agent Host snapshots and ordered
     actions own canonical schemas and values; every runtime resolves and
-    applies them through the common Agent configuration surface. Invalid or
-    stale state fails explicitly, raw credentials and SDK-native configuration
-    cross no Host boundary, and no Agent-specific settings path remains.
+    applies them through the common Agent configuration surface. A
+    materialized Session update retains its prior runtime value until the Host
+    persists and finalizes the exact operation, and persistence failure rolls
+    that operation back without publishing partial state. The runtime retains
+    terminal transaction identity until the Host has persisted the completed
+    outcome and sends an exact cleanup acknowledgement; only acknowledged Host
+    records are evictable. Invalid or stale
+    state fails explicitly, raw credentials enter no configuration, profile,
+    catalog, log, or diagnostic and resolve only through exact accepted-Turn
+    authority, SDK-native configuration crosses no Host protocol boundary, and
+    no Agent-specific settings path remains.
 
 ## Deletion condition
 

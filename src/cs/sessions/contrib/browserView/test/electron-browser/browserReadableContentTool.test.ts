@@ -94,7 +94,7 @@ function createCall(
 	return Object.freeze({
 		id: createAgentToolCallId(id),
 		agent: createAgentId('comet'),
-		registration: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
+		registration: createAgentRuntimeRegistrationRevision('comet.embedded.v2'),
 		session: createAgentSessionId('session-1'),
 		chat: createAgentChatId('chat-1'),
 		turn: createAgentTurnId('turn-1'),

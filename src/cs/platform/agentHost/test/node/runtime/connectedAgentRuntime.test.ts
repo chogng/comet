@@ -12,6 +12,7 @@ import { CancellationError } from 'cs/base/common/errors';
 import { Emitter } from 'cs/base/common/event';
 import type {
 	IAgentAction,
+	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentCancelTurnRequest,
 	IAgentChatBacking,
 	IAgentChatRequest,
@@ -21,17 +22,32 @@ import type {
 	IAgentDeleteSessionRequest,
 	IAgentExecutionProfile,
 	IAgentExecutionProfileRequest,
+	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
+	IAgentPrepareSessionConfigurationUpdateRequest,
 	IAgentReleaseChatRequest,
 	IAgentReleaseSessionRequest,
+	IAgentResolvedSessionConfiguration,
+	IAgentResolveSessionConfigurationRequest,
 	IAgentResumeMigrationRequest,
 	IAgentResumeState,
+	IAgentSessionConfigurationCompletionRequest,
 	IAgentSessionBacking,
 	IAgentSteerRequest,
 } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostAttachment } from 'cs/platform/agentHost/common/attachments';
+import {
+	AgentConfigurationSchemaProfile,
+	type IAgentConfigurationCompletion,
+	type IAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
+import type {
+	IAgentCredentialReference,
+	IAgentCredentialResolutionRequest,
+	IAgentCredentialResolver,
+} from 'cs/platform/agentHost/common/credentials';
 import type {
 	AgentRuntimeHostOperation,
 	AgentRuntimeConnectionState,
@@ -75,6 +91,9 @@ import {
 	createAgentAttachmentRepresentationSchemaId,
 	createAgentCancellationId,
 	createAgentChatId,
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
 	createAgentContentDigest,
 	createAgentContentLeaseId,
 	createAgentContentMaterializationId,
@@ -128,7 +147,7 @@ import {
 
 const connectionId = createAgentRuntimeConnectionId('runtime-connection-1');
 const generation = createAgentRuntimeConnectionGeneration(7);
-const protocolVersion = createAgentRuntimeProtocolVersion('1');
+const protocolVersion = createAgentRuntimeProtocolVersion('2');
 const packageId = createAgentPackageId('test.runtime');
 const packageRevision = createAgentPackageRevision('test.runtime.v1');
 const agentId = createAgentId('test.agent');
@@ -137,6 +156,13 @@ const capabilityRevision = createAgentCapabilityRevision('test.capabilities.v1')
 const registrationRevision = createAgentRuntimeRegistrationRevision('test.registration.v1');
 const modelId = createAgentModelId('test-model');
 const modelRevision = createAgentModelDescriptorRevision('test-model.v1');
+const hostDefaultsSchemaRevision = createAgentConfigurationSchemaRevision('test.configuration.host.v1');
+const sessionConfigurationSchemaRevision = createAgentConfigurationSchemaRevision('test.configuration.session.v1');
+const resolvedSessionConfigurationSchemaRevision = createAgentConfigurationSchemaRevision('test.configuration.session.v2');
+const modelConfigurationSchemaRevision = createAgentConfigurationSchemaRevision('test.configuration.model.v1');
+const configurationProperty = createAgentConfigurationPropertyId('test.agent.mode');
+const immutableConfigurationProperty = createAgentConfigurationPropertyId('test.agent.fixed-profile');
+const modelConfigurationProperty = createAgentConfigurationPropertyId('test.agent.temperature');
 const schemaProfile = createAgentToolSchemaProfileId('test.tools.v1');
 const resumeSchema = createAgentResumeSchemaId('test.resume.v1');
 const nextResumeSchema = createAgentResumeSchemaId('test.resume.v2');
@@ -144,6 +170,16 @@ const sessionId = createAgentSessionId('session-1');
 const chatId = createAgentChatId('chat-1');
 const turnId = createAgentTurnId('turn-1');
 const reverseToolCallId = createAgentToolCallId('runtime-tool-call-1');
+const credentialReference: IAgentCredentialReference = Object.freeze({
+	provider: 'test.provider',
+	scope: 'test.scope',
+	reference: 'test.reference',
+});
+const otherCredentialReference: IAgentCredentialReference = Object.freeze({
+	provider: 'test.provider',
+	scope: 'test.scope',
+	reference: 'test.other-reference',
+});
 const reverseToolRegistration = Object.freeze({
 	id: createAgentToolRegistrationId('runtime-tool-registration-1'),
 	revision: createAgentToolRegistrationRevision('runtime-tool-registration-1.v1'),
@@ -171,6 +207,115 @@ const reverseToolRegistration = Object.freeze({
 	executor: Object.freeze({ kind: 'host' as const, executor: createAgentToolExecutorId('runtime.tool.executor') }),
 });
 
+const configurationPropertySchema = Object.freeze({
+	id: configurationProperty,
+	owner: Object.freeze({ kind: 'agent' as const, agent: agentId }),
+	scopes: Object.freeze(['hostDefault', 'session'] as const),
+	value: Object.freeze({ type: 'string' as const, enum: Object.freeze(['balanced', 'precise']) }),
+	required: true,
+	default: 'balanced',
+	sessionMutable: true,
+	dynamicCompletion: true,
+	display: Object.freeze({ label: 'Mode' }),
+	persistence: 'persisted' as const,
+	redaction: 'public' as const,
+});
+
+const immutableConfigurationPropertySchema = Object.freeze({
+	id: immutableConfigurationProperty,
+	owner: Object.freeze({ kind: 'agent' as const, agent: agentId }),
+	scopes: Object.freeze(['hostDefault', 'session'] as const),
+	value: Object.freeze({ type: 'string' as const, enum: Object.freeze(['stable', 'changed']) }),
+	required: true,
+	default: 'stable',
+	sessionMutable: false,
+	dynamicCompletion: false,
+	display: Object.freeze({ label: 'Fixed profile' }),
+	persistence: 'persisted' as const,
+	redaction: 'public' as const,
+});
+
+const hostDefaultsSchema = Object.freeze({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'hostDefault' as const,
+	revision: hostDefaultsSchemaRevision,
+	properties: Object.freeze([configurationPropertySchema, immutableConfigurationPropertySchema]),
+});
+
+const sessionConfigurationSchema = Object.freeze({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'session' as const,
+	revision: sessionConfigurationSchemaRevision,
+	properties: Object.freeze([configurationPropertySchema, immutableConfigurationPropertySchema]),
+});
+
+const resolvedSessionConfigurationSchema = Object.freeze({
+	...sessionConfigurationSchema,
+	revision: resolvedSessionConfigurationSchemaRevision,
+});
+
+const modelConfigurationSchema = Object.freeze({
+	profile: AgentConfigurationSchemaProfile,
+	agent: agentId,
+	scope: 'model' as const,
+	revision: modelConfigurationSchemaRevision,
+	properties: Object.freeze([Object.freeze({
+		id: modelConfigurationProperty,
+		owner: Object.freeze({ kind: 'agent' as const, agent: agentId }),
+		scopes: Object.freeze(['model'] as const),
+		value: Object.freeze({ type: 'number' as const, integer: false, minimum: 0, maximum: 1 }),
+		required: false,
+		default: 0.5,
+		sessionMutable: false,
+		dynamicCompletion: false,
+		display: Object.freeze({ label: 'Temperature' }),
+		persistence: 'persisted' as const,
+		redaction: 'public' as const,
+	})]),
+});
+
+const hostDefaultsState: IAgentConfigurationState = Object.freeze({
+	schema: hostDefaultsSchema,
+	revision: createAgentConfigurationStateRevision('test.configuration.host.state.v1'),
+	values: Object.freeze({
+		[configurationProperty]: 'balanced',
+		[immutableConfigurationProperty]: 'stable',
+	}),
+});
+
+const sessionConfigurationState: IAgentConfigurationState = Object.freeze({
+	schema: sessionConfigurationSchema,
+	revision: createAgentConfigurationStateRevision('test.configuration.session.state.v1'),
+	values: Object.freeze({
+		[configurationProperty]: 'precise',
+		[immutableConfigurationProperty]: 'stable',
+	}),
+});
+
+const nextSessionConfigurationState: IAgentConfigurationState = Object.freeze({
+	schema: sessionConfigurationSchema,
+	revision: createAgentConfigurationStateRevision('test.configuration.session.state.v2'),
+	values: Object.freeze({
+		[configurationProperty]: 'balanced',
+		[immutableConfigurationProperty]: 'stable',
+	}),
+});
+
+const modelConfiguration = Object.freeze({
+	schema: modelConfigurationSchemaRevision,
+	values: Object.freeze({ [modelConfigurationProperty]: 0.25 }),
+});
+
+const sessionConfigurationCandidate = Object.freeze({
+	schema: sessionConfigurationSchemaRevision,
+	values: Object.freeze({
+		[configurationProperty]: 'precise',
+		[immutableConfigurationProperty]: 'stable',
+	}),
+});
+
 const descriptor = {
 	id: agentId,
 	packageId,
@@ -196,6 +341,7 @@ const descriptor = {
 		revision: modelRevision,
 		displayName: 'Test Model',
 		enabled: true,
+		configurationSchema: modelConfigurationSchema,
 		toolSchemaProfiles: [schemaProfile],
 		attachments: {
 			carriers: ['inline', 'reference'] as const,
@@ -209,7 +355,7 @@ const descriptor = {
 			supportsClientContentForBackgroundExecution: false,
 		},
 	}],
-	authenticationRequired: false,
+	requiresAgentAuthentication: false,
 } as const;
 
 const registration = {
@@ -218,6 +364,12 @@ const registration = {
 	revision: registrationRevision,
 	descriptorRevision,
 	capabilityRevision,
+	hostDefaultsSchema,
+	initialSessionConfigurationSchema: sessionConfigurationSchemaRevision,
+	supportedSessionConfigurationSchemas: [
+		sessionConfigurationSchemaRevision,
+		resolvedSessionConfigurationSchemaRevision,
+	],
 	supportedToolSchemaProfiles: [schemaProfile],
 	supportedResumeSchemas: [resumeSchema, nextResumeSchema],
 	resumeMigrationEdges: [{ sourceSchema: resumeSchema, targetSchema: nextResumeSchema }],
@@ -268,6 +420,12 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 	readonly hostOperationProgress: IAgentRuntimeHostOperationProgress[] = [];
 	readonly hostOperationResponses: IAgentRuntimeHostOperationResponse[] = [];
 	readonly initializeRequests: IAgentRuntimeInitializeRequest[] = [];
+	readonly resolveSessionConfigurationCalls: IAgentRuntimeCall<IAgentResolveSessionConfigurationRequest>[] = [];
+	readonly completeSessionConfigurationCalls: IAgentRuntimeCall<IAgentSessionConfigurationCompletionRequest>[] = [];
+	readonly prepareSessionConfigurationUpdateCalls: IAgentRuntimeCall<IAgentPrepareSessionConfigurationUpdateRequest>[] = [];
+	readonly commitSessionConfigurationUpdateCalls: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>[] = [];
+	readonly rollbackSessionConfigurationUpdateCalls: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>[] = [];
+	readonly acknowledgeSessionConfigurationUpdateCalls: IAgentRuntimeCall<IAgentAcknowledgeSessionConfigurationUpdateRequest>[] = [];
 	readonly resolveExecutionProfileCalls: IAgentRuntimeCall<IAgentExecutionProfileRequest>[] = [];
 	readonly migrateResumeStateCalls: IAgentRuntimeCall<IAgentResumeMigrationRequest>[] = [];
 	readonly createSessionCalls: IAgentRuntimeCall<IAgentCreateSessionOptions>[] = [];
@@ -294,6 +452,18 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 		transportLimits: request.transportLimits,
 		registrations: [{ registration, descriptor }],
 	});
+	resolveSessionConfigurationHandler: (
+		request: IAgentRuntimeCall<IAgentResolveSessionConfigurationRequest>,
+	) => Promise<IAgentRuntimeResponse<IAgentResolvedSessionConfiguration>> = request => Promise.resolve(exactResponse(request, {
+		schema: sessionConfigurationSchema,
+		values: request.request.candidate.values,
+	}));
+	completeSessionConfigurationHandler: (
+		request: IAgentRuntimeCall<IAgentSessionConfigurationCompletionRequest>,
+	) => Promise<IAgentRuntimeResponse<readonly IAgentConfigurationCompletion[]>> = request => Promise.resolve(exactResponse(request, [
+		{ label: 'Balanced', value: 'balanced' },
+		{ label: 'Precise', value: 'precise' },
+	]));
 	createSessionHandler: (
 		request: IAgentRuntimeCall<IAgentCreateSessionOptions>,
 	) => Promise<IAgentRuntimeResponse<IAgentSessionBacking>> = request => Promise.resolve(exactResponse(request, {
@@ -322,6 +492,48 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 	async initialize(request: IAgentRuntimeInitializeRequest): Promise<IAgentRuntimeInitializeResult> {
 		this.initializeRequests.push(request);
 		return this.initializeHandler(request);
+	}
+
+	async resolveSessionConfiguration(
+		request: IAgentRuntimeCall<IAgentResolveSessionConfigurationRequest>,
+	): Promise<IAgentRuntimeResponse<IAgentResolvedSessionConfiguration>> {
+		this.resolveSessionConfigurationCalls.push(request);
+		return this.resolveSessionConfigurationHandler(request);
+	}
+
+	async completeSessionConfiguration(
+		request: IAgentRuntimeCall<IAgentSessionConfigurationCompletionRequest>,
+	): Promise<IAgentRuntimeResponse<readonly IAgentConfigurationCompletion[]>> {
+		this.completeSessionConfigurationCalls.push(request);
+		return this.completeSessionConfigurationHandler(request);
+	}
+
+	async prepareSessionConfigurationUpdate(
+		request: IAgentRuntimeCall<IAgentPrepareSessionConfigurationUpdateRequest>,
+	): Promise<IAgentRuntimeResponse<null>> {
+		this.prepareSessionConfigurationUpdateCalls.push(request);
+		return exactResponse(request, null);
+	}
+
+	async commitSessionConfigurationUpdate(
+		request: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>,
+	): Promise<IAgentRuntimeResponse<null>> {
+		this.commitSessionConfigurationUpdateCalls.push(request);
+		return exactResponse(request, null);
+	}
+
+	async rollbackSessionConfigurationUpdate(
+		request: IAgentRuntimeCall<IAgentFinalizeSessionConfigurationUpdateRequest>,
+	): Promise<IAgentRuntimeResponse<null>> {
+		this.rollbackSessionConfigurationUpdateCalls.push(request);
+		return exactResponse(request, null);
+	}
+
+	async acknowledgeSessionConfigurationUpdate(
+		request: IAgentRuntimeCall<IAgentAcknowledgeSessionConfigurationUpdateRequest>,
+	): Promise<IAgentRuntimeResponse<null>> {
+		this.acknowledgeSessionConfigurationUpdateCalls.push(request);
+		return exactResponse(request, null);
 	}
 
 	async createSession(
@@ -527,6 +739,19 @@ class TestRuntimeToolExecution implements IAgentToolExecutionPort {
 	}
 }
 
+class TestRuntimeCredentialResolver implements IAgentCredentialResolver {
+	readonly calls: IAgentCredentialResolutionRequest[] = [];
+	readonly tokens: CancellationToken[] = [];
+	value = 'resolved-test-secret';
+	resolveHandler = async (_request: IAgentCredentialResolutionRequest, _token: CancellationToken): Promise<string> => this.value;
+
+	async resolve(request: IAgentCredentialResolutionRequest, token: CancellationToken): Promise<string> {
+		this.calls.push(request);
+		this.tokens.push(token);
+		return this.resolveHandler(request, token);
+	}
+}
+
 class TestRuntimeContentResources implements IAgentContentResourcePort {
 	readonly opens: IAgentContentResourceOpenRequest[] = [];
 	readonly blobReads: IAgentContentBlobReadRequest[] = [];
@@ -588,11 +813,13 @@ function runtimeOptions(
 	limits: IAgentRuntimeTransportLimits = defaultLimits,
 	toolExecution: IAgentToolExecutionPort = new TestRuntimeToolExecution(),
 	contentResources: IAgentContentResourcePort = new TestRuntimeContentResources(),
+	credentialResolver: IAgentCredentialResolver = new TestRuntimeCredentialResolver(),
 ): IConnectedAgentRuntimeOptions {
 	return {
 		connection,
 		toolExecution,
 		contentResources,
+		credentialResolver,
 		protocolVersions: [protocolVersion],
 		transportLimits: limits,
 		packageId,
@@ -607,6 +834,7 @@ function sessionRequest(index: number): IAgentCreateSessionOptions {
 		operation: createAgentHostOperationId(`create-session-${index}`),
 		payloadDigest: createAgentHostPayloadDigest(`sha256:${String(index % 10).repeat(64)}`),
 		session: createAgentSessionId(`session-${index}`),
+		configuration: sessionConfigurationState,
 	};
 }
 
@@ -629,6 +857,8 @@ function turnRequest(turn: string): IAgentChatRequest {
 				modelDescriptor: modelRevision,
 				data: '{}',
 			},
+			modelConfiguration,
+			credentials: [],
 			runtimeRegistration: registrationRevision,
 			toolSet: {
 				revision: createAgentToolSetRevision('tool-set.v1'),
@@ -678,6 +908,7 @@ function reverseTurnRequest(turn: string): {
 		attachments: Object.freeze([attachment]),
 		binding: Object.freeze({
 			...base.binding,
+			credentials: Object.freeze([credentialReference]),
 			toolSet: Object.freeze({
 				...base.binding.toolSet,
 				registrations: Object.freeze([reverseToolRegistration]),
@@ -746,12 +977,19 @@ async function connect(
 	limits = defaultLimits,
 	toolExecution: IAgentToolExecutionPort = new TestRuntimeToolExecution(),
 	contentResources: IAgentContentResourcePort = new TestRuntimeContentResources(),
+	credentialResolver: IAgentCredentialResolver = new TestRuntimeCredentialResolver(),
 ): Promise<IConnectedAgentRuntime> {
-	return connectAgentRuntime(runtimeOptions(connection, limits, toolExecution, contentResources));
+	return connectAgentRuntime(runtimeOptions(
+		connection,
+		limits,
+		toolExecution,
+		contentResources,
+		credentialResolver,
+	));
 }
 
 suite('ConnectedAgentRuntime', { concurrency: false }, () => {
-	test('projects the complete Agent profile, resume, Session, Chat, and Turn lifecycle', async () => {
+	test('projects the complete Agent configuration, profile, resume, Session, Chat, and Turn lifecycle', async () => {
 		const connection = new TestRuntimeConnection();
 		const runtime = await connect(connection);
 		const agent = runtime.agents[0];
@@ -759,12 +997,80 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 			operation: createAgentHostOperationId(name),
 			payloadDigest: createAgentHostPayloadDigest(`sha256:${digit.repeat(64)}`),
 		});
+		const resolvedConfiguration = await agent.configuration.resolveSession({
+			runtimeRegistration: registrationRevision,
+			hostDefaults: hostDefaultsState,
+			candidate: sessionConfigurationCandidate,
+		});
+		assert.deepEqual(resolvedConfiguration, {
+			schema: sessionConfigurationSchema,
+			values: {
+				[configurationProperty]: 'precise',
+				[immutableConfigurationProperty]: 'stable',
+			},
+		});
+		const completions = await agent.configuration.completeSession({
+			runtimeRegistration: registrationRevision,
+			hostDefaults: hostDefaultsState,
+			candidate: sessionConfigurationCandidate,
+			resolvedSchema: sessionConfigurationSchema,
+			property: configurationProperty,
+			query: '',
+			limit: 2,
+		});
+		assert.deepEqual(completions, [
+			{ label: 'Balanced', value: 'balanced' },
+			{ label: 'Precise', value: 'precise' },
+		]);
+		const commitConfigurationContext = context('configuration-commit', 'e');
+		await agent.configuration.prepareSessionUpdate({
+			...commitConfigurationContext,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			current: sessionConfigurationState,
+			candidate: nextSessionConfigurationState,
+		});
+		await agent.configuration.commitSessionUpdate({
+			...commitConfigurationContext,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+		});
+		await agent.configuration.acknowledgeSessionUpdate({
+			...commitConfigurationContext,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+			decision: 'commit',
+		});
+		const rollbackConfigurationContext = context('configuration-rollback', 'f');
+		await agent.configuration.prepareSessionUpdate({
+			...rollbackConfigurationContext,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			current: sessionConfigurationState,
+			candidate: nextSessionConfigurationState,
+		});
+		await agent.configuration.rollbackSessionUpdate({
+			...rollbackConfigurationContext,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+		});
+		await agent.configuration.acknowledgeSessionUpdate({
+			...rollbackConfigurationContext,
+			runtimeRegistration: registrationRevision,
+			session: sessionId,
+			configuration: nextSessionConfigurationState.revision,
+			decision: 'rollback',
+		});
 
 		const profile = await agent.executionProfiles.resolve({
 			submission: createAgentSubmissionId('submission-profile'),
-			selection: { kind: 'user', value: { model: modelId } },
+			selection: { kind: 'user', value: { model: modelId }, configuration: modelConfiguration },
 			selectionDigest: createAgentHostPayloadDigest(`sha256:${'1'.repeat(64)}`),
 			runtimeRegistration: registrationRevision,
+			sessionConfiguration: sessionConfigurationState,
 		});
 		assert.equal(profile.modelDescriptor, modelRevision);
 
@@ -780,11 +1086,13 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 		const createdSession = await agent.sessions.create({
 			...context('create-session-complete', '3'),
 			session: sessionId,
+			configuration: sessionConfigurationState,
 		});
 		assert.deepEqual(createdSession, { session: sessionId });
 		await agent.sessions.materialize({
 			...context('materialize-session-complete', '4'),
 			session: sessionId,
+			configuration: sessionConfigurationState,
 			resume: { schema: resumeSchema, data: '{}' },
 		});
 
@@ -844,6 +1152,10 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 		});
 
 		for (const calls of [
+			connection.resolveSessionConfigurationCalls,
+			connection.completeSessionConfigurationCalls,
+			connection.commitSessionConfigurationUpdateCalls,
+			connection.rollbackSessionConfigurationUpdateCalls,
 			connection.resolveExecutionProfileCalls,
 			connection.migrateResumeStateCalls,
 			connection.createSessionCalls,
@@ -865,9 +1177,224 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 			assert.equal(calls[0].registration, registrationRevision);
 			assert.equal(calls[0].agent, agentId);
 		}
+		assert.equal(connection.prepareSessionConfigurationUpdateCalls.length, 2);
+		for (const call of connection.prepareSessionConfigurationUpdateCalls) {
+			assert.equal(call.connection, connectionId);
+			assert.equal(call.generation, generation);
+			assert.equal(call.registration, registrationRevision);
+			assert.equal(call.agent, agentId);
+		}
+		assert.deepEqual(
+			connection.acknowledgeSessionConfigurationUpdateCalls.map(call => call.request.decision),
+			['commit', 'rollback'],
+		);
+		for (const call of connection.acknowledgeSessionConfigurationUpdateCalls) {
+			assert.equal(call.connection, connectionId);
+			assert.equal(call.generation, generation);
+			assert.equal(call.registration, registrationRevision);
+			assert.equal(call.agent, agentId);
+			assert.equal(call.request.session, sessionId);
+			assert.equal(call.request.configuration, nextSessionConfigurationState.revision);
+		}
 
 		runtime.dispose();
 		assert.equal(connection.disposeCount, 1);
+	});
+
+	test('rejects Agent Runtime protocol v1 before initialization', async () => {
+		const connection = new TestRuntimeConnection();
+		await assert.rejects(
+			connectAgentRuntime({
+				...runtimeOptions(connection),
+				protocolVersions: [createAgentRuntimeProtocolVersion('1')],
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
+		);
+		assert.deepEqual(connection.initializeRequests, []);
+		assert.equal(connection.disposeCount, 1);
+	});
+
+	test('rejects inconsistent Host, Session, and model configuration registration', async () => {
+		const foreignAgent = createAgentId('foreign.agent');
+		const cases = [
+			{
+				name: 'initial Session schema',
+				code: AgentHostErrorCode.InvalidProtocolValue,
+				registration: {
+					...registration,
+					initialSessionConfigurationSchema: createAgentConfigurationSchemaRevision('unsupported.session.v1'),
+				},
+				descriptor,
+			},
+			{
+				name: 'unknown configuration field',
+				code: AgentHostErrorCode.InvalidProtocolValue,
+				registration: {
+					...registration,
+					unknownConfigurationField: true,
+				},
+				descriptor,
+			},
+			{
+				name: 'Host defaults owner',
+				code: AgentHostErrorCode.InvalidConfigurationSchema,
+				registration: {
+					...registration,
+					hostDefaultsSchema: { ...hostDefaultsSchema, agent: foreignAgent },
+				},
+				descriptor,
+			},
+			{
+				name: 'model schema owner',
+				code: AgentHostErrorCode.InvalidConfigurationSchema,
+				registration,
+				descriptor: {
+					...descriptor,
+					models: [{
+						...descriptor.models[0],
+						configurationSchema: { ...modelConfigurationSchema, agent: foreignAgent },
+					}],
+				},
+			},
+		] as const;
+
+		for (const candidate of cases) {
+			const connection = new TestRuntimeConnection();
+			connection.initializeHandler = async request => ({
+				connection: request.connection,
+				generation: request.generation,
+				call: request.call,
+				protocolVersion,
+				transportLimits: request.transportLimits,
+				registrations: [{
+					registration: candidate.registration,
+					descriptor: candidate.descriptor,
+				}],
+			});
+
+			await assert.rejects(
+				connect(connection),
+				error => assertErrorCode(error, candidate.code),
+				candidate.name,
+			);
+			assert.equal(connection.disposeCount, 1, candidate.name);
+		}
+	});
+
+	test('accepts a supported resolved Session schema distinct from the initial candidate schema', async () => {
+		const connection = new TestRuntimeConnection();
+		connection.resolveSessionConfigurationHandler = request => Promise.resolve(exactResponse(request, {
+			schema: resolvedSessionConfigurationSchema,
+			values: request.request.candidate.values,
+		}));
+		const runtime = await connect(connection);
+
+		const resolved = await runtime.agents[0].configuration.resolveSession({
+			runtimeRegistration: registrationRevision,
+			hostDefaults: hostDefaultsState,
+			candidate: sessionConfigurationCandidate,
+		});
+
+		assert.equal(resolved.schema.revision, resolvedSessionConfigurationSchemaRevision);
+		assert.deepEqual(resolved.values, sessionConfigurationCandidate.values);
+		assert.equal(connection.resolveSessionConfigurationCalls.length, 1);
+		assert.equal(connection.disposeCount, 0);
+		runtime.dispose();
+	});
+
+	test('rejects a structurally valid resolved Session schema that was not registered', async () => {
+		const connection = new TestRuntimeConnection();
+		connection.resolveSessionConfigurationHandler = request => Promise.resolve(exactResponse(request, {
+			schema: {
+				...sessionConfigurationSchema,
+				revision: createAgentConfigurationSchemaRevision('test.configuration.session.unsupported'),
+			},
+			values: request.request.candidate.values,
+		}));
+		const runtime = await connect(connection);
+
+		await assert.rejects(
+			runtime.agents[0].configuration.resolveSession({
+				runtimeRegistration: registrationRevision,
+				hostDefaults: hostDefaultsState,
+				candidate: sessionConfigurationCandidate,
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
+		);
+		assert.equal(connection.resolveSessionConfigurationCalls.length, 1);
+		assert.equal(connection.disposeCount, 1);
+		runtime.dispose();
+	});
+
+	test('rejects an incomplete resolved Session configuration without skipping required values', async () => {
+		const connection = new TestRuntimeConnection();
+		connection.resolveSessionConfigurationHandler = request => Promise.resolve(exactResponse(request, {
+			schema: sessionConfigurationSchema,
+			values: { [configurationProperty]: 'precise' },
+		}));
+		const runtime = await connect(connection);
+
+		await assert.rejects(
+			runtime.agents[0].configuration.resolveSession({
+				runtimeRegistration: registrationRevision,
+				hostDefaults: hostDefaultsState,
+				candidate: sessionConfigurationCandidate,
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.InvalidConfigurationValue),
+		);
+		assert.equal(connection.resolveSessionConfigurationCalls.length, 1);
+		assert.equal(connection.disposeCount, 1);
+		runtime.dispose();
+	});
+
+	test('rejects a Session update that changes an immutable property before runtime side effects', async () => {
+		const connection = new TestRuntimeConnection();
+		const runtime = await connect(connection);
+		const changed = Object.freeze({
+			schema: sessionConfigurationSchema,
+			revision: createAgentConfigurationStateRevision('test.configuration.session.state.v3'),
+			values: Object.freeze({
+				[configurationProperty]: 'balanced',
+				[immutableConfigurationProperty]: 'changed',
+			}),
+		});
+
+		await assert.rejects(
+			runtime.agents[0].configuration.prepareSessionUpdate({
+				operation: createAgentHostOperationId('configuration-immutable'),
+				payloadDigest: createAgentHostPayloadDigest(`sha256:${'a'.repeat(64)}`),
+				runtimeRegistration: registrationRevision,
+				session: sessionId,
+				current: sessionConfigurationState,
+				candidate: changed,
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
+		);
+		assert.deepEqual(connection.prepareSessionConfigurationUpdateCalls, []);
+		assert.equal(connection.disposeCount, 0);
+		await runtime.agents[0].sessions.create(sessionRequest(11));
+		runtime.dispose();
+	});
+
+	test('invalidates when completion results exceed the exact requested limit', async () => {
+		const connection = new TestRuntimeConnection();
+		const runtime = await connect(connection);
+
+		await assert.rejects(
+			runtime.agents[0].configuration.completeSession({
+				runtimeRegistration: registrationRevision,
+				hostDefaults: hostDefaultsState,
+				candidate: sessionConfigurationCandidate,
+				resolvedSchema: sessionConfigurationSchema,
+				property: configurationProperty,
+				query: '',
+				limit: 1,
+			}),
+			error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
+		);
+		assert.equal(connection.completeSessionConfigurationCalls.length, 1);
+		assert.equal(connection.disposeCount, 1);
+		runtime.dispose();
 	});
 
 	test('negotiates one generation and projects the exact runtime-published Agent pair', async () => {
@@ -969,6 +1496,413 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 		await send;
 		assert.equal(connection.disposeCount, 0);
 		runtime.dispose();
+	});
+
+	test('resolves an authorized credential for only its exact active parent Turn', async () => {
+		const connection = new TestRuntimeConnection();
+		const credentialResolver = new TestRuntimeCredentialResolver();
+		const runtime = await connect(
+			connection,
+			defaultLimits,
+			new TestRuntimeToolExecution(),
+			new TestRuntimeContentResources(),
+			credentialResolver,
+		);
+		const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		connection.sendHandler = () => pending.p;
+		const reverse = reverseTurnRequest('credential-success');
+		const send = runtime.agents[0].chats.send(reverse.request);
+		const parent = connection.sendCalls[0];
+		const operation = hostOperation(parent, 'runtime-host-credential-success', {
+			kind: 'credential.resolve',
+			credential: credentialReference,
+		});
+
+		connection.emitHostOperation(operation);
+		await flush();
+
+		assert.deepEqual(credentialResolver.calls, [{
+			packageId,
+			agentId,
+			runtimeRegistration: registrationRevision,
+			session: reverse.request.session,
+			chat: reverse.request.chat,
+			turn: reverse.request.turn,
+			credential: credentialReference,
+		}]);
+		assert.equal(Object.isFrozen(credentialResolver.calls[0]), true);
+		assert.equal(Object.isFrozen(credentialResolver.calls[0].credential), true);
+		assert.notStrictEqual(credentialResolver.calls[0].credential, credentialReference);
+		assert.equal(credentialResolver.tokens.length, 1);
+		assert.equal(credentialResolver.tokens[0].isCancellationRequested, false);
+		assert.deepEqual(connection.hostOperationResponses, [{
+			connection: connectionId,
+			generation,
+			operation: operation.operation,
+			parentCall: parent.call,
+			registration: registrationRevision,
+			agent: agentId,
+			outcome: { kind: 'completed', value: credentialResolver.value },
+		}]);
+		connection.emitHostOperation(operation);
+		await flush();
+		assert.equal(credentialResolver.calls.length, 1);
+		assert.equal(connection.hostOperationResponses.length, 2);
+		assert.strictEqual(connection.hostOperationResponses[1], connection.hostOperationResponses[0]);
+
+		emitTerminal(connection, parent);
+		pending.complete(exactResponse(parent, null));
+		await send;
+		assert.equal(credentialResolver.tokens[0].isCancellationRequested, false);
+		runtime.dispose();
+	});
+
+	test('rejects credential resolution from a retired Turn before resolver side effects', async () => {
+		const connection = new TestRuntimeConnection();
+		const credentialResolver = new TestRuntimeCredentialResolver();
+		const runtime = await connect(
+			connection,
+			defaultLimits,
+			new TestRuntimeToolExecution(),
+			new TestRuntimeContentResources(),
+			credentialResolver,
+		);
+		const retiredRequest = reverseTurnRequest('credential-retired').request;
+		await runtime.agents[0].chats.send(retiredRequest);
+		const retiredParent = connection.sendCalls[0];
+		const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		connection.sendHandler = () => pending.p;
+		const activeSend = runtime.agents[0].chats.send(reverseTurnRequest('credential-active').request);
+
+		connection.emitHostOperation(hostOperation(retiredParent, 'runtime-host-credential-retired', {
+			kind: 'credential.resolve',
+			credential: credentialReference,
+		}));
+
+		await assert.rejects(activeSend, error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue));
+		assert.deepEqual(credentialResolver.calls, []);
+		assert.equal(connection.disposeCount, 1);
+		runtime.dispose();
+	});
+
+	test('rejects unbound and cross-registration credential resolution before resolver side effects', async () => {
+		for (const kind of ['reference', 'registration'] as const) {
+			const connection = new TestRuntimeConnection();
+			const credentialResolver = new TestRuntimeCredentialResolver();
+			const runtime = await connect(
+				connection,
+				defaultLimits,
+				new TestRuntimeToolExecution(),
+				new TestRuntimeContentResources(),
+				credentialResolver,
+			);
+			const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+			connection.sendHandler = () => pending.p;
+			const reverse = reverseTurnRequest(`credential-invalid-${kind}`);
+			const send = runtime.agents[0].chats.send(reverse.request);
+			const parent = connection.sendCalls[0];
+			const operation = hostOperation(parent, `runtime-host-credential-invalid-${kind}`, {
+				kind: 'credential.resolve',
+				credential: kind === 'reference' ? otherCredentialReference : credentialReference,
+			});
+			connection.emitHostOperation(kind === 'registration'
+				? {
+					...operation,
+					registration: createAgentRuntimeRegistrationRevision('test.registration.other'),
+				}
+				: operation);
+
+			await assert.rejects(send, error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue));
+			assert.deepEqual(credentialResolver.calls, [], kind);
+			assert.equal(connection.hostOperationResponses.length, 0, kind);
+			assert.equal(connection.disposeCount, 1, kind);
+			runtime.dispose();
+		}
+	});
+
+	test('rejects unknown credential operation fields before resolver side effects', async () => {
+		const invalidRequests = [
+			{
+				kind: 'credential.resolve',
+				credential: credentialReference,
+				unknownOperationField: true,
+			},
+			{
+				kind: 'credential.resolve',
+				credential: {
+					...credentialReference,
+					unknownCredentialField: true,
+				},
+			},
+		] as const;
+
+		for (const [index, invalidRequest] of invalidRequests.entries()) {
+			const connection = new TestRuntimeConnection();
+			const credentialResolver = new TestRuntimeCredentialResolver();
+			const runtime = await connect(
+				connection,
+				defaultLimits,
+				new TestRuntimeToolExecution(),
+				new TestRuntimeContentResources(),
+				credentialResolver,
+			);
+			const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+			connection.sendHandler = () => pending.p;
+			const reverse = reverseTurnRequest(`credential-fields-${index}`);
+			const send = runtime.agents[0].chats.send(reverse.request);
+			connection.emitHostOperation(hostOperation(
+				connection.sendCalls[0],
+				`runtime-host-credential-fields-${index}`,
+				invalidRequest as unknown as AgentRuntimeHostOperation,
+			));
+
+			await assert.rejects(send, error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue));
+			assert.deepEqual(credentialResolver.calls, []);
+			assert.equal(connection.hostOperationResponses.length, 0);
+			assert.equal(connection.disposeCount, 1);
+			runtime.dispose();
+		}
+	});
+
+	test('rejects malformed or duplicate Turn credential bindings before runtime transport', async () => {
+		const credentialBindings = [
+			Object.freeze([
+				credentialReference,
+				credentialReference,
+			]),
+			Object.freeze([{
+				...credentialReference,
+				unknownCredentialField: true,
+			}]),
+		] as const;
+
+		for (const [index, credentials] of credentialBindings.entries()) {
+			const connection = new TestRuntimeConnection();
+			const runtime = await connect(connection);
+			const reverse = reverseTurnRequest(`credential-binding-${index}`);
+			const request = {
+				...reverse.request,
+				binding: {
+					...reverse.request.binding,
+					credentials,
+				},
+			} as IAgentChatRequest;
+
+			await assert.rejects(
+				runtime.agents[0].chats.send(request),
+				error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
+			);
+			assert.deepEqual(connection.sendCalls, []);
+			assert.equal(connection.disposeCount, 0);
+			runtime.dispose();
+		}
+	});
+
+	test('sanitizes credential resolver failures before reverse diagnostics', async () => {
+		const diagnosticSecret = 'resolver-diagnostic-secret';
+		const connection = new TestRuntimeConnection();
+		const credentialResolver = new TestRuntimeCredentialResolver();
+		credentialResolver.resolveHandler = async () => {
+			throw new AgentHostError(
+				AgentHostErrorCode.InvalidProtocolValue,
+				diagnosticSecret,
+				{ field: diagnosticSecret, value: diagnosticSecret },
+			);
+		};
+		const runtime = await connect(
+			connection,
+			defaultLimits,
+			new TestRuntimeToolExecution(),
+			new TestRuntimeContentResources(),
+			credentialResolver,
+		);
+		const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		connection.sendHandler = () => pending.p;
+		const reverse = reverseTurnRequest('credential-failure');
+		const send = runtime.agents[0].chats.send(reverse.request);
+		const parent = connection.sendCalls[0];
+		connection.emitHostOperation(hostOperation(parent, 'runtime-host-credential-failure', {
+			kind: 'credential.resolve',
+			credential: credentialReference,
+		}));
+		await flush();
+
+		assert.equal(connection.hostOperationResponses.length, 1);
+		assert.deepEqual(connection.hostOperationResponses[0].outcome, {
+			kind: 'failed',
+			code: AgentHostErrorCode.ResourceMissing,
+			message: 'Agent credential resolution failed',
+			data: { resource: 'agentCredential' },
+		});
+		assert.equal(JSON.stringify(connection.hostOperationResponses[0]).includes(diagnosticSecret), false);
+
+		emitTerminal(connection, parent);
+		pending.complete(exactResponse(parent, null));
+		await send;
+		runtime.dispose();
+	});
+
+	test('does not copy resolved credentials into transport-failure diagnostics', async () => {
+		const connection = new TestRuntimeConnection();
+		const credentialResolver = new TestRuntimeCredentialResolver();
+		connection.completeHostOperationHandler = async () => {
+			throw new Error(`credential transport rejected: ${credentialResolver.value}`);
+		};
+		const runtime = await connect(
+			connection,
+			defaultLimits,
+			new TestRuntimeToolExecution(),
+			new TestRuntimeContentResources(),
+			credentialResolver,
+		);
+		const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		connection.sendHandler = () => pending.p;
+		const reverse = reverseTurnRequest('credential-transport-failure');
+		const send = runtime.agents[0].chats.send(reverse.request);
+		connection.emitHostOperation(hostOperation(
+			connection.sendCalls[0],
+			'runtime-host-credential-transport-failure',
+			{ kind: 'credential.resolve', credential: credentialReference },
+		));
+
+		await assert.rejects(send, error => {
+			assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue);
+			assert.ok(error instanceof AgentHostError);
+			assert.equal(JSON.stringify({ message: error.message, data: error.data }).includes(credentialResolver.value), false);
+			return true;
+		});
+		assert.equal(connection.hostOperationResponses.length, 1);
+		assert.deepEqual(connection.hostOperationResponses[0].outcome, {
+			kind: 'completed',
+			value: credentialResolver.value,
+		});
+		assert.equal(connection.disposeCount, 1);
+		runtime.dispose();
+	});
+
+	test('rejects an oversized resolved credential before reverse response transport', async () => {
+		const connection = new TestRuntimeConnection();
+		const credentialResolver = new TestRuntimeCredentialResolver();
+		credentialResolver.value = `credential-${'s'.repeat(4_096)}`;
+		const limits: IAgentRuntimeTransportLimits = {
+			...defaultLimits,
+			maximumResponseBytes: 3_500,
+		};
+		const runtime = await connect(
+			connection,
+			limits,
+			new TestRuntimeToolExecution(),
+			new TestRuntimeContentResources(),
+			credentialResolver,
+		);
+		const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+		connection.sendHandler = () => pending.p;
+		const reverse = reverseTurnRequest('credential-response-bound');
+		const send = runtime.agents[0].chats.send(reverse.request);
+		connection.emitHostOperation(hostOperation(
+			connection.sendCalls[0],
+			'runtime-host-credential-response-bound',
+			{ kind: 'credential.resolve', credential: credentialReference },
+		));
+
+		await assert.rejects(send, error => {
+			assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue);
+			assert.ok(error instanceof AgentHostError);
+			assert.equal(JSON.stringify({ message: error.message, data: error.data }).includes(credentialResolver.value), false);
+			return true;
+		});
+		assert.deepEqual(connection.hostOperationResponses, []);
+		assert.equal(connection.disposeCount, 1);
+		runtime.dispose();
+	});
+
+	test('retires pending credential resolution after terminal, cancel, release, or disconnect', async () => {
+		for (const trigger of ['terminal', 'cancel', 'releaseChat', 'releaseSession', 'disconnect'] as const) {
+			const connection = new TestRuntimeConnection();
+			const credentialResolver = new TestRuntimeCredentialResolver();
+			const lateSecret = new DeferredPromise<string>();
+			credentialResolver.resolveHandler = () => lateSecret.p;
+			const runtime = await connect(
+				connection,
+				defaultLimits,
+				new TestRuntimeToolExecution(),
+				new TestRuntimeContentResources(),
+				credentialResolver,
+			);
+			const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();
+			connection.sendHandler = () => pending.p;
+			const reverse = reverseTurnRequest(`credential-cancel-${trigger}`);
+			const send = runtime.agents[0].chats.send(reverse.request);
+			const sendCompletion = send.then(
+				() => ({ kind: 'completed' } as const),
+				error => ({ kind: 'failed', error } as const),
+			);
+			const parent = connection.sendCalls[0];
+			connection.emitHostOperation(hostOperation(parent, `runtime-host-credential-cancel-${trigger}`, {
+				kind: 'credential.resolve',
+				credential: credentialReference,
+			}));
+			await flush();
+
+			assert.equal(credentialResolver.tokens.length, 1, trigger);
+			assert.equal(credentialResolver.tokens[0].isCancellationRequested, false, trigger);
+			const lifecycleContext = {
+				operation: createAgentHostOperationId(`credential-cancel-${trigger}`),
+				payloadDigest: createAgentHostPayloadDigest(`sha256:${'e'.repeat(64)}`),
+			};
+			switch (trigger) {
+				case 'terminal':
+					emitTerminal(connection, parent);
+					break;
+				case 'cancel':
+					await runtime.agents[0].chats.cancel({
+						...lifecycleContext,
+						session: reverse.request.session,
+						chat: reverse.request.chat,
+						turn: reverse.request.turn,
+					});
+					break;
+				case 'releaseChat':
+					await runtime.agents[0].chats.release({
+						...lifecycleContext,
+						session: reverse.request.session,
+						chat: reverse.request.chat,
+					});
+					break;
+				case 'releaseSession':
+					await runtime.agents[0].sessions.release({
+						...lifecycleContext,
+						session: reverse.request.session,
+					});
+					break;
+				case 'disconnect':
+					connection.disconnect('processExited');
+					break;
+			}
+
+			assert.equal(credentialResolver.tokens[0].isCancellationRequested, true, trigger);
+			lateSecret.complete(credentialResolver.value);
+			await flush();
+			assert.equal(
+				connection.hostOperationResponses.some(response =>
+					response.outcome.kind === 'completed' && response.outcome.value === credentialResolver.value
+				),
+				false,
+				trigger,
+			);
+			if (trigger === 'disconnect') {
+				const completion = await sendCompletion;
+				assert.equal(completion.kind, 'failed');
+				assertErrorCode(completion.error, AgentHostErrorCode.ResourceMissing);
+			} else {
+				if (trigger !== 'terminal') {
+					emitTerminal(connection, parent);
+				}
+				pending.complete(exactResponse(parent, null));
+				assert.deepEqual(await sendCompletion, { kind: 'completed' });
+			}
+			runtime.dispose();
+		}
 	});
 
 	test('cancels and retires an exact pending Tool child when its terminal parent responds', async () => {
@@ -1558,7 +2492,7 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 				name: 'protocol version',
 				mutate: (_request, result) => ({
 					...result,
-					protocolVersion: createAgentRuntimeProtocolVersion('2'),
+					protocolVersion: createAgentRuntimeProtocolVersion('3'),
 				}),
 			},
 			{

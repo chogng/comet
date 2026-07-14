@@ -11,6 +11,7 @@ import type {
 	IAgentResumeState,
 	IAgentRuntimeRegistration,
 } from 'cs/platform/agentHost/common/agent';
+import { validateAndFreezeAgentConfigurationSchema } from 'cs/platform/agentHost/common/configuration';
 import {
 	AgentHostPayloadDigest,
 	AgentId,
@@ -18,6 +19,7 @@ import {
 	AgentPackageOperationId,
 	AgentResumeStateDigest,
 	createAgentCapabilityRevision,
+	createAgentConfigurationSchemaRevision,
 	createAgentChatId,
 	createAgentDescriptorRevision,
 	createAgentHostPayloadDigest,
@@ -242,6 +244,13 @@ function freezeRegistration(
 ): IAgentRuntimeRegistration {
 	return Object.freeze({
 		...registration,
+		hostDefaultsSchema: validateAndFreezeAgentConfigurationSchema(registration.hostDefaultsSchema, {
+			agent: registration.agentId,
+			scope: 'hostDefault',
+		}),
+		supportedSessionConfigurationSchemas: Object.freeze([
+			...registration.supportedSessionConfigurationSchemas,
+		]),
 		supportedToolSchemaProfiles: Object.freeze([...registration.supportedToolSchemaProfiles]),
 		supportedResumeSchemas: Object.freeze([...registration.supportedResumeSchemas]),
 		resumeMigrationEdges: Object.freeze(
@@ -334,6 +343,7 @@ function assertRegistrationSet(
 	for (const registration of registrations) {
 		const fields = [
 			'packageId', 'agentId', 'revision', 'descriptorRevision', 'capabilityRevision',
+			'hostDefaultsSchema', 'initialSessionConfigurationSchema', 'supportedSessionConfigurationSchemas',
 			'supportedToolSchemaProfiles', 'supportedResumeSchemas', 'resumeMigrationEdges',
 		];
 		if (
@@ -342,6 +352,7 @@ function assertRegistrationSet(
 			|| Array.isArray(registration)
 			|| Object.keys(registration).length !== fields.length
 			|| fields.some(field => !Object.hasOwn(registration, field))
+			|| !Array.isArray(registration.supportedSessionConfigurationSchemas)
 			|| !Array.isArray(registration.supportedToolSchemaProfiles)
 			|| !Array.isArray(registration.supportedResumeSchemas)
 			|| !Array.isArray(registration.resumeMigrationEdges)
@@ -353,6 +364,14 @@ function assertRegistrationSet(
 		createAgentRuntimeRegistrationRevision(registration.revision);
 		createAgentDescriptorRevision(registration.descriptorRevision);
 		createAgentCapabilityRevision(registration.capabilityRevision);
+		validateAndFreezeAgentConfigurationSchema(registration.hostDefaultsSchema, {
+			agent: registration.agentId,
+			scope: 'hostDefault',
+		});
+		createAgentConfigurationSchemaRevision(registration.initialSessionConfigurationSchema);
+		for (const schema of registration.supportedSessionConfigurationSchemas) {
+			createAgentConfigurationSchemaRevision(schema);
+		}
 		for (const profile of registration.supportedToolSchemaProfiles) {
 			createAgentToolSchemaProfileId(profile);
 		}
@@ -391,6 +410,19 @@ function assertRegistrationSet(
 			throw new AgentPackageError(
 				AgentPackageErrorCode.RegistrationInvalid,
 				'Runtime registration declares duplicate resume schemas',
+				{ packageId: installedPackage.packageId, agentId: registration.agentId },
+			);
+		}
+		if (
+			new Set(registration.supportedSessionConfigurationSchemas).size
+			!== registration.supportedSessionConfigurationSchemas.length
+			|| !registration.supportedSessionConfigurationSchemas.includes(
+				registration.initialSessionConfigurationSchema,
+			)
+		) {
+			throw new AgentPackageError(
+				AgentPackageErrorCode.RegistrationInvalid,
+				'Runtime registration declares duplicate Session configuration schemas',
 				{ packageId: installedPackage.packageId, agentId: registration.agentId },
 			);
 		}

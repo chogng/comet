@@ -3,9 +3,15 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IAgentDescriptor, IAgentExecutionProfile, IAgentWorkspace, AgentChatOrigin, AgentTurnResponsePart } from './agent.js';
+import { IAgentDescriptor, IAgentExecutionProfile, IAgentRuntimeRegistration, IAgentWorkspace, AgentChatOrigin, AgentTurnResponsePart } from './agent.js';
 import { IAgentHostAttachment, IAgentHostInteractionTarget, assertAgentHostAttachment, assertAgentHostInteractionTarget } from './attachments.js';
 import { IAgentHostChannelAction, IAgentHostChannelSnapshot } from './channelState.js';
+import {
+	IAgentConfigurationCandidate,
+	IAgentConfigurationCompletion,
+	IAgentConfigurationSchema,
+	IAgentConfigurationState,
+} from './configuration.js';
 import { AgentHostError, AgentHostErrorCode } from './errors.js';
 import {
 	AgentChatId,
@@ -21,6 +27,9 @@ import {
 	AgentHostProtocolVersion,
 	AgentHostSequence,
 	AgentId,
+	AgentConfigurationPropertyId,
+	AgentConfigurationSchemaRevision,
+	AgentConfigurationStateRevision,
 	AgentModelId,
 	AgentPackageId,
 	AgentRuntimeRegistrationRevision,
@@ -41,9 +50,9 @@ import {
 } from './identities.js';
 import { AgentHostProtocolValue, assertAgentHostProtocolValue, computeAgentHostPayloadDigest } from './protocolValues.js';
 import type {
-	IAgentAuthenticationCredentialReference,
 	IAgentHostPackageCatalogState,
 } from './packages.js';
+import type { IAgentCredentialReference } from './credentials.js';
 import { IAgentToolSet } from './tools.js';
 
 export const AgentHostChannelKind = {
@@ -178,6 +187,8 @@ export interface IAgentHostRootState {
 	readonly capabilities: IAgentHostRootCapabilities;
 	readonly packages: IAgentHostPackageCatalogState;
 	readonly agents: readonly IAgentDescriptor[];
+	readonly agentRegistrations: readonly IAgentRuntimeRegistration[];
+	readonly agentDefaults: readonly IAgentConfigurationState[];
 	readonly sessionTypes: readonly IAgentHostSessionTypeDescriptor[];
 }
 
@@ -246,6 +257,7 @@ export interface IAgentHostSessionChange {
 
 export interface IAgentHostSessionState extends IAgentHostSessionSummary {
 	readonly workspace?: IAgentWorkspace;
+	readonly configuration: IAgentConfigurationState;
 	readonly capabilities: IAgentHostSessionCapabilities;
 	readonly changes: readonly IAgentHostSessionChange[];
 	readonly chats: readonly IAgentHostChatSummary[];
@@ -505,6 +517,9 @@ export interface IAgentHostPreparedSubmission {
 	readonly message: string;
 	readonly attachments: readonly IAgentHostAttachment[];
 	readonly interactionTargets: readonly IAgentHostInteractionTarget[];
+	readonly sessionConfiguration: IAgentConfigurationState;
+	readonly modelConfiguration: IAgentConfigurationCandidate;
+	readonly credentials: readonly IAgentCredentialReference[];
 	readonly executionProfile: IAgentExecutionProfile;
 	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
 	readonly toolSet: IAgentToolSet;
@@ -529,10 +544,12 @@ export type AgentHostExecutionSelection =
 	| {
 		readonly kind: 'model';
 		readonly model: AgentModelId;
+		readonly configuration: IAgentConfigurationCandidate;
 	}
 	| {
 		readonly kind: 'preset';
 		readonly preset: AgentExecutionPresetId;
+		readonly configuration: IAgentConfigurationCandidate;
 	};
 
 export type AgentHostSubmissionTarget =
@@ -545,7 +562,37 @@ export type AgentHostSubmissionTarget =
 		readonly kind: 'draft';
 		readonly sessionType: AgentSessionTypeId;
 		readonly workspace?: IAgentWorkspace;
+		readonly configuration: IAgentConfigurationCandidate;
 	};
+
+export interface IAgentHostResolveSessionConfigurationRequest {
+	readonly sessionType: AgentSessionTypeId;
+	readonly workspace?: IAgentWorkspace;
+	readonly candidate: IAgentConfigurationCandidate;
+}
+
+export interface IAgentHostResolveSessionConfigurationResult {
+	readonly agent: AgentId;
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly configuration: IAgentConfigurationState;
+}
+
+export interface IAgentHostSessionConfigurationCompletionsRequest {
+	readonly sessionType: AgentSessionTypeId;
+	readonly workspace?: IAgentWorkspace;
+	readonly candidate: IAgentConfigurationCandidate;
+	readonly resolvedSchema: IAgentConfigurationSchema;
+	readonly property: AgentConfigurationPropertyId;
+	readonly query: string;
+	readonly limit: number;
+}
+
+export interface IAgentHostSessionConfigurationCompletionsResult {
+	readonly agent: AgentId;
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly schema: AgentConfigurationSchemaRevision;
+	readonly completions: readonly IAgentConfigurationCompletion[];
+}
 
 export interface IAgentHostPrepareSubmissionRequest {
 	readonly submission: AgentSubmissionId;
@@ -578,7 +625,20 @@ export type AgentHostMutationPayload =
 		readonly kind: 'createSession';
 		readonly sessionType: AgentSessionTypeId;
 		readonly workspace?: IAgentWorkspace;
+		readonly configuration: IAgentConfigurationCandidate;
 		readonly chats: readonly IAgentHostCreateSessionChatRequest[];
+	}
+	| {
+		readonly kind: 'updateAgentDefaults';
+		readonly agent: AgentId;
+		readonly expectedRevision: AgentConfigurationStateRevision;
+		readonly candidate: IAgentConfigurationCandidate;
+	}
+	| {
+		readonly kind: 'updateSessionConfiguration';
+		readonly session: AgentSessionId;
+		readonly expectedRevision: AgentConfigurationStateRevision;
+		readonly candidate: IAgentConfigurationCandidate;
 	}
 	| {
 		readonly kind: 'createChat';
@@ -666,7 +726,7 @@ export type AgentHostMutationPayload =
 		readonly packageId: AgentPackageId;
 		readonly agentId: AgentId;
 		readonly registration: AgentRuntimeRegistrationRevision;
-		readonly credential: IAgentAuthenticationCredentialReference;
+		readonly credential: IAgentCredentialReference;
 	};
 
 export interface IAgentHostMutationRequest {
@@ -720,6 +780,16 @@ export type AgentHostMutationResult = IAgentHostMutationCommit & (
 	| {
 		readonly kind: 'renameSession' | 'setSessionArchived' | 'materializeSession' | 'releaseSession' | 'deleteSession';
 		readonly session: AgentSessionId;
+	}
+	| {
+		readonly kind: 'updateAgentDefaults';
+		readonly agent: AgentId;
+		readonly configuration: AgentConfigurationStateRevision;
+	}
+	| {
+		readonly kind: 'updateSessionConfiguration';
+		readonly session: AgentSessionId;
+		readonly configuration: AgentConfigurationStateRevision;
 	}
 	| {
 		readonly kind: 'renameChat' | 'setChatModel' | 'materializeChat' | 'releaseChat' | 'deleteChat';

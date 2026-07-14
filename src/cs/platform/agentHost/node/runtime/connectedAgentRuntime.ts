@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { DeferredPromise } from 'cs/base/common/async';
+import { DeferredPromise, raceCancellationError } from 'cs/base/common/async';
 import { CancellationToken, CancellationTokenNone, CancellationTokenSource } from 'cs/base/common/cancellation';
-import { isCancellationError, onUnexpectedError } from 'cs/base/common/errors';
+import { CancellationError, isCancellationError, onUnexpectedError } from 'cs/base/common/errors';
 import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { IObservable, observableValue } from 'cs/base/common/observable';
@@ -14,11 +14,13 @@ import type {
 	AgentTurnProgress,
 	AgentTurnResponsePart,
 	IAgent,
+	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentAction,
 	IAgentCancelTurnRequest,
 	IAgentChatBacking,
 	IAgentChatRequest,
 	IAgentChats,
+	IAgentConfiguration,
 	IAgentCreateChatOptions,
 	IAgentCreateSessionOptions,
 	IAgentDeleteChatRequest,
@@ -27,16 +29,21 @@ import type {
 	IAgentExecutionProfile,
 	IAgentExecutionProfileRequest,
 	IAgentExecutionProfiles,
+	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentModelDescriptor,
+	IAgentPrepareSessionConfigurationUpdateRequest,
 	IAgentReleaseChatRequest,
 	IAgentReleaseSessionRequest,
+	IAgentResolvedSessionConfiguration,
+	IAgentResolveSessionConfigurationRequest,
 	IAgentResumeMigrationRequest,
 	IAgentResumeState,
 	IAgentResumeStates,
 	IAgentRuntimeRegistration,
+	IAgentSessionConfigurationCompletionRequest,
 	IAgentSessionBacking,
 	IAgentSessions,
 	IAgentSteerRequest,
@@ -56,6 +63,20 @@ import {
 	assertAgentContentTreePageRequest,
 } from 'cs/platform/agentHost/common/contentResources';
 import type {
+	IAgentConfigurationCandidate,
+	IAgentConfigurationCompletion,
+	IAgentConfigurationSchema,
+	IAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
+import {
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCompletions,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
+import type { IAgentCredentialReference, IAgentCredentialResolver } from 'cs/platform/agentHost/common/credentials';
+import { validateAndFreezeAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
+import type {
 	AgentRuntimeHostOperationValue,
 	AgentRuntimeConnectionState,
 	IAgentRuntimeAgentRegistration,
@@ -72,6 +93,7 @@ import type {
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import {
 	AgentChatId,
+	AgentConfigurationSchemaRevision,
 	AgentContentLeaseId,
 	AgentContentMaterializationId,
 	AgentHostOperationId,
@@ -88,6 +110,9 @@ import {
 	createAgentCapabilityRevision,
 	createAgentCancellationId,
 	createAgentChatId,
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
 	createAgentContentLeaseId,
 	createAgentContentMaterializationId,
 	createAgentDescriptorRevision,
@@ -133,6 +158,9 @@ import {
 const maximumConnectedAgentCount = 256;
 const maximumDescriptorModelCount = 256;
 const maximumRetainedHostOperationCount = 4_096;
+const maximumConfigurationCompletionCount = 100;
+const maximumConfigurationCompletionQueryLength = 4_096;
+const connectedAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
 const mediaTypePattern = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 
 /** Options authorized by one installed package or bundled composition. */
@@ -140,6 +168,7 @@ export interface IConnectedAgentRuntimeOptions {
 	readonly connection: IAgentRuntimeConnection;
 	readonly toolExecution: IAgentToolExecutionPort;
 	readonly contentResources: IAgentContentResourcePort;
+	readonly credentialResolver: IAgentCredentialResolver;
 	readonly protocolVersions: readonly AgentRuntimeProtocolVersion[];
 	readonly transportLimits: IAgentRuntimeTransportLimits;
 	readonly packageId: AgentPackageId;
@@ -152,6 +181,12 @@ export interface IConnectedAgentRuntimeOptions {
 }
 
 type ConnectedAgentCallKind =
+	| 'configuration.resolveSession'
+	| 'configuration.completeSession'
+	| 'configuration.prepareSessionUpdate'
+	| 'configuration.commitSessionUpdate'
+	| 'configuration.rollbackSessionUpdate'
+	| 'configuration.acknowledgeSessionUpdate'
 	| 'executionProfile.resolve'
 	| 'resumeState.migrate'
 	| 'session.create'
@@ -177,6 +212,7 @@ interface IConnectedAgentCallContext {
 	readonly allowsChatActions: boolean;
 	readonly allowsTurnActions: boolean;
 	readonly turnRequest?: IAgentChatRequest;
+	readonly turnCredentials?: readonly IAgentCredentialReference[];
 }
 
 interface IPendingConnectedAgentCall extends IConnectedAgentCallContext {
@@ -185,6 +221,7 @@ interface IPendingConnectedAgentCall extends IConnectedAgentCallContext {
 	readonly registration: AgentRuntimeRegistrationRevision;
 	readonly disconnected: DeferredPromise<never>;
 	hostOperationsOpen: boolean;
+	credentialOperationsOpen: boolean;
 	exactTurnTerminalAccepted: boolean;
 }
 
@@ -206,6 +243,7 @@ interface IConnectedAgentHostOperationRecord {
 	readonly canonicalRequest: string;
 	readonly request: IAgentRuntimeHostOperationRequest;
 	readonly owner: IConnectedAgentContentOwner;
+	readonly credential?: IAgentCredentialReference;
 	readonly cancellation: CancellationTokenSource;
 	readonly executionTerminal: DeferredPromise<void>;
 	executionState: 'pending' | 'terminal';
@@ -215,6 +253,11 @@ interface IConnectedAgentHostOperationRecord {
 	pipelineFailure?: Error;
 	retired: boolean;
 	response?: IAgentRuntimeHostOperationResponse;
+}
+
+interface IValidatedConnectedAgentHostOperation {
+	readonly owner: IConnectedAgentContentOwner;
+	readonly credential?: IAgentCredentialReference;
 }
 
 interface IConnectedAgentToolCallRecord {
@@ -275,11 +318,14 @@ function assertPositiveInteger(value: unknown, field: string): asserts value is 
 }
 
 function assertExactKeys(
-	value: object,
+	value: unknown,
 	required: readonly string[],
 	optional: readonly string[],
 	field: string,
 ): void {
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+		throwInvalidRuntimeValue(field, value);
+	}
 	const keys = Object.keys(value);
 	const allowed = new Set([...required, ...optional]);
 	if (
@@ -415,19 +461,34 @@ function assertUniqueStrings(
 
 function validateAndFreezeModelDescriptor(
 	model: IAgentModelDescriptor,
+	agent: AgentId,
 	field: string,
 ): IAgentModelDescriptor {
+	assertExactKeys(
+		model,
+		['id', 'revision', 'displayName', 'enabled', 'configurationSchema', 'toolSchemaProfiles', 'attachments'],
+		[],
+		field,
+	);
 	createAgentModelId(model.id);
 	createAgentModelDescriptorRevision(model.revision);
 	assertBoundedString(model.displayName, `${field}.displayName`, 512);
 	if (typeof model.enabled !== 'boolean') {
 		throwInvalidRuntimeValue(`${field}.enabled`, model.enabled);
 	}
+	const configurationSchema = validateAndFreezeAgentConfigurationSchema(model.configurationSchema, {
+		agent,
+		scope: 'model',
+	});
 	const toolSchemaProfiles = assertUniqueStrings(
 		model.toolSchemaProfiles,
 		`${field}.toolSchemaProfiles`,
 		createAgentToolSchemaProfileId,
 	);
+	assertExactKeys(model.attachments, [
+		'carriers', 'shapes', 'mediaTypes', 'maximumCount', 'maximumItemBytes', 'maximumTotalBytes',
+		'maximumTreeDepth', 'maximumTreeEntries', 'supportsClientContentForBackgroundExecution',
+	], [], `${field}.attachments`);
 	const carriers = assertUniqueStrings(model.attachments.carriers, `${field}.attachments.carriers`, carrier => {
 		if (carrier !== 'inline' && carrier !== 'reference') {
 			throwInvalidRuntimeValue(`${field}.attachments.carriers`, carrier);
@@ -463,6 +524,7 @@ function validateAndFreezeModelDescriptor(
 		revision: model.revision,
 		displayName: model.displayName,
 		enabled: model.enabled,
+		configurationSchema,
 		toolSchemaProfiles: toolSchemaProfiles as IAgentModelDescriptor['toolSchemaProfiles'],
 		attachments: Object.freeze({
 			carriers: carriers as IAgentModelDescriptor['attachments']['carriers'],
@@ -479,14 +541,25 @@ function validateAndFreezeModelDescriptor(
 }
 
 function validateAndFreezeDescriptor(descriptor: IAgentDescriptor, field: string): IAgentDescriptor {
+	assertExactKeys(
+		descriptor,
+		['id', 'packageId', 'revision', 'displayName', 'description', 'capabilities', 'models', 'requiresAgentAuthentication'],
+		[],
+		field,
+	);
 	createAgentId(descriptor.id);
 	createAgentPackageId(descriptor.packageId);
 	createAgentDescriptorRevision(descriptor.revision);
 	assertBoundedString(descriptor.displayName, `${field}.displayName`, 512);
 	assertBoundedString(descriptor.description, `${field}.description`, 2_048);
-	if (typeof descriptor.authenticationRequired !== 'boolean') {
-		throwInvalidRuntimeValue(`${field}.authenticationRequired`, descriptor.authenticationRequired);
+	if (typeof descriptor.requiresAgentAuthentication !== 'boolean') {
+		throwInvalidRuntimeValue(`${field}.requiresAgentAuthentication`, descriptor.requiresAgentAuthentication);
 	}
+	assertExactKeys(descriptor.capabilities, [
+		'revision', 'supportsEmptySession', 'supportsCreateChat', 'supportsForkChat', 'supportsQueue',
+		'supportsSteering', 'supportsCancellation', 'supportsReleaseSession', 'supportsReleaseChat',
+		'supportsDeleteSession', 'supportsDeleteChat',
+	], ['maximumChatCount'], `${field}.capabilities`);
 	createAgentCapabilityRevision(descriptor.capabilities.revision);
 	for (const [name, capability] of [
 		['supportsEmptySession', descriptor.capabilities.supportsEmptySession],
@@ -512,13 +585,20 @@ function validateAndFreezeDescriptor(descriptor: IAgentDescriptor, field: string
 	}
 	const modelIds = new Set<string>();
 	const modelRevisions = new Set<string>();
+	const modelConfigurationSchemas = new Map<string, string>();
 	const models = descriptor.models.map((model, index) => {
-		const validated = validateAndFreezeModelDescriptor(model, `${field}.models.${index}`);
+		const validated = validateAndFreezeModelDescriptor(model, descriptor.id, `${field}.models.${index}`);
 		if (modelIds.has(validated.id) || modelRevisions.has(validated.revision)) {
 			throwInvalidRuntimeValue(`${field}.models.${index}`, validated.id);
 		}
+		const encodedConfigurationSchema = encodeAgentHostProtocolValue(validated.configurationSchema);
+		const existingConfigurationSchema = modelConfigurationSchemas.get(validated.configurationSchema.revision);
+		if (existingConfigurationSchema !== undefined && existingConfigurationSchema !== encodedConfigurationSchema) {
+			throwInvalidRuntimeValue(`${field}.models.${index}.configurationSchema`, validated.configurationSchema.revision);
+		}
 		modelIds.add(validated.id);
 		modelRevisions.add(validated.revision);
+		modelConfigurationSchemas.set(validated.configurationSchema.revision, encodedConfigurationSchema);
 		return validated;
 	});
 	return Object.freeze({
@@ -529,7 +609,7 @@ function validateAndFreezeDescriptor(descriptor: IAgentDescriptor, field: string
 		description: descriptor.description,
 		capabilities: Object.freeze({ ...descriptor.capabilities }),
 		models: Object.freeze(models),
-		authenticationRequired: descriptor.authenticationRequired,
+		requiresAgentAuthentication: descriptor.requiresAgentAuthentication,
 	});
 }
 
@@ -539,8 +619,14 @@ function validateAndFreezeRegistration(
 	authorizedAgents: ReadonlySet<AgentId>,
 	field: string,
 ): IConnectedAgentRegistration {
+	assertExactKeys(pair, ['registration', 'descriptor'], [], field);
 	const descriptor = validateAndFreezeDescriptor(pair.descriptor, `${field}.descriptor`);
 	const registration = pair.registration;
+	assertExactKeys(registration, [
+		'packageId', 'agentId', 'revision', 'descriptorRevision', 'capabilityRevision',
+		'hostDefaultsSchema', 'initialSessionConfigurationSchema', 'supportedSessionConfigurationSchemas',
+		'supportedToolSchemaProfiles', 'supportedResumeSchemas', 'resumeMigrationEdges',
+	], [], `${field}.registration`);
 	createAgentPackageId(registration.packageId);
 	createAgentId(registration.agentId);
 	createAgentRuntimeRegistrationRevision(registration.revision);
@@ -555,6 +641,28 @@ function validateAndFreezeRegistration(
 		|| descriptor.capabilities.revision !== registration.capabilityRevision
 	) {
 		throwInvalidRuntimeValue(field, registration.agentId);
+	}
+	const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema(registration.hostDefaultsSchema, {
+		agent: registration.agentId,
+		scope: 'hostDefault',
+	});
+	const supportedSessionConfigurationSchemas = assertUniqueStrings(
+		registration.supportedSessionConfigurationSchemas,
+		`${field}.registration.supportedSessionConfigurationSchemas`,
+		createAgentConfigurationSchemaRevision,
+	);
+	if (supportedSessionConfigurationSchemas.length === 0) {
+		throwInvalidRuntimeValue(
+			`${field}.registration.supportedSessionConfigurationSchemas`,
+			supportedSessionConfigurationSchemas.length,
+		);
+	}
+	createAgentConfigurationSchemaRevision(registration.initialSessionConfigurationSchema);
+	if (!supportedSessionConfigurationSchemas.includes(registration.initialSessionConfigurationSchema)) {
+		throwInvalidRuntimeValue(
+			`${field}.registration.initialSessionConfigurationSchema`,
+			registration.initialSessionConfigurationSchema,
+		);
 	}
 	const supportedToolSchemaProfiles = assertUniqueStrings(
 		registration.supportedToolSchemaProfiles,
@@ -601,6 +709,9 @@ function validateAndFreezeRegistration(
 			revision: registration.revision,
 			descriptorRevision: registration.descriptorRevision,
 			capabilityRevision: registration.capabilityRevision,
+			hostDefaultsSchema,
+			initialSessionConfigurationSchema: registration.initialSessionConfigurationSchema,
+			supportedSessionConfigurationSchemas: supportedSessionConfigurationSchemas as IAgentRuntimeRegistration['supportedSessionConfigurationSchemas'],
 			supportedToolSchemaProfiles: supportedToolSchemaProfiles as IAgentRuntimeRegistration['supportedToolSchemaProfiles'],
 			supportedResumeSchemas: supportedResumeSchemas as IAgentRuntimeRegistration['supportedResumeSchemas'],
 			resumeMigrationEdges: Object.freeze(resumeMigrationEdges),
@@ -680,6 +791,7 @@ function turnContext(
 	chat: AgentChatId,
 	turn: AgentTurnId,
 	turnRequest?: IAgentChatRequest,
+	turnCredentials?: readonly IAgentCredentialReference[],
 ): IConnectedAgentCallContext {
 	return {
 		kind,
@@ -691,6 +803,7 @@ function turnContext(
 		allowsChatActions: true,
 		allowsTurnActions: true,
 		...(turnRequest === undefined ? {} : { turnRequest }),
+		...(turnCredentials === undefined ? {} : { turnCredentials }),
 	};
 }
 
@@ -704,7 +817,7 @@ export interface IConnectedAgentRuntime {
 }
 
 class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime {
-	private readonly initializationOptions: Omit<IConnectedAgentRuntimeOptions, 'connection' | 'toolExecution' | 'contentResources'>;
+	private readonly initializationOptions: Omit<IConnectedAgentRuntimeOptions, 'connection' | 'toolExecution' | 'contentResources' | 'credentialResolver'>;
 	private readonly pendingCalls = new Map<AgentRuntimeCallId, IPendingConnectedAgentCall>();
 	private readonly hostOperations = new Map<AgentRuntimeHostOperationId, IConnectedAgentHostOperationRecord>();
 	private readonly contentLeases = new Map<AgentContentLeaseId, IConnectedAgentContentLease>();
@@ -727,12 +840,14 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 	readonly connection: IAgentRuntimeConnection;
 	private readonly toolExecution: IAgentToolExecutionPort;
 	private readonly contentResources: IAgentContentResourcePort;
+	private readonly credentialResolver: IAgentCredentialResolver;
 
 	private constructor(options: IConnectedAgentRuntimeOptions) {
 		super();
 		this.connection = options.connection;
 		this.toolExecution = options.toolExecution;
 		this.contentResources = options.contentResources;
+		this.credentialResolver = options.credentialResolver;
 		this.initializationOptions = {
 			protocolVersions: options.protocolVersions,
 			transportLimits: options.transportLimits,
@@ -785,8 +900,8 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			'runtime.protocolVersions',
 			createAgentRuntimeProtocolVersion,
 		) as readonly AgentRuntimeProtocolVersion[];
-		if (protocolVersions.length === 0) {
-			throwInvalidRuntimeValue('runtime.protocolVersions', 'empty');
+		if (protocolVersions.length !== 1 || protocolVersions[0] !== connectedAgentRuntimeProtocolVersion) {
+			throwInvalidRuntimeValue('runtime.protocolVersions', protocolVersions.join(','));
 		}
 		const authorizedAgents = assertUniqueStrings(
 			this.initializationOptions.authorizedAgents,
@@ -905,6 +1020,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			registration: agent.registration.revision,
 			disconnected: new DeferredPromise<never>(),
 			hostOperationsOpen: context.kind === 'chat.send',
+			credentialOperationsOpen: context.kind === 'chat.send',
 			exactTurnTerminalAccepted: false,
 		};
 		this.pendingCalls.set(callId, pending);
@@ -923,6 +1039,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 				throw error;
 			}
 			pending.hostOperationsOpen = false;
+			this.closeCredentialOperationsForParent(pending);
 			try {
 				assertTransportBound(response, 'runtime.call.response', this.transportLimits.maximumResponseBytes);
 				if (
@@ -960,6 +1077,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 
 		pending.hostOperationsOpen = false;
+		this.closeCredentialOperationsForParent(pending);
 		let cleanupFailed = false;
 		let cleanupFailure: unknown;
 		try {
@@ -1009,7 +1127,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		try {
 			this.assertActive();
 			assertTransportBound(request, 'runtime.hostOperation.request', this.transportLimits.maximumRequestBytes);
-			const owner = this.validateHostOperationRequest(request);
+			const validated = this.validateHostOperationRequest(request);
 			const canonicalRequest = encodeAgentHostProtocolValue(request);
 			const existing = this.hostOperations.get(request.operation);
 			if (existing !== undefined) {
@@ -1036,10 +1154,25 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			if (activeCount >= this.transportLimits.maximumConcurrentCalls) {
 				throw invalidRuntimeValue('runtime.hostOperation.pending', activeCount);
 			}
+			const retainedRequest: IAgentRuntimeHostOperationRequest = validated.credential === undefined
+				? request
+				: Object.freeze({
+					connection: request.connection,
+					generation: request.generation,
+					operation: request.operation,
+					parentCall: request.parentCall,
+					registration: request.registration,
+					agent: request.agent,
+					request: Object.freeze({
+						kind: 'credential.resolve',
+						credential: validated.credential,
+					}),
+				});
 			const record: IConnectedAgentHostOperationRecord = {
 				canonicalRequest,
-				request,
-				owner,
+				request: retainedRequest,
+				owner: validated.owner,
+				...(validated.credential === undefined ? {} : { credential: validated.credential }),
 				cancellation: new CancellationTokenSource(),
 				executionTerminal: new DeferredPromise<void>(),
 				executionState: 'pending',
@@ -1059,7 +1192,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 	}
 
-	private validateHostOperationRequest(request: IAgentRuntimeHostOperationRequest): IConnectedAgentContentOwner {
+	private validateHostOperationRequest(request: IAgentRuntimeHostOperationRequest): IValidatedConnectedAgentHostOperation {
 		assertExactKeys(
 			request,
 			['connection', 'generation', 'operation', 'parentCall', 'registration', 'agent', 'request'],
@@ -1081,6 +1214,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			|| parent.kind !== 'chat.send'
 			|| !parent.hostOperationsOpen
 			|| parent.turnRequest === undefined
+			|| parent.turnCredentials === undefined
 			|| parent.agent !== request.agent
 			|| parent.registration !== request.registration
 			|| parent.session === undefined
@@ -1097,15 +1231,27 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			chat: parent.chat,
 			turn: parent.turn,
 		};
-		this.validateHostOperationValue(request, parent.turnRequest, owner);
-		return owner;
+			const credential = this.validateHostOperationValue(
+			request,
+			parent.turnRequest,
+			parent.turnCredentials,
+				owner,
+			);
+			if (credential !== undefined && !parent.credentialOperationsOpen) {
+				throw invalidRuntimeValue('runtime.hostOperation.credential.parentCall', request.parentCall);
+			}
+		return {
+			owner,
+			...(credential === undefined ? {} : { credential }),
+		};
 	}
 
 	private validateHostOperationValue(
 		envelope: IAgentRuntimeHostOperationRequest,
 		turn: IAgentChatRequest,
+		turnCredentials: readonly IAgentCredentialReference[],
 		owner: IConnectedAgentContentOwner,
-	): void {
+	): IAgentCredentialReference | undefined {
 		const request = envelope.request;
 		switch (request.kind) {
 			case 'tool.execute':
@@ -1114,6 +1260,18 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 				assertExactKeys(request, ['kind', 'call'], [], 'runtime.hostOperation.request');
 				this.validateHostToolCall(request.call, turn, owner, request.kind);
 				return;
+			case 'credential.resolve': {
+				assertExactKeys(request, ['kind', 'credential'], [], 'runtime.hostOperation.request');
+				const credential = validateAndFreezeAgentCredentialReference(request.credential);
+				if (!turnCredentials.some(candidate =>
+					candidate.provider === credential.provider
+					&& candidate.scope === credential.scope
+					&& candidate.reference === credential.reference
+				)) {
+					throw invalidRuntimeValue('runtime.hostOperation.credential.authorization', 'denied');
+				}
+				return credential;
+			}
 			case 'content.open': {
 				assertExactKeys(request, ['kind', 'request'], [], 'runtime.hostOperation.request');
 				assertAgentContentResourceOpenRequest(request.request);
@@ -1167,6 +1325,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 					|| target.request.request.kind === 'tool.execute'
 					|| target.request.request.kind === 'tool.cancel'
 					|| target.request.request.kind === 'tool.reconcile'
+					|| target.request.request.kind === 'credential.resolve'
 					|| !this.sameContentOwner(target.owner, owner)
 				) {
 					throw invalidRuntimeValue('runtime.hostOperation.content.cancel', request.target);
@@ -1269,8 +1428,81 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			return [];
 		}
 		return [...this.hostOperations.values()].filter(operation =>
-			operation.owner.parentCall === parent.call && operation.responseDeliveryState !== 'delivered',
+			operation.owner.parentCall === parent.call
+			&& !operation.retired
+			&& operation.responseDeliveryState !== 'delivered',
 		);
+	}
+
+	closeTurnCredentialOperations(
+		agent: AgentId,
+		session: AgentSessionId,
+		chat: AgentChatId,
+		turn: AgentTurnId,
+	): void {
+		this.closeCredentialOperations(parent => (
+			parent.agent === agent
+			&& parent.session === session
+			&& parent.chat === chat
+			&& parent.turn === turn
+		));
+	}
+
+	closeChatCredentialOperations(agent: AgentId, session: AgentSessionId, chat: AgentChatId): void {
+		this.closeCredentialOperations(parent => (
+			parent.agent === agent
+			&& parent.session === session
+			&& parent.chat === chat
+		));
+	}
+
+	closeSessionCredentialOperations(agent: AgentId, session: AgentSessionId): void {
+		this.closeCredentialOperations(parent => parent.agent === agent && parent.session === session);
+	}
+
+	private closeCredentialOperationsForParent(parent: IPendingConnectedAgentCall): void {
+		this.closeCredentialOperations(candidate => candidate === parent);
+	}
+
+	private closeCredentialOperations(predicate: (parent: IPendingConnectedAgentCall) => boolean): void {
+		const parentCalls = new Set<AgentRuntimeCallId>();
+		for (const parent of this.pendingCalls.values()) {
+			if (parent.kind === 'chat.send' && predicate(parent)) {
+				parent.credentialOperationsOpen = false;
+				parentCalls.add(parent.call);
+			}
+		}
+		for (const operation of this.hostOperations.values()) {
+			if (
+				parentCalls.has(operation.owner.parentCall)
+				&& operation.request.request.kind === 'credential.resolve'
+				&& operation.responseDeliveryState !== 'delivered'
+			) {
+				operation.retired = true;
+				if (operation.executionState === 'pending') {
+					operation.cancellation.cancel();
+				}
+			}
+		}
+	}
+
+	private isCredentialOperationActive(record: IConnectedAgentHostOperationRecord): boolean {
+		if (record.request.request.kind !== 'credential.resolve') {
+			return !record.retired;
+		}
+		const parent = this.pendingCalls.get(record.owner.parentCall);
+		return !record.retired
+			&& !record.cancellation.token.isCancellationRequested
+			&& parent !== undefined
+			&& parent.kind === 'chat.send'
+			&& parent.hostOperationsOpen
+			&& parent.credentialOperationsOpen
+			&& !parent.exactTurnTerminalAccepted
+			&& parent.agent === record.owner.agent
+			&& parent.registration === record.owner.registration
+			&& parent.session === record.owner.session
+			&& parent.chat === record.owner.chat
+			&& parent.turn === record.owner.turn;
 	}
 
 	private async cancelPendingHostOperations(operations: readonly IConnectedAgentHostOperationRecord[]): Promise<void> {
@@ -1461,13 +1693,14 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 				value: await this.executeHostOperation(record),
 			});
 		} catch (error) {
-			outcome = this.hostOperationFailure(error);
+			outcome = this.hostOperationFailure(record, error);
 		} finally {
 			this.markHostOperationExecutionTerminal(record);
 			record.cancellation.dispose();
 		}
 		await record.progressDelivery;
-		if (record.retired) {
+		if (!this.isCredentialOperationActive(record)) {
+			record.retired = true;
 			return;
 		}
 		const request = record.request;
@@ -1579,6 +1812,29 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 				}
 				return reconciliation;
 			}
+			case 'credential.resolve': {
+				const credential = record.credential;
+				if (credential === undefined) {
+					throw invalidRuntimeValue('runtime.hostOperation.credential', 'missing');
+				}
+				const resolution = this.credentialResolver.resolve(Object.freeze({
+					packageId: this.initializationOptions.packageId,
+					agentId: record.owner.agent,
+					runtimeRegistration: record.owner.registration,
+					session: record.owner.session,
+					chat: record.owner.chat,
+					turn: record.owner.turn,
+					credential,
+				}), record.cancellation.token);
+				const value: unknown = await raceCancellationError(resolution, record.cancellation.token);
+				if (!this.isCredentialOperationActive(record)) {
+					throw new CancellationError();
+				}
+				if (typeof value !== 'string') {
+					throw invalidRuntimeValue('runtime.hostOperation.credential.value', typeof value);
+				}
+				return value;
+			}
 			case 'content.open': {
 				const lease = await this.contentResources.open(request.request, record.cancellation.token);
 				assertAgentContentResourceLease(lease, request.request);
@@ -1645,9 +1901,20 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 	}
 
-	private hostOperationFailure(error: unknown): IAgentRuntimeHostOperationResponse['outcome'] {
+	private hostOperationFailure(
+		record: IConnectedAgentHostOperationRecord,
+		error: unknown,
+	): IAgentRuntimeHostOperationResponse['outcome'] {
 		if (isCancellationError(error)) {
 			return Object.freeze({ kind: 'cancelled' });
+		}
+		if (record.request.request.kind === 'credential.resolve') {
+			return Object.freeze({
+				kind: 'failed',
+				code: AgentHostErrorCode.ResourceMissing,
+				message: 'Agent credential resolution failed',
+				data: Object.freeze({ resource: 'agentCredential' }),
+			});
 		}
 		if (error instanceof AgentHostError) {
 			assertAgentHostProtocolValue(error.data);
@@ -1685,9 +1952,13 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		record: IConnectedAgentHostOperationRecord,
 		response: IAgentRuntimeHostOperationResponse,
 	): Promise<void> {
+		if (!this.isCredentialOperationActive(record)) {
+			record.retired = true;
+			return;
+		}
 		record.responseDeliveryState = 'pending';
 		try {
-			await this.sendHostOperationResponse(response);
+			await this.sendHostOperationResponse(record, response);
 			record.responseDeliveryState = 'delivered';
 		} catch (error) {
 			record.responseDeliveryState = 'failed';
@@ -1695,7 +1966,10 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 	}
 
-	private async sendHostOperationResponse(response: IAgentRuntimeHostOperationResponse): Promise<void> {
+	private async sendHostOperationResponse(
+		record: IConnectedAgentHostOperationRecord,
+		response: IAgentRuntimeHostOperationResponse,
+	): Promise<void> {
 		try {
 			await this.connection.completeHostOperation(response);
 		} catch (error) {
@@ -1705,7 +1979,9 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			}
 			const failure = invalidRuntimeValue(
 				'runtime.hostOperation.response',
-				error instanceof Error ? error.message : error,
+				record.request.request.kind === 'credential.resolve'
+					? 'delivery-failed'
+					: error instanceof Error ? error.message : error,
 			);
 			this.markInvalid(failure, true);
 			throw this.failure ?? failure;
@@ -1858,6 +2134,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 		send.exactTurnTerminalAccepted = true;
 		send.hostOperationsOpen = false;
+		this.closeCredentialOperationsForParent(send);
 	}
 
 	private invalidateProtocol(field: string, value: unknown): never {
@@ -1868,6 +2145,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		if (this.status !== 'invalid' && this.status !== 'disposed') {
 			this.status = 'invalid';
 			this.failure = error;
+			this.closeCredentialOperations(() => true);
 			if (this.initializationDisconnect !== undefined && !this.initializationDisconnect.isSettled) {
 				this.initializationDisconnect.error(error);
 			}
@@ -1922,6 +2200,7 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 		}
 		this.status = 'disposed';
 		const error = this.failure ?? runtimeUnavailable(this.connection);
+		this.closeCredentialOperations(() => true);
 		if (this.initializationDisconnect !== undefined && !this.initializationDisconnect.isSettled) {
 			this.initializationDisconnect.error(error);
 		}
@@ -2010,6 +2289,47 @@ function validateNullResponse(value: null): void {
 	}
 }
 
+function validateHostDefaultsConfigurationState(
+	state: IAgentConfigurationState,
+	connected: IConnectedAgentRegistration,
+): IAgentConfigurationState {
+	const validated = validateAndFreezeAgentConfigurationState(state, {
+		agent: connected.registration.agentId,
+		scope: 'hostDefault',
+		revision: connected.registration.hostDefaultsSchema.revision,
+	});
+	if (
+		encodeAgentHostProtocolValue(validated.schema)
+		!== encodeAgentHostProtocolValue(connected.registration.hostDefaultsSchema)
+	) {
+		throwInvalidRuntimeValue('runtime.configuration.hostDefaults.schema', validated.schema.revision);
+	}
+	return validated;
+}
+
+function modelConfigurationSchema(
+	candidate: IAgentConfigurationCandidate,
+	connected: IConnectedAgentRegistration,
+): IAgentConfigurationSchema {
+	createAgentConfigurationSchemaRevision(candidate.schema);
+	const model = connected.descriptor.models.find(value => value.configurationSchema.revision === candidate.schema);
+	if (model === undefined) {
+		throwInvalidRuntimeValue('runtime.configuration.model.schema', candidate.schema);
+	}
+	return model.configurationSchema;
+}
+
+function validateModelConfigurationCandidate(
+	candidate: IAgentConfigurationCandidate,
+	connected: IConnectedAgentRegistration,
+): IAgentConfigurationCandidate {
+	return validateAndFreezeAgentConfigurationCandidate(
+		modelConfigurationSchema(candidate, connected),
+		candidate,
+		'model',
+	);
+}
+
 class ConnectedAgent extends Disposable implements IAgent {
 	readonly id: AgentId;
 	readonly descriptor: IObservable<IAgentDescriptor>;
@@ -2018,10 +2338,13 @@ class ConnectedAgent extends Disposable implements IAgent {
 	private readonly actionEmitter = this._register(new Emitter<IAgentAction>());
 	readonly onDidEmitAction: Event<IAgentAction> = this.actionEmitter.event;
 
+	readonly configuration: IAgentConfiguration;
 	readonly executionProfiles: IAgentExecutionProfiles;
 	readonly sessions: IAgentSessions;
 	readonly chats: IAgentChats;
 	readonly resumeStates: IAgentResumeStates;
+
+	private readonly sessionConfigurationSchemas = new Map<AgentConfigurationSchemaRevision, IAgentConfigurationSchema>();
 
 	constructor(
 		private readonly runtime: ConnectedAgentRuntime,
@@ -2031,6 +2354,14 @@ class ConnectedAgent extends Disposable implements IAgent {
 		this.id = connected.registration.agentId;
 		this.registration = connected.registration;
 		this.descriptor = observableValue(`ConnectedAgent.${this.id}.descriptor`, connected.descriptor);
+		this.configuration = {
+			resolveSession: request => this.resolveSessionConfiguration(request),
+			completeSession: request => this.completeSessionConfiguration(request),
+			prepareSessionUpdate: request => this.prepareSessionConfigurationUpdate(request),
+			commitSessionUpdate: request => this.commitSessionConfigurationUpdate(request),
+			rollbackSessionUpdate: request => this.rollbackSessionConfigurationUpdate(request),
+			acknowledgeSessionUpdate: request => this.acknowledgeSessionConfigurationUpdate(request),
+		};
 		this.executionProfiles = {
 			resolve: request => this.resolveExecutionProfile(request),
 		};
@@ -2059,11 +2390,236 @@ class ConnectedAgent extends Disposable implements IAgent {
 		this.actionEmitter.fire(action);
 	}
 
+	private async resolveSessionConfiguration(
+		request: IAgentResolveSessionConfigurationRequest,
+	): Promise<IAgentResolvedSessionConfiguration> {
+		this.validateConfigurationRuntimeRegistration(request.runtimeRegistration, 'runtime.configuration.resolveSession');
+		validateHostDefaultsConfigurationState(request.hostDefaults, this.connected);
+		this.validateUnresolvedSessionConfigurationCandidate(request.candidate);
+		if (request.workspace !== undefined) {
+			assertAgentHostProtocolValue(request.workspace);
+		}
+		return this.runtime.invoke(
+			this.connected,
+			request,
+			{
+				kind: 'configuration.resolveSession',
+				allowsSessionActions: false,
+				allowsChatActions: false,
+				allowsTurnActions: false,
+			},
+			call => this.runtime.connection.resolveSessionConfiguration(call),
+			value => {
+				assertAgentHostProtocolValue(value);
+				assertExactKeys(value, ['schema', 'values'], [], 'runtime.configuration.resolveSession.response');
+				const schema = this.acceptSessionConfigurationSchema(value.schema);
+				validateAndFreezeAgentConfigurationCandidate(schema, {
+					schema: schema.revision,
+					values: request.candidate.values,
+				}, 'session');
+				const resolved = validateAndFreezeAgentConfigurationCandidate(
+					schema,
+					{ schema: schema.revision, values: value.values },
+					'session',
+					true,
+				);
+				return Object.freeze({ schema, values: resolved.values });
+			},
+		);
+	}
+
+	private async completeSessionConfiguration(
+		request: IAgentSessionConfigurationCompletionRequest,
+	): Promise<readonly IAgentConfigurationCompletion[]> {
+		this.validateConfigurationRuntimeRegistration(request.runtimeRegistration, 'runtime.configuration.completeSession');
+		validateHostDefaultsConfigurationState(request.hostDefaults, this.connected);
+		const schema = this.acceptSessionConfigurationSchema(request.resolvedSchema);
+		validateAndFreezeAgentConfigurationCandidate(schema, request.candidate, 'session');
+		createAgentConfigurationPropertyId(request.property);
+		if (
+			schema.revision !== request.candidate.schema
+			|| !schema.properties.some(property => property.id === request.property && property.dynamicCompletion)
+			|| typeof request.query !== 'string'
+			|| request.query.length > maximumConfigurationCompletionQueryLength
+			|| !Number.isSafeInteger(request.limit)
+			|| request.limit <= 0
+			|| request.limit > maximumConfigurationCompletionCount
+		) {
+			throwInvalidRuntimeValue('runtime.configuration.completeSession.request', request.property);
+		}
+		if (request.workspace !== undefined) {
+			assertAgentHostProtocolValue(request.workspace);
+		}
+		return this.runtime.invoke(
+			this.connected,
+			request,
+			{
+				kind: 'configuration.completeSession',
+				allowsSessionActions: false,
+				allowsChatActions: false,
+				allowsTurnActions: false,
+			},
+			call => this.runtime.connection.completeSessionConfiguration(call),
+			value => {
+				const completions = validateAndFreezeAgentConfigurationCompletions(schema, request.property, value);
+				if (completions.length > request.limit) {
+					throwInvalidRuntimeValue('runtime.configuration.completeSession.response.length', completions.length);
+				}
+				return completions;
+			},
+		);
+	}
+
+	private async prepareSessionConfigurationUpdate(
+		request: IAgentPrepareSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		validateOperationContext(request.operation, request.payloadDigest);
+		this.validateConfigurationRuntimeRegistration(request.runtimeRegistration, 'runtime.configuration.prepareSessionUpdate');
+		createAgentSessionId(request.session);
+		const current = this.validateSessionConfigurationState(request.current);
+		const candidate = this.validateSessionConfigurationState(request.candidate);
+		if (
+			current.schema.revision !== candidate.schema.revision
+			|| current.revision === candidate.revision
+		) {
+			throwInvalidRuntimeValue('runtime.configuration.prepareSessionUpdate.revision', candidate.revision);
+		}
+		for (const property of candidate.schema.properties) {
+			if (!property.sessionMutable && this.configurationPropertyChanged(property.id, current, candidate)) {
+				throwInvalidRuntimeValue('runtime.configuration.prepareSessionUpdate.immutableProperty', property.id);
+			}
+		}
+		await this.runtime.invoke(
+			this.connected,
+			request,
+			sessionContext('configuration.prepareSessionUpdate', request.operation, request.session, false),
+			call => this.runtime.connection.prepareSessionConfigurationUpdate(call),
+			validateNullResponse,
+		);
+	}
+
+	private async commitSessionConfigurationUpdate(
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		await this.finalizeSessionConfigurationUpdate('configuration.commitSessionUpdate', request);
+	}
+
+	private async rollbackSessionConfigurationUpdate(
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		await this.finalizeSessionConfigurationUpdate('configuration.rollbackSessionUpdate', request);
+	}
+
+	private async acknowledgeSessionConfigurationUpdate(
+		request: IAgentAcknowledgeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		validateOperationContext(request.operation, request.payloadDigest);
+		this.validateConfigurationRuntimeRegistration(request.runtimeRegistration, 'runtime.configuration.acknowledgeSessionUpdate');
+		createAgentSessionId(request.session);
+		createAgentConfigurationStateRevision(request.configuration);
+		if (request.decision !== 'commit' && request.decision !== 'rollback') {
+			throwInvalidRuntimeValue('runtime.configuration.acknowledgeSessionUpdate.decision', request.decision);
+		}
+		await this.runtime.invoke(
+			this.connected,
+			request,
+			sessionContext('configuration.acknowledgeSessionUpdate', request.operation, request.session, false),
+			call => this.runtime.connection.acknowledgeSessionConfigurationUpdate(call),
+			validateNullResponse,
+		);
+	}
+
+	private async finalizeSessionConfigurationUpdate(
+		kind: 'configuration.commitSessionUpdate' | 'configuration.rollbackSessionUpdate',
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		validateOperationContext(request.operation, request.payloadDigest);
+		this.validateConfigurationRuntimeRegistration(request.runtimeRegistration, `runtime.${kind}`);
+		createAgentSessionId(request.session);
+		createAgentConfigurationStateRevision(request.configuration);
+		await this.runtime.invoke(
+			this.connected,
+			request,
+			sessionContext(kind, request.operation, request.session, false),
+			call => kind === 'configuration.commitSessionUpdate'
+				? this.runtime.connection.commitSessionConfigurationUpdate(call)
+				: this.runtime.connection.rollbackSessionConfigurationUpdate(call),
+			validateNullResponse,
+		);
+	}
+
+	private validateConfigurationRuntimeRegistration(
+		runtimeRegistration: AgentRuntimeRegistrationRevision,
+		field: string,
+	): void {
+		createAgentRuntimeRegistrationRevision(runtimeRegistration);
+		if (runtimeRegistration !== this.registration.revision) {
+			throwInvalidRuntimeValue(`${field}.runtimeRegistration`, runtimeRegistration);
+		}
+	}
+
+	private validateUnresolvedSessionConfigurationCandidate(candidate: IAgentConfigurationCandidate): void {
+		assertAgentHostProtocolValue(candidate);
+		assertExactKeys(candidate, ['schema', 'values'], [], 'runtime.configuration.sessionCandidate');
+		createAgentConfigurationSchemaRevision(candidate.schema);
+		if (!this.registration.supportedSessionConfigurationSchemas.includes(candidate.schema)) {
+			throwInvalidRuntimeValue('runtime.configuration.sessionCandidate.schema', candidate.schema);
+		}
+		const knownSchema = this.sessionConfigurationSchemas.get(candidate.schema);
+		if (knownSchema !== undefined) {
+			validateAndFreezeAgentConfigurationCandidate(knownSchema, candidate, 'session');
+		}
+	}
+
+	private acceptSessionConfigurationSchema(value: unknown): IAgentConfigurationSchema {
+		const schema = validateAndFreezeAgentConfigurationSchema(value, {
+			agent: this.id,
+			scope: 'session',
+		});
+		if (!this.registration.supportedSessionConfigurationSchemas.includes(schema.revision)) {
+			throwInvalidRuntimeValue('runtime.configuration.sessionSchema.revision', schema.revision);
+		}
+		const existing = this.sessionConfigurationSchemas.get(schema.revision);
+		if (
+			existing !== undefined
+			&& encodeAgentHostProtocolValue(existing) !== encodeAgentHostProtocolValue(schema)
+		) {
+			throwInvalidRuntimeValue('runtime.configuration.sessionSchema.conflict', schema.revision);
+		}
+		this.sessionConfigurationSchemas.set(schema.revision, schema);
+		return schema;
+	}
+
+	private validateSessionConfigurationState(state: IAgentConfigurationState): IAgentConfigurationState {
+		const validated = validateAndFreezeAgentConfigurationState(state, {
+			agent: this.id,
+			scope: 'session',
+		});
+		this.acceptSessionConfigurationSchema(validated.schema);
+		return validated;
+	}
+
+	private configurationPropertyChanged(
+		property: string,
+		current: IAgentConfigurationState,
+		candidate: IAgentConfigurationState,
+	): boolean {
+		const currentPresent = Object.hasOwn(current.values, property);
+		const candidatePresent = Object.hasOwn(candidate.values, property);
+		return currentPresent !== candidatePresent || (
+			currentPresent
+			&& encodeAgentHostProtocolValue(current.values[property]!)
+				!== encodeAgentHostProtocolValue(candidate.values[property]!)
+		);
+	}
+
 	private async resolveExecutionProfile(request: IAgentExecutionProfileRequest): Promise<IAgentExecutionProfile> {
 		createAgentSubmissionId(request.submission);
 		createAgentHostPayloadDigest(request.selectionDigest);
 		createAgentRuntimeRegistrationRevision(request.runtimeRegistration);
 		assertAgentHostProtocolValue(request.selection);
+		const modelConfiguration = validateModelConfigurationCandidate(request.selection.configuration, this.connected);
+		this.validateSessionConfigurationState(request.sessionConfiguration);
 		if (request.runtimeRegistration !== this.registration.revision) {
 			throwInvalidRuntimeValue('runtime.executionProfile.runtimeRegistration', request.runtimeRegistration);
 		}
@@ -2077,7 +2633,14 @@ class ConnectedAgent extends Disposable implements IAgent {
 				allowsTurnActions: false,
 			},
 			call => this.runtime.connection.resolveExecutionProfile(call),
-			value => validateExecutionProfile(value, this.connected),
+			value => {
+				const profile = validateExecutionProfile(value, this.connected);
+				const model = this.connected.descriptor.models.find(candidate => candidate.revision === profile.modelDescriptor)!;
+				if (model.configurationSchema.revision !== modelConfiguration.schema) {
+					throwInvalidRuntimeValue('runtime.executionProfile.configurationSchema', modelConfiguration.schema);
+				}
+				return profile;
+			},
 		);
 	}
 
@@ -2127,6 +2690,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 	private async createSession(request: IAgentCreateSessionOptions): Promise<IAgentSessionBacking> {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
+		this.validateSessionConfigurationState(request.configuration);
 		return this.runtime.invoke(
 			this.connected,
 			request,
@@ -2139,6 +2703,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 	private async materializeSession(request: IAgentMaterializeSessionRequest): Promise<void> {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
+		this.validateSessionConfigurationState(request.configuration);
 		validateResumeState(request.resume, this.registration, 'runtime.materializeSession.resume');
 		await this.runtime.invoke(
 			this.connected,
@@ -2152,6 +2717,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 	private async releaseSession(request: IAgentReleaseSessionRequest): Promise<void> {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
+		this.runtime.closeSessionCredentialOperations(this.id, request.session);
 		await this.runtime.invoke(
 			this.connected,
 			request,
@@ -2205,6 +2771,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
 		createAgentChatId(request.chat);
+		this.runtime.closeChatCredentialOperations(this.id, request.session, request.chat);
 		await this.runtime.invoke(
 			this.connected,
 			request,
@@ -2230,11 +2797,19 @@ class ConnectedAgent extends Disposable implements IAgent {
 	}
 
 	private async send(request: IAgentChatRequest): Promise<void> {
-		this.validateTurnRequest(request);
+		const credentials = this.validateTurnRequest(request);
 		await this.runtime.invoke(
 			this.connected,
 			request,
-			turnContext('chat.send', request.operation, request.session, request.chat, request.turn, request),
+			turnContext(
+				'chat.send',
+				request.operation,
+				request.session,
+				request.chat,
+				request.turn,
+				request,
+				credentials,
+			),
 			call => this.runtime.connection.send(call),
 			validateNullResponse,
 		);
@@ -2262,6 +2837,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 		createAgentSessionId(request.session);
 		createAgentChatId(request.chat);
 		createAgentTurnId(request.turn);
+		this.runtime.closeTurnCredentialOperations(this.id, request.session, request.chat, request.turn);
 		await this.runtime.invoke(
 			this.connected,
 			request,
@@ -2284,7 +2860,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 		);
 	}
 
-	private validateTurnRequest(request: IAgentChatRequest): void {
+	private validateTurnRequest(request: IAgentChatRequest): readonly IAgentCredentialReference[] {
 		validateOperationContext(request.operation, request.payloadDigest);
 		createAgentSessionId(request.session);
 		createAgentChatId(request.chat);
@@ -2344,5 +2920,20 @@ class ConnectedAgent extends Disposable implements IAgent {
 			assertAgentHostProtocolValue(registration.descriptor.outputSchema.value);
 			registrationIds.add(registration.id);
 		}
+		if (!Array.isArray(request.binding.credentials)) {
+			throwInvalidRuntimeValue('runtime.send.binding.credentials', 'invalid');
+		}
+		const credentials: IAgentCredentialReference[] = [];
+		const credentialKeys = new Set<string>();
+		for (const [index, candidate] of request.binding.credentials.entries()) {
+			const credential = validateAndFreezeAgentCredentialReference(candidate);
+			const key = encodeAgentHostProtocolValue(credential);
+			if (credentialKeys.has(key)) {
+				throwInvalidRuntimeValue(`runtime.send.binding.credentials.${index}`, 'duplicate');
+			}
+			credentialKeys.add(key);
+			credentials.push(credential);
+		}
+		return Object.freeze(credentials);
 	}
 }

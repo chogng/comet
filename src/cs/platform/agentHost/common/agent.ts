@@ -7,9 +7,18 @@ import { Event } from 'cs/base/common/event';
 import { IObservable } from 'cs/base/common/observable';
 import { IAgentHostAttachment, IAgentHostInteractionTarget } from './attachments.js';
 import {
+	IAgentConfigurationCandidate,
+	IAgentConfigurationCompletion,
+	IAgentConfigurationSchema,
+	IAgentConfigurationState,
+} from './configuration.js';
+import {
 	AgentCapabilityRevision,
 	AgentCancellationId,
 	AgentChatId,
+	AgentConfigurationPropertyId,
+	AgentConfigurationSchemaRevision,
+	AgentConfigurationStateRevision,
 	AgentDescriptorRevision,
 	AgentExecutionProfileDigest,
 	AgentExecutionProfileRevision,
@@ -32,6 +41,7 @@ import {
 } from './identities.js';
 import { AgentHostProtocolValue } from './protocolValues.js';
 import { IAgentToolSet } from './tools.js';
+import type { IAgentCredentialReference } from './credentials.js';
 
 export interface IAgentResumeMigrationEdge {
 	readonly sourceSchema: AgentResumeSchemaId;
@@ -44,6 +54,9 @@ export interface IAgentRuntimeRegistration {
 	readonly revision: AgentRuntimeRegistrationRevision;
 	readonly descriptorRevision: AgentDescriptorRevision;
 	readonly capabilityRevision: AgentCapabilityRevision;
+	readonly hostDefaultsSchema: IAgentConfigurationSchema;
+	readonly initialSessionConfigurationSchema: AgentConfigurationSchemaRevision;
+	readonly supportedSessionConfigurationSchemas: readonly AgentConfigurationSchemaRevision[];
 	readonly supportedToolSchemaProfiles: readonly AgentToolSchemaProfileId[];
 	readonly supportedResumeSchemas: readonly AgentResumeSchemaId[];
 	readonly resumeMigrationEdges: readonly IAgentResumeMigrationEdge[];
@@ -66,6 +79,7 @@ export interface IAgentModelDescriptor {
 	readonly revision: AgentModelDescriptorRevision;
 	readonly displayName: string;
 	readonly enabled: boolean;
+	readonly configurationSchema: IAgentConfigurationSchema;
 	readonly toolSchemaProfiles: readonly AgentToolSchemaProfileId[];
 	readonly attachments: IAgentAttachmentCapabilities;
 }
@@ -93,12 +107,13 @@ export interface IAgentDescriptor {
 	readonly description: string;
 	readonly capabilities: IAgentCapabilities;
 	readonly models: readonly IAgentModelDescriptor[];
-	readonly authenticationRequired: boolean;
+	readonly requiresAgentAuthentication: boolean;
 }
 
 export interface IAgentExecutionProfileSelection {
 	readonly kind: 'user' | 'product';
 	readonly value: AgentHostProtocolValue;
+	readonly configuration: IAgentConfigurationCandidate;
 }
 
 export interface IAgentExecutionProfileRequest {
@@ -106,6 +121,7 @@ export interface IAgentExecutionProfileRequest {
 	readonly selection: IAgentExecutionProfileSelection;
 	readonly selectionDigest: AgentHostPayloadDigest;
 	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly sessionConfiguration: IAgentConfigurationState;
 }
 
 export interface IAgentExecutionProfile {
@@ -149,6 +165,59 @@ export interface IAgentOperationContext {
 	readonly payloadDigest: AgentHostPayloadDigest;
 }
 
+export interface IAgentResolveSessionConfigurationRequest {
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly workspace?: IAgentWorkspace;
+	readonly hostDefaults: IAgentConfigurationState;
+	readonly candidate: IAgentConfigurationCandidate;
+}
+
+export interface IAgentResolvedSessionConfiguration {
+	readonly schema: IAgentConfigurationSchema;
+	readonly values: IAgentConfigurationState['values'];
+}
+
+export interface IAgentSessionConfigurationCompletionRequest {
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly workspace?: IAgentWorkspace;
+	readonly hostDefaults: IAgentConfigurationState;
+	readonly candidate: IAgentConfigurationCandidate;
+	readonly resolvedSchema: IAgentConfigurationSchema;
+	readonly property: AgentConfigurationPropertyId;
+	readonly query: string;
+	readonly limit: number;
+}
+
+export interface IAgentPrepareSessionConfigurationUpdateRequest extends IAgentOperationContext {
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly session: AgentSessionId;
+	readonly current: IAgentConfigurationState;
+	readonly candidate: IAgentConfigurationState;
+}
+
+export interface IAgentFinalizeSessionConfigurationUpdateRequest extends IAgentOperationContext {
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly session: AgentSessionId;
+	readonly configuration: AgentConfigurationStateRevision;
+}
+
+export type AgentSessionConfigurationUpdateDecision = 'commit' | 'rollback';
+
+export interface IAgentAcknowledgeSessionConfigurationUpdateRequest extends IAgentFinalizeSessionConfigurationUpdateRequest {
+	readonly decision: AgentSessionConfigurationUpdateDecision;
+}
+
+export interface IAgentConfiguration {
+	resolveSession(request: IAgentResolveSessionConfigurationRequest): Promise<IAgentResolvedSessionConfiguration>;
+	completeSession(request: IAgentSessionConfigurationCompletionRequest): Promise<readonly IAgentConfigurationCompletion[]>;
+	prepareSessionUpdate(request: IAgentPrepareSessionConfigurationUpdateRequest): Promise<void>;
+	commitSessionUpdate(request: IAgentFinalizeSessionConfigurationUpdateRequest): Promise<void>;
+	/** Idempotently finalizes an unapplied rollback intent as well as a prepared rollback. */
+	rollbackSessionUpdate(request: IAgentFinalizeSessionConfigurationUpdateRequest): Promise<void>;
+	/** Releases only matching terminal transaction state; an absent terminal record is already clean. */
+	acknowledgeSessionUpdate(request: IAgentAcknowledgeSessionConfigurationUpdateRequest): Promise<void>;
+}
+
 export interface IAgentWorkspaceRepository {
 	readonly root: string;
 	readonly branch?: string;
@@ -170,11 +239,13 @@ export interface IAgentWorkspace {
 
 export interface IAgentCreateSessionOptions extends IAgentOperationContext {
 	readonly session: AgentSessionId;
+	readonly configuration: IAgentConfigurationState;
 	readonly workspace?: IAgentWorkspace;
 }
 
 export interface IAgentMaterializeSessionRequest extends IAgentOperationContext {
 	readonly session: AgentSessionId;
+	readonly configuration: IAgentConfigurationState;
 	readonly resume?: IAgentResumeState;
 }
 
@@ -253,6 +324,8 @@ export interface IAgentChatBacking {
 
 export interface IAgentTurnExecutionBinding {
 	readonly profile: IAgentExecutionProfile;
+	readonly modelConfiguration: IAgentConfigurationCandidate;
+	readonly credentials: readonly IAgentCredentialReference[];
 	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
 	readonly toolSet: IAgentToolSet;
 	readonly deadline: number;
@@ -369,6 +442,7 @@ export interface IAgent {
 	readonly descriptor: IObservable<IAgentDescriptor>;
 	readonly registration: IAgentRuntimeRegistration;
 	readonly onDidEmitAction: Event<IAgentAction>;
+	readonly configuration: IAgentConfiguration;
 	readonly executionProfiles: IAgentExecutionProfiles;
 	readonly sessions: IAgentSessions;
 	readonly chats: IAgentChats;

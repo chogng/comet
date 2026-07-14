@@ -3,9 +3,13 @@ import type { AppSettingsConfigurationService } from 'cs/platform/configuration/
 import { AppCommandErrorCode, appCommandError } from 'cs/base/parts/sandbox/common/appCommandErrors';
 import { createConfigurationMainService } from 'cs/platform/configuration/electron-main/configurationService';
 import {
-  BaseSecretStorageService,
+  type IProviderApiKeySecretStorage,
   ProviderApiKeySecretStorage,
 } from 'cs/platform/secrets/common/secret';
+import {
+  ElectronSecretStorageService,
+  type ElectronSafeStorage,
+} from 'cs/platform/secrets/electron-main/secretStorageService';
 import { createLibraryStore, type LibraryStore } from 'cs/platform/storage/electron-main/libraryStore';
 import { createTranslationCacheStore, type TranslationCacheStore } from 'cs/platform/storage/electron-main/translationCacheStore';
 import { createStorageMainService } from 'cs/platform/storage/electron-main/storageMainService';
@@ -21,6 +25,8 @@ interface StoragePaths {
 }
 
 interface StorageOptions {
+  safeStorage: ElectronSafeStorage;
+  platform: NodeJS.Platform;
   defaultLocale?: 'zh' | 'en';
 }
 
@@ -28,13 +34,19 @@ export type AppStorageService =
   IStorageService &
   AppSettingsConfigurationService &
   TranslationCacheStore &
-  Omit<LibraryStore, 'dispose'>;
+  Omit<LibraryStore, 'dispose'> & {
+    readonly providerApiKeySecretStorage: IProviderApiKeySecretStorage;
+  };
 
-export function createStorageService(paths: StoragePaths, options: StorageOptions = {}): AppStorageService {
+export function createStorageService(paths: StoragePaths, options: StorageOptions): AppStorageService {
   const storageMainService = createStorageMainService({
     stateDbFile: paths.stateDbFile,
   });
-  const secretStorageService = new BaseSecretStorageService(storageMainService);
+  const secretStorageService = new ElectronSecretStorageService(
+    storageMainService,
+    options.safeStorage,
+    options.platform,
+  );
   const providerApiKeySecretStorage = new ProviderApiKeySecretStorage(secretStorageService);
   const configurationService = createConfigurationMainService(paths.configFile, paths.userSettingsFile, {
     defaultLocale: options.defaultLocale,
@@ -50,12 +62,14 @@ export function createStorageService(paths: StoragePaths, options: StorageOption
   return {
     _serviceBrand: undefined,
     applicationStorage: storageMainService.applicationStorage.storage,
+    providerApiKeySecretStorage,
     onDidChangeValue: storageMainService.onDidChangeValue,
     onDidChangeTarget: storageMainService.onDidChangeTarget,
     onWillSaveState: storageMainService.onWillSaveState,
 
     async init() {
       await storageMainService.init();
+      await secretStorageService.init();
     },
 
     async close() {

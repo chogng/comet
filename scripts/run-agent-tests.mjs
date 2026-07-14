@@ -22,6 +22,16 @@ const agentHostCommonEntryPoint = path.join(
   'common',
   'agentHostProtocol.test.ts',
 );
+const agentConfigurationEntryPoint = path.join(
+  rootDir,
+  'src',
+  'cs',
+  'platform',
+  'agentHost',
+  'test',
+  'common',
+  'agentConfiguration.test.ts',
+);
 const agentPackageLifecycleEntryPoint = path.join(
   rootDir,
   'src',
@@ -118,6 +128,17 @@ const agentContentResourceServiceEntryPoint = path.join(
   'content',
   'agentContentResourceService.test.ts',
 );
+const agentCredentialServiceEntryPoint = path.join(
+  rootDir,
+  'src',
+  'cs',
+  'platform',
+  'agentHost',
+  'test',
+  'node',
+  'credentials',
+  'agentCredentialService.test.ts',
+);
 const cometAgentEntryPoint = path.join(
   rootDir,
   'src',
@@ -166,6 +187,7 @@ const connectedAgentRuntimeEntryPoint = path.join(
   'connectedAgentRuntime.test.ts',
 );
 const agentHostCommonOutputFile = path.join(outputDir, 'agent-host-common.test.mjs');
+const agentConfigurationOutputFile = path.join(outputDir, 'agent-configuration.test.mjs');
 const agentPackageLifecycleOutputFile = path.join(outputDir, 'agent-package-lifecycle.test.mjs');
 const agentHostAuthorityOutputFile = path.join(outputDir, 'agent-host-authority.test.mjs');
 const agentHostStateStoresOutputFile = path.join(outputDir, 'agent-host-state-stores.test.mjs');
@@ -175,6 +197,7 @@ const clientAgentToolsOutputFile = path.join(outputDir, 'client-agent-tools.test
 const clientContentResourcesOutputFile = path.join(outputDir, 'client-content-resources.test.mjs');
 const localAgentHostConnectionOutputFile = path.join(outputDir, 'local-agent-host-connection.test.mjs');
 const agentContentResourceServiceOutputFile = path.join(outputDir, 'agent-content-resource-service.test.mjs');
+const agentCredentialServiceOutputFile = path.join(outputDir, 'agent-credential-service.test.mjs');
 const cometAgentOutputFile = path.join(outputDir, 'comet-agent.test.mjs');
 const openAIResponsesOutputFile = path.join(outputDir, 'openai-responses.test.mjs');
 const openAIChatCompletionsOutputFile = path.join(outputDir, 'openai-chat-completions.test.mjs');
@@ -185,6 +208,7 @@ await mkdir(outputDir, { recursive: true });
 
 for (const [entryPoint, outputFile] of [
   [agentHostCommonEntryPoint, agentHostCommonOutputFile],
+  [agentConfigurationEntryPoint, agentConfigurationOutputFile],
   [agentPackageLifecycleEntryPoint, agentPackageLifecycleOutputFile],
   [agentHostAuthorityEntryPoint, agentHostAuthorityOutputFile],
   [agentHostStateStoresEntryPoint, agentHostStateStoresOutputFile],
@@ -194,6 +218,7 @@ for (const [entryPoint, outputFile] of [
   [clientContentResourcesEntryPoint, clientContentResourcesOutputFile],
   [localAgentHostConnectionEntryPoint, localAgentHostConnectionOutputFile],
   [agentContentResourceServiceEntryPoint, agentContentResourceServiceOutputFile],
+  [agentCredentialServiceEntryPoint, agentCredentialServiceOutputFile],
   [cometAgentEntryPoint, cometAgentOutputFile],
   [openAIResponsesEntryPoint, openAIResponsesOutputFile],
   [openAIChatCompletionsEntryPoint, openAIChatCompletionsOutputFile],
@@ -219,6 +244,7 @@ const result = spawnSync(process.execPath, [
   '--test',
   '--test-concurrency=1',
   agentHostCommonOutputFile,
+  agentConfigurationOutputFile,
   agentPackageLifecycleOutputFile,
   agentHostAuthorityOutputFile,
   agentHostStateStoresOutputFile,
@@ -228,6 +254,7 @@ const result = spawnSync(process.execPath, [
   clientContentResourcesOutputFile,
   localAgentHostConnectionOutputFile,
   agentContentResourceServiceOutputFile,
+  agentCredentialServiceOutputFile,
   cometAgentOutputFile,
   openAIResponsesOutputFile,
   openAIChatCompletionsOutputFile,

@@ -11,6 +11,7 @@ import { URI } from 'cs/base/common/uri';
 import { createWritingEditorDocumentFromPlainText } from 'cs/editor/common/writingEditorDocument';
 import { LegacyChatMigrationCompanion } from 'cs/code/electron-main/agentHost/legacyChatMigration';
 import {
+	createAgentConfigurationStateRevision,
 	createAgentHostAuthorityId,
 	createAgentSessionTypeId,
 } from 'cs/platform/agentHost/common/identities';
@@ -18,6 +19,10 @@ import {
 	COMET_AGENT_ID,
 	COMET_AGENT_PACKAGE_ID,
 } from 'cs/platform/agentHost/node/agents/comet/cometAgent';
+import {
+	COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+	COMET_SESSION_CONFIGURATION_SCHEMA,
+} from 'cs/platform/agentHost/node/agents/comet/cometConfiguration';
 import { COMET_AGENT_RESUME_SCHEMA } from 'cs/platform/agentHost/node/agents/comet/cometResume';
 import { migrateLegacySessionsCatalog } from 'cs/platform/agentHost/node/host/agentHostCatalog';
 import {
@@ -146,6 +151,16 @@ test('legacy migration commits exact Host history and Workbench presentation sta
 			agentId: COMET_AGENT_ID,
 			sessionType: createAgentSessionTypeId('comet'),
 			resumeSchema: COMET_AGENT_RESUME_SCHEMA,
+			agentDefaults: Object.freeze([Object.freeze({
+				schema: COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+				revision: createAgentConfigurationStateRevision('legacy-test.host-defaults.v1'),
+				values: Object.freeze({}),
+			})]),
+			sessionConfiguration: Object.freeze({
+				schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+				revision: createAgentConfigurationStateRevision('legacy-test.session.v1'),
+				values: Object.freeze({}),
+			}),
 		});
 
 		assert.equal(storage.get('sessions.providers.default'), undefined);

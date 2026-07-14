@@ -51,6 +51,10 @@ export class AgentHostOperationOutcomeRegistry<
 		return this.records.size;
 	}
 
+	delete(operation: TOperation): boolean {
+		return this.records.delete(operation);
+	}
+
 	begin(operation: TOperation, digest: AgentHostPayloadDigest): AgentHostOperationStart<TResult> {
 		const record = this.records.get(operation);
 		if (record === undefined) {

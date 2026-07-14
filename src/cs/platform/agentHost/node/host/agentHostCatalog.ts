@@ -9,6 +9,7 @@ import { URI } from 'cs/base/common/uri';
 import type {
 	IAgentBackingIdentity,
 	AgentTurnResponsePart,
+	AgentSessionConfigurationUpdateDecision,
 	IAgentResumeState,
 	IAgentWorkspace,
 } from 'cs/platform/agentHost/common/agent';
@@ -19,6 +20,7 @@ import {
 } from 'cs/platform/agentHost/common/attachments';
 import {
 	AgentHostChannelRevision,
+	AgentHostClientConnectionId,
 	AgentHostPayloadDigest,
 	AgentHostOperationId,
 	AgentHostSequence,
@@ -26,7 +28,9 @@ import {
 	AgentPackageId,
 	AgentResumeSchemaId,
 	AgentSessionTypeId,
+	type AgentConfigurationStateRevision,
 	type AgentChatId,
+	type AgentRuntimeRegistrationRevision,
 	type AgentSessionId,
 	type AgentTurnId,
 	createAgentAttachmentId,
@@ -36,14 +40,17 @@ import {
 	createAgentChatId,
 	createAgentContentDigest,
 	createAgentContentVersion,
+	createAgentConfigurationStateRevision,
 	createAgentHostChannelId,
 	createAgentHostChannelRevision,
+	createAgentHostClientConnectionId,
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentHostSequence,
 	createAgentModelId,
 	createAgentPackageId,
 	createAgentResumeSchemaId,
+	createAgentRuntimeRegistrationRevision,
 	createAgentSessionId,
 	createAgentSessionTypeId,
 	createAgentSubmissionId,
@@ -51,6 +58,9 @@ import {
 } from 'cs/platform/agentHost/common/identities';
 import {
 	IAgentHostChatState,
+	type AgentHostMutationOutcome,
+	type AgentHostMutationResult,
+	AgentHostOperationFailureCode,
 	IAgentHostOperationFailure,
 	IAgentHostSessionState,
 	IAgentHostTurn,
@@ -60,6 +70,10 @@ import {
 	getAgentHostSessionChannelId,
 	getAgentHostSessionsChannelId,
 } from 'cs/platform/agentHost/common/protocol';
+import {
+	IAgentConfigurationState,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
 import {
 	AgentHostProtocolValue,
 	assertAgentHostProtocolValue,
@@ -72,7 +86,7 @@ import {
 	encodeCometSessionResumeV1,
 } from 'cs/platform/agentHost/node/agents/comet/cometResume';
 
-const agentHostCatalogSchemaVersion = 1;
+const agentHostCatalogSchemaVersion = 2;
 const legacySessionsStorageKey = 'sessions.providers.default';
 const legacySessionsStorageVersion = 3;
 const legacySessionsMigrationId = 'legacy-sessions-v3';
@@ -83,6 +97,8 @@ const maximumLegacyStringLength = 16 * 1024 * 1024;
 const maximumLegacyImageBytes = 8 * 1024 * 1024;
 const maximumLegacyImagesPerMessage = 8;
 const maximumLegacyImagesBytesPerMessage = 12 * 1024 * 1024;
+
+export const maximumRetainedAgentHostSessionConfigurationFinalizations = 16_384;
 
 export interface IAgentHostPersistedChatRecord {
 	readonly state: IAgentHostChatState;
@@ -106,14 +122,52 @@ export interface IAgentHostBackingRemovalOperation {
 	readonly records: readonly IAgentBackingIdentity[];
 }
 
+interface IAgentHostSessionConfigurationFinalizationBase {
+	readonly operation: AgentHostOperationId;
+	readonly digest: AgentHostPayloadDigest;
+	readonly connection: AgentHostClientConnectionId;
+	readonly outcome: AgentHostSessionConfigurationFinalizationOutcome;
+}
+
+interface IAgentHostSessionConfigurationUnacknowledgedFinalizationBase extends IAgentHostSessionConfigurationFinalizationBase {
+	readonly packageId: AgentPackageId;
+	readonly agentId: AgentId;
+	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
+	readonly session: AgentSessionId;
+	readonly configuration: AgentConfigurationStateRevision;
+	readonly decision: AgentSessionConfigurationUpdateDecision;
+}
+
+export type AgentHostSessionConfigurationFinalizationOutcome = Extract<
+	AgentHostMutationOutcome,
+	{ readonly kind: 'succeeded' | 'failed' }
+>;
+
+export type IAgentHostSessionConfigurationFinalization =
+	| (IAgentHostSessionConfigurationUnacknowledgedFinalizationBase & {
+		readonly status: 'intent';
+		readonly decision: 'rollback';
+	})
+	| (IAgentHostSessionConfigurationUnacknowledgedFinalizationBase & {
+		readonly status: 'pending';
+	})
+	| (IAgentHostSessionConfigurationUnacknowledgedFinalizationBase & {
+		readonly status: 'completed';
+	})
+	| (IAgentHostSessionConfigurationFinalizationBase & {
+		readonly status: 'acknowledged';
+	});
+
 export interface IAgentHostPersistedCatalog {
 	readonly schemaVersion: typeof agentHostCatalogSchemaVersion;
 	readonly revision: number;
 	readonly packageCatalogRevision: number;
 	readonly hostSequence: AgentHostSequence;
 	readonly channelRevisions: Readonly<Record<string, AgentHostChannelRevision>>;
+	readonly agentDefaults: readonly IAgentConfigurationState[];
 	readonly sessions: readonly IAgentHostPersistedSessionRecord[];
 	readonly backingRemovalOperations: readonly IAgentHostBackingRemovalOperation[];
+	readonly sessionConfigurationFinalizations: readonly IAgentHostSessionConfigurationFinalization[];
 	readonly completedMigrations: readonly IAgentHostCompletedMigration[];
 }
 
@@ -177,6 +231,8 @@ export interface IAgentHostLegacyCatalogMigrationOptions {
 	readonly agentId: AgentId;
 	readonly sessionType: AgentSessionTypeId;
 	readonly resumeSchema: AgentResumeSchemaId;
+	readonly agentDefaults: readonly IAgentConfigurationState[];
+	readonly sessionConfiguration: IAgentConfigurationState;
 }
 
 interface ILegacyImage {
@@ -758,6 +814,7 @@ function createMigratedRecord(
 		status,
 		isRead: true,
 		modifiedAt: session.updatedAt,
+		configuration: options.sessionConfiguration,
 		capabilities: Object.freeze({
 			supportsCreateChat: false,
 			maximumChatCount: 1,
@@ -795,47 +852,162 @@ function createInitialChannelRevisions(records: readonly IAgentHostPersistedSess
 	return Object.freeze(revisions);
 }
 
-export function createEmptyAgentHostCatalog(): IAgentHostPersistedCatalog {
-	return Object.freeze({
+export function createEmptyAgentHostCatalog(agentDefaults: readonly IAgentConfigurationState[]): IAgentHostPersistedCatalog {
+	const catalog = Object.freeze({
 		schemaVersion: agentHostCatalogSchemaVersion,
 		revision: 0,
 		packageCatalogRevision: 0,
 		hostSequence: createAgentHostSequence(0),
 		channelRevisions: createInitialChannelRevisions([]),
+		agentDefaults: Object.freeze([...agentDefaults]),
 		sessions: Object.freeze([]),
 		backingRemovalOperations: Object.freeze([]),
+		sessionConfigurationFinalizations: Object.freeze([]),
 		completedMigrations: Object.freeze([]),
 	});
+	assertAgentHostPersistedCatalog(catalog);
+	return catalog;
+}
+
+function assertSessionConfigurationFinalizationOutcome(
+	outcome: AgentHostMutationOutcome,
+): asserts outcome is AgentHostSessionConfigurationFinalizationOutcome {
+	if (outcome === null || typeof outcome !== 'object' || Array.isArray(outcome)) {
+		throw new Error('Invalid Agent Host Session configuration finalization outcome');
+	}
+	if (outcome.kind === 'succeeded') {
+		if (
+			Object.keys(outcome).length !== 2
+			|| !Object.hasOwn(outcome, 'result')
+		) {
+			throw new Error('Invalid successful Agent Host Session configuration finalization outcome');
+		}
+		const result: AgentHostMutationResult = outcome.result;
+		const resultFields = new Set([
+			'kind', 'operation', 'digest', 'hostSequence', 'revisions', 'session', 'configuration',
+		]);
+		if (
+			result === null
+			|| typeof result !== 'object'
+			|| Array.isArray(result)
+			|| result.kind !== 'updateSessionConfiguration'
+			|| Object.keys(result).length !== resultFields.size
+			|| Object.keys(result).some(field => !resultFields.has(field))
+			|| !Array.isArray(result.revisions)
+		) {
+			throw new Error('Invalid successful Agent Host Session configuration finalization result');
+		}
+		createAgentHostOperationId(result.operation);
+		createAgentHostPayloadDigest(result.digest);
+		createAgentHostSequence(result.hostSequence);
+		createAgentSessionId(result.session);
+		createAgentConfigurationStateRevision(result.configuration);
+		const revisionChannels = new Set<string>();
+		for (const revision of result.revisions) {
+			if (
+				revision === null
+				|| typeof revision !== 'object'
+				|| Array.isArray(revision)
+				|| Object.keys(revision).length !== 2
+				|| !Object.hasOwn(revision, 'channel')
+				|| !Object.hasOwn(revision, 'revision')
+			) {
+				throw new Error('Invalid Agent Host Session configuration finalization channel revision');
+			}
+			const channel = createAgentHostChannelId(revision.channel);
+			if (revisionChannels.has(channel)) {
+				throw new Error('Duplicate Agent Host Session configuration finalization channel revision');
+			}
+			revisionChannels.add(channel);
+			createAgentHostChannelRevision(revision.revision);
+		}
+		return;
+	}
+	if (outcome.kind !== 'failed' || Object.keys(outcome).length !== 2 || !Object.hasOwn(outcome, 'failure')) {
+		throw new Error('Agent Host Session configuration finalization outcome is not terminal');
+	}
+	const failure = outcome.failure;
+	const failureFields = new Set(['code', 'message', 'reconciliation', 'data']);
+	if (
+		failure === null
+		|| typeof failure !== 'object'
+		|| Array.isArray(failure)
+		|| !Object.hasOwn(failure, 'code')
+		|| !Object.hasOwn(failure, 'message')
+		|| !Object.hasOwn(failure, 'reconciliation')
+		|| Object.keys(failure).some(field => !failureFields.has(field))
+		|| (Object.keys(failure).length !== 3 && Object.keys(failure).length !== 4)
+		|| !Object.values(AgentHostOperationFailureCode).includes(failure.code)
+		|| typeof failure.message !== 'string'
+		|| failure.message.length === 0
+		|| failure.message.length > 2_048
+		|| failure.reconciliation !== 'terminal'
+		|| (Object.keys(failure).length === 4 && !Object.hasOwn(failure, 'data'))
+	) {
+		throw new Error('Invalid failed Agent Host Session configuration finalization outcome');
+	}
+	if (Object.hasOwn(failure, 'data')) {
+		assertAgentHostProtocolValue(failure.data);
+	}
 }
 
 export function assertAgentHostPersistedCatalog(value: IAgentHostPersistedCatalog): void {
+	const catalogFields = new Set([
+		'schemaVersion', 'revision', 'packageCatalogRevision', 'hostSequence', 'channelRevisions',
+		'agentDefaults', 'sessions', 'backingRemovalOperations', 'sessionConfigurationFinalizations',
+		'completedMigrations',
+	]);
 	if (
-		value.schemaVersion !== agentHostCatalogSchemaVersion
+		value === null
+		|| typeof value !== 'object'
+		|| Object.keys(value).length !== catalogFields.size
+		|| Object.keys(value).some(field => !catalogFields.has(field))
+		|| value.schemaVersion !== agentHostCatalogSchemaVersion
 		|| !Number.isSafeInteger(value.revision)
 		|| value.revision < 0
 		|| !Number.isSafeInteger(value.packageCatalogRevision)
 		|| value.packageCatalogRevision < 0
+		|| !Array.isArray(value.sessionConfigurationFinalizations)
+		|| value.sessionConfigurationFinalizations.length > maximumRetainedAgentHostSessionConfigurationFinalizations
 	) {
 		throw new Error('Invalid Agent Host catalog header');
 	}
 	createAgentHostSequence(value.hostSequence);
+	if (!Array.isArray(value.agentDefaults)) {
+		throw new Error('Invalid Agent Host Agent-default configuration catalog');
+	}
+	const configuredAgents = new Set<AgentId>();
+	for (const state of value.agentDefaults) {
+		const configuration = validateAndFreezeAgentConfigurationState(state, {
+			agent: state.schema.agent,
+			scope: 'hostDefault',
+		});
+		if (configuredAgents.has(configuration.schema.agent)) {
+			throw new Error(`Duplicate Agent Host Agent-default configuration '${configuration.schema.agent}'`);
+		}
+		configuredAgents.add(configuration.schema.agent);
+	}
 	if (
 		!Object.hasOwn(value.channelRevisions, getAgentHostRootChannelId())
 		|| !Object.hasOwn(value.channelRevisions, getAgentHostSessionsChannelId())
 	) {
 		throw new Error('Agent Host catalog is missing a root channel revision');
 	}
-	const sessionIds = new Set<string>();
+	const sessionsById = new Map<AgentSessionId, IAgentHostPersistedSessionRecord>();
 	for (const record of value.sessions) {
 		assertAgentHostProtocolValue(record.state);
-		if (sessionIds.has(record.state.id)) {
+		const sessionId = createAgentSessionId(record.state.id);
+		if (sessionsById.has(sessionId)) {
 			throw new Error('Duplicate Agent Host Session identity');
 		}
-		sessionIds.add(record.state.id);
-		createAgentSessionId(record.state.id);
+		sessionsById.set(sessionId, record);
 		createAgentPackageId(record.state.packageId);
 		createAgentId(record.state.agentId);
 		createAgentSessionTypeId(record.state.type);
+		validateAndFreezeAgentConfigurationState(record.state.configuration, {
+			agent: record.state.agentId,
+			scope: 'session',
+		});
 		assertPersistedResumeState(record.resume);
 		const chatIds = new Set<string>();
 		if (record.state.chats.length !== record.chats.length) {
@@ -882,6 +1054,111 @@ export function assertAgentHostPersistedCatalog(value: IAgentHostPersistedCatalo
 				throw new Error('Duplicate Agent Host backing-removal identity');
 			}
 			records.add(key);
+		}
+	}
+	const sessionConfigurationFinalizations = new Set<string>();
+	const pendingSessionConfigurationFinalizations = new Set<AgentSessionId>();
+	for (const finalization of value.sessionConfigurationFinalizations) {
+		if (finalization === null || typeof finalization !== 'object' || Array.isArray(finalization)) {
+			throw new Error('Invalid Agent Host Session configuration finalization');
+		}
+		if (
+			finalization.status !== 'intent'
+			&& finalization.status !== 'pending'
+			&& finalization.status !== 'completed'
+			&& finalization.status !== 'acknowledged'
+		) {
+			throw new Error('Invalid Agent Host Session configuration finalization status');
+		}
+		const requiredFields = finalization.status !== 'acknowledged'
+			? [
+				'operation', 'digest', 'connection', 'outcome', 'status', 'packageId', 'agentId',
+				'runtimeRegistration', 'session', 'configuration', 'decision',
+			]
+			: ['operation', 'digest', 'connection', 'outcome', 'status'];
+		if (Object.keys(finalization).length !== requiredFields.length || requiredFields.some(field => !Object.hasOwn(finalization, field))) {
+			throw new Error('Invalid Agent Host Session configuration finalization');
+		}
+		const operation = createAgentHostOperationId(finalization.operation);
+		if (sessionConfigurationFinalizations.has(operation)) {
+			throw new Error('Duplicate Agent Host Session configuration finalization');
+		}
+		sessionConfigurationFinalizations.add(operation);
+		createAgentHostPayloadDigest(finalization.digest);
+		createAgentHostClientConnectionId(finalization.connection);
+		assertSessionConfigurationFinalizationOutcome(finalization.outcome);
+		if (
+			finalization.outcome.kind === 'succeeded'
+			&& (
+				finalization.outcome.result.operation !== finalization.operation
+				|| finalization.outcome.result.digest !== finalization.digest
+			)
+		) {
+			throw new Error('Agent Host Session configuration finalization outcome addresses another operation');
+		}
+		if (finalization.outcome.kind === 'succeeded') {
+			if (finalization.outcome.result.hostSequence > value.hostSequence) {
+				throw new Error('Agent Host Session configuration finalization result has a future Host sequence');
+			}
+			const requiredChannels = new Set([
+				getAgentHostSessionsChannelId(),
+				getAgentHostSessionChannelId(finalization.outcome.result.session),
+			]);
+			const revisions = finalization.outcome.result.revisions;
+			if (
+				revisions.length !== requiredChannels.size
+				&& (finalization.status !== 'acknowledged' || revisions.length !== 0)
+			) {
+				throw new Error('Agent Host Session configuration finalization result has an incomplete channel revision vector');
+			}
+			for (const revision of finalization.outcome.result.revisions) {
+				if (
+					!requiredChannels.has(revision.channel)
+					|| !Object.hasOwn(value.channelRevisions, revision.channel)
+					|| revision.revision > value.channelRevisions[revision.channel]
+				) {
+					throw new Error('Agent Host Session configuration finalization result has an invalid channel revision');
+				}
+			}
+		}
+		if (finalization.status !== 'acknowledged') {
+			createAgentPackageId(finalization.packageId);
+			createAgentId(finalization.agentId);
+			createAgentRuntimeRegistrationRevision(finalization.runtimeRegistration);
+			const session = createAgentSessionId(finalization.session);
+			createAgentConfigurationStateRevision(finalization.configuration);
+			if (finalization.decision !== 'commit' && finalization.decision !== 'rollback') {
+				throw new Error('Invalid Agent Host Session configuration finalization decision');
+			}
+			if (
+				finalization.status === 'intent'
+				&& (finalization.decision !== 'rollback' || finalization.outcome.kind !== 'failed')
+			) {
+				throw new Error('Agent Host Session configuration intent must retain the rollback decision');
+			}
+			if (pendingSessionConfigurationFinalizations.has(session)) {
+				throw new Error('Agent Host Session has more than one pending configuration finalization');
+			}
+			pendingSessionConfigurationFinalizations.add(session);
+			const persistedSession = sessionsById.get(session);
+			if (
+				persistedSession === undefined
+				|| persistedSession.state.packageId !== finalization.packageId
+				|| persistedSession.state.agentId !== finalization.agentId
+				|| (finalization.decision === 'commit') !== (
+					persistedSession.state.configuration.revision === finalization.configuration
+				)
+				|| (finalization.decision === 'commit') !== (finalization.outcome.kind === 'succeeded')
+				|| (
+					finalization.outcome.kind === 'succeeded'
+					&& (
+						finalization.outcome.result.session !== finalization.session
+						|| finalization.outcome.result.configuration !== finalization.configuration
+					)
+				)
+			) {
+				throw new Error('Agent Host Session configuration finalization conflicts with persisted Session state');
+			}
 		}
 	}
 	const migrations = new Set<string>();
@@ -942,6 +1219,19 @@ export async function migrateLegacySessionsCatalog(options: IAgentHostLegacyCata
 		throw new Error('Chat presentation storage conflicts with the legacy Sessions source');
 	}
 	const existing = await options.store.read();
+	const sessionConfiguration = validateAndFreezeAgentConfigurationState(options.sessionConfiguration, {
+		agent: options.agentId,
+		scope: 'session',
+	});
+	const suppliedAgentDefaults = Object.freeze(options.agentDefaults.map(state => (
+		validateAndFreezeAgentConfigurationState(state, { agent: state.schema.agent, scope: 'hostDefault' })
+	)));
+	if (new Set(suppliedAgentDefaults.map(state => state.schema.agent)).size !== suppliedAgentDefaults.length) {
+		throw new Error('Legacy Sessions migration Agent defaults contain duplicate Agent IDs');
+	}
+	if (!suppliedAgentDefaults.some(state => state.schema.agent === options.agentId)) {
+		throw new Error(`Legacy Sessions migration is missing Agent defaults for '${options.agentId}'`);
+	}
 	if (existing !== undefined) {
 		assertAgentHostPersistedCatalog(existing);
 		const completed = existing.completedMigrations.find(migration => migration.id === legacySessionsMigrationId);
@@ -962,6 +1252,23 @@ export async function migrateLegacySessionsCatalog(options: IAgentHostLegacyCata
 			return;
 		}
 	}
+	const agentDefaultsByAgent = new Map<AgentId, IAgentConfigurationState>(
+		existing?.agentDefaults.map(state => [state.schema.agent, state]) ?? [],
+	);
+	for (const state of suppliedAgentDefaults) {
+		const retained = agentDefaultsByAgent.get(state.schema.agent);
+		if (retained !== undefined) {
+			if (
+				retained.schema.revision !== state.schema.revision
+				|| encodeAgentHostProtocolValue(retained.schema) !== encodeAgentHostProtocolValue(state.schema)
+			) {
+				throw new Error(`Legacy Sessions migration Agent-default schema conflicts for '${state.schema.agent}'`);
+			}
+			continue;
+		}
+		agentDefaultsByAgent.set(state.schema.agent, state);
+	}
+	const mergedAgentDefaults = Object.freeze([...agentDefaultsByAgent.values()]);
 	const enrichments = validateLegacyTurnEnrichments(
 		chats,
 		await options.companion.prepare({
@@ -971,7 +1278,7 @@ export async function migrateLegacySessionsCatalog(options: IAgentHostLegacyCata
 		}),
 	);
 	const imported = Object.freeze(
-		plans.map(plan => createMigratedRecord(plan, options, enrichments)),
+		plans.map(plan => createMigratedRecord(plan, { ...options, sessionConfiguration }, enrichments)),
 	);
 	const existingSessionIds = new Set(existing?.sessions.map(record => record.state.id) ?? []);
 	for (const record of imported) {
@@ -1000,8 +1307,10 @@ export async function migrateLegacySessionsCatalog(options: IAgentHostLegacyCata
 		packageCatalogRevision: existing === undefined ? 0 : existing.packageCatalogRevision,
 		hostSequence,
 		channelRevisions: Object.freeze(channelRevisions),
+		agentDefaults: mergedAgentDefaults,
 		sessions,
 		backingRemovalOperations: existing?.backingRemovalOperations ?? Object.freeze([]),
+		sessionConfigurationFinalizations: existing?.sessionConfigurationFinalizations ?? Object.freeze([]),
 		completedMigrations: Object.freeze([
 			...(existing?.completedMigrations ?? []),
 			Object.freeze({ id: legacySessionsMigrationId, sourceDigest }),

@@ -22,13 +22,25 @@ import {
 	assertAgentHostAttachment,
 	assertAgentHostInteractionTarget,
 } from 'cs/platform/agentHost/common/attachments';
+import {
+	type IAgentConfigurationCandidate,
+	type IAgentConfigurationState,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCompletions,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
+import { validateAndFreezeAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
 import {
 	localAgentHostClientContentResourceChannelName,
 	localAgentHostClientToolChannelName,
 } from 'cs/platform/agentHost/common/connectionChannel';
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import {
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
 	createAgentChatId,
 	createAgentExecutionPresetId,
 	createAgentHostCapabilityId,
@@ -67,10 +79,17 @@ import {
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostPreparedSubmission,
 	type IAgentHostReconnectRequest,
+	type IAgentHostResolveSessionConfigurationRequest,
+	type IAgentHostResolveSessionConfigurationResult,
 	type IAgentHostSetSubscriptionsRequest,
 	type IAgentHostSetSubscriptionsResult,
+	type IAgentHostSessionConfigurationCompletionsRequest,
+	type IAgentHostSessionConfigurationCompletionsResult,
 } from 'cs/platform/agentHost/common/protocol';
-import { assertAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
+import {
+	assertAgentHostProtocolValue,
+	type AgentHostProtocolValue,
+} from 'cs/platform/agentHost/common/protocolValues';
 import {
 	validateAndFreezeAgentClientToolPublicationSnapshot,
 } from 'cs/platform/agentHost/common/tools';
@@ -84,6 +103,7 @@ import { ClientContentResourceChannelClient } from './clientContentResourceChann
 const localAgentHostErrorCode = 'AGENT_HOST_ERROR';
 const localAgentHostCancellationErrorCode = 'AGENT_HOST_CANCELLED';
 const localAgentHostChannelErrorCode = 'AGENT_HOST_CHANNEL_ERROR';
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
 
 type ProtocolRecord = Readonly<Record<string, unknown>>;
 
@@ -155,6 +175,30 @@ function requireSafeCounter(value: unknown, field: string): number {
 	return value;
 }
 
+function validateConfigurationCandidateShape(value: unknown, field: string): IAgentConfigurationCandidate {
+	const candidate = requireRecord(value, field);
+	requireExactKeys(candidate, ['schema', 'values'], [], field);
+	const schema = createAgentConfigurationSchemaRevision(requireString(candidate.schema, `${field}.schema`));
+	const values = requireRecord(candidate.values, `${field}.values`) as Readonly<Record<string, AgentHostProtocolValue>>;
+	return Object.freeze({
+		schema,
+		values: Object.freeze({ ...values }),
+	});
+}
+
+function validateSessionConfigurationState(
+	value: unknown,
+	field: string,
+	agent?: ReturnType<typeof createAgentId>,
+): IAgentConfigurationState {
+	const state = requireRecord(value, field);
+	const schema = validateAndFreezeAgentConfigurationSchema(state.schema);
+	return validateAndFreezeAgentConfigurationState(value as IAgentConfigurationState, {
+		agent: agent ?? schema.agent,
+		scope: 'session',
+	});
+}
+
 function assertDistinct(values: readonly string[], field: string): void {
 	if (new Set(values).size !== values.length) {
 		invalidProtocol(field, values.length);
@@ -219,6 +263,9 @@ function assertPreparedSubmission(value: unknown, field: string): asserts value 
 		'message',
 		'attachments',
 		'interactionTargets',
+		'sessionConfiguration',
+		'modelConfiguration',
+		'credentials',
 		'executionProfile',
 		'runtimeRegistration',
 		'toolSet',
@@ -233,6 +280,11 @@ function assertPreparedSubmission(value: unknown, field: string): asserts value 
 	}
 	for (const target of requireArray(submission.interactionTargets, `${field}.interactionTargets`)) {
 		assertAgentHostInteractionTarget(target);
+	}
+	validateSessionConfigurationState(submission.sessionConfiguration, `${field}.sessionConfiguration`);
+	validateConfigurationCandidateShape(submission.modelConfiguration, `${field}.modelConfiguration`);
+	for (const credential of requireArray(submission.credentials, `${field}.credentials`)) {
+		validateAndFreezeAgentCredentialReference(credential);
 	}
 	requireRecord(submission.executionProfile, `${field}.executionProfile`);
 	createAgentRuntimeRegistrationRevision(requireString(submission.runtimeRegistration, `${field}.runtimeRegistration`));
@@ -261,8 +313,9 @@ function assertPrepareSubmissionRequest(value: unknown): asserts value is IAgent
 		createAgentSessionId(requireString(target.session, 'prepareSubmission.target.session'));
 		createAgentChatId(requireString(target.chat, 'prepareSubmission.target.chat'));
 	} else if (targetKind === 'draft') {
-		requireExactKeys(target, ['kind', 'sessionType'], ['workspace'], 'prepareSubmission.target');
+		requireExactKeys(target, ['kind', 'sessionType', 'configuration'], ['workspace'], 'prepareSubmission.target');
 		createAgentSessionTypeId(requireString(target.sessionType, 'prepareSubmission.target.sessionType'));
+		validateConfigurationCandidateShape(target.configuration, 'prepareSubmission.target.configuration');
 		if (target.workspace !== undefined) {
 			assertWorkspace(target.workspace, 'prepareSubmission.target.workspace');
 		}
@@ -283,11 +336,19 @@ function assertPrepareSubmissionRequest(value: unknown): asserts value is IAgent
 	const selection = requireRecord(request.executionSelection, 'prepareSubmission.executionSelection');
 	const selectionKind = requireString(selection.kind, 'prepareSubmission.executionSelection.kind');
 	if (selectionKind === 'model') {
-		requireExactKeys(selection, ['kind', 'model'], [], 'prepareSubmission.executionSelection');
+		requireExactKeys(selection, ['kind', 'model', 'configuration'], [], 'prepareSubmission.executionSelection');
 		createAgentModelId(requireString(selection.model, 'prepareSubmission.executionSelection.model'));
+		validateConfigurationCandidateShape(
+			selection.configuration,
+			'prepareSubmission.executionSelection.configuration',
+		);
 	} else if (selectionKind === 'preset') {
-		requireExactKeys(selection, ['kind', 'preset'], [], 'prepareSubmission.executionSelection');
+		requireExactKeys(selection, ['kind', 'preset', 'configuration'], [], 'prepareSubmission.executionSelection');
 		createAgentExecutionPresetId(requireString(selection.preset, 'prepareSubmission.executionSelection.preset'));
+		validateConfigurationCandidateShape(
+			selection.configuration,
+			'prepareSubmission.executionSelection.configuration',
+		);
 	} else {
 		invalidProtocol('prepareSubmission.executionSelection.kind', selectionKind);
 	}
@@ -327,8 +388,14 @@ function assertMutationPayload(value: unknown): asserts value is AgentHostMutati
 	const kind = requireString(payload.kind, 'mutation.payload.kind');
 	switch (kind) {
 		case 'createSession': {
-			requireExactKeys(payload, ['kind', 'sessionType', 'chats'], ['workspace'], 'mutation.payload');
+			requireExactKeys(
+				payload,
+				['kind', 'sessionType', 'configuration', 'chats'],
+				['workspace'],
+				'mutation.payload',
+			);
 			createAgentSessionTypeId(requireString(payload.sessionType, 'mutation.payload.sessionType'));
+			validateConfigurationCandidateShape(payload.configuration, 'mutation.payload.configuration');
 			if (payload.workspace !== undefined) {
 				assertWorkspace(payload.workspace, 'mutation.payload.workspace');
 			}
@@ -337,6 +404,34 @@ function assertMutationPayload(value: unknown): asserts value is AgentHostMutati
 			}
 			return;
 		}
+		case 'updateAgentDefaults':
+			requireExactKeys(
+				payload,
+				['kind', 'agent', 'expectedRevision', 'candidate'],
+				[],
+				'mutation.payload',
+			);
+			createAgentId(requireString(payload.agent, 'mutation.payload.agent'));
+			createAgentConfigurationStateRevision(requireString(
+				payload.expectedRevision,
+				'mutation.payload.expectedRevision',
+			));
+			validateConfigurationCandidateShape(payload.candidate, 'mutation.payload.candidate');
+			return;
+		case 'updateSessionConfiguration':
+			requireExactKeys(
+				payload,
+				['kind', 'session', 'expectedRevision', 'candidate'],
+				[],
+				'mutation.payload',
+			);
+			createAgentSessionId(requireString(payload.session, 'mutation.payload.session'));
+			createAgentConfigurationStateRevision(requireString(
+				payload.expectedRevision,
+				'mutation.payload.expectedRevision',
+			));
+			validateConfigurationCandidateShape(payload.candidate, 'mutation.payload.candidate');
+			return;
 		case 'createChat':
 			requireExactKeys(payload, ['kind', 'session', 'model', 'origin'], ['title'], 'mutation.payload');
 			createAgentSessionId(requireString(payload.session, 'mutation.payload.session'));
@@ -456,10 +551,9 @@ function assertInitializeRequest(value: unknown, connection: IAgentHostConnectio
 	const protocols = requireArray(request.protocolVersions, 'initialize.protocolVersions').map((version, index) => (
 		createAgentHostProtocolVersion(requireString(version, `initialize.protocolVersions.${index}`))
 	));
-	if (protocols.length === 0) {
-		invalidProtocol('initialize.protocolVersions', 0);
+	if (protocols.length !== 1 || protocols[0] !== localAgentHostProtocolVersion) {
+		invalidProtocol('initialize.protocolVersions', protocols.length);
 	}
-	assertDistinct(protocols, 'initialize.protocolVersions');
 	const capabilityIds: string[] = [];
 	for (const [index, capabilityValue] of requireArray(request.capabilities, 'initialize.capabilities').entries()) {
 		const field = `initialize.capabilities.${index}`;
@@ -501,6 +595,145 @@ function assertSetSubscriptionsRequest(value: unknown): asserts value is IAgentH
 		createAgentHostChannelId(requireString(channel, `setSubscriptions.subscriptions.${index}`))
 	));
 	assertDistinct(subscriptions, 'setSubscriptions.subscriptions');
+}
+
+function assertResolveSessionConfigurationRequest(
+	value: unknown,
+): asserts value is IAgentHostResolveSessionConfigurationRequest {
+	const request = requireRecord(value, 'resolveSessionConfiguration');
+	requireExactKeys(
+		request,
+		['sessionType', 'candidate'],
+		['workspace'],
+		'resolveSessionConfiguration',
+	);
+	createAgentSessionTypeId(requireString(request.sessionType, 'resolveSessionConfiguration.sessionType'));
+	validateConfigurationCandidateShape(request.candidate, 'resolveSessionConfiguration.candidate');
+	if (request.workspace !== undefined) {
+		assertWorkspace(request.workspace, 'resolveSessionConfiguration.workspace');
+	}
+}
+
+function validateResolveSessionConfigurationResult(value: unknown): IAgentHostResolveSessionConfigurationResult {
+	const result = requireRecord(value, 'resolveSessionConfiguration.result');
+	requireExactKeys(
+		result,
+		['agent', 'runtimeRegistration', 'configuration'],
+		[],
+		'resolveSessionConfiguration.result',
+	);
+	const agent = createAgentId(requireString(result.agent, 'resolveSessionConfiguration.result.agent'));
+	const runtimeRegistration = createAgentRuntimeRegistrationRevision(requireString(
+		result.runtimeRegistration,
+		'resolveSessionConfiguration.result.runtimeRegistration',
+	));
+	const configuration = validateSessionConfigurationState(
+		result.configuration,
+		'resolveSessionConfiguration.result.configuration',
+		agent,
+	);
+	return Object.freeze({ agent, runtimeRegistration, configuration });
+}
+
+function assertSessionConfigurationCompletionsRequest(
+	value: unknown,
+): asserts value is IAgentHostSessionConfigurationCompletionsRequest {
+	const request = requireRecord(value, 'completeSessionConfiguration');
+	requireExactKeys(request, [
+		'sessionType',
+		'candidate',
+		'resolvedSchema',
+		'property',
+		'query',
+		'limit',
+	], ['workspace'], 'completeSessionConfiguration');
+	createAgentSessionTypeId(requireString(request.sessionType, 'completeSessionConfiguration.sessionType'));
+	if (request.workspace !== undefined) {
+		assertWorkspace(request.workspace, 'completeSessionConfiguration.workspace');
+	}
+	const schema = validateAndFreezeAgentConfigurationSchema(request.resolvedSchema);
+	if (schema.scope !== 'session') {
+		invalidProtocol('completeSessionConfiguration.resolvedSchema.scope', schema.scope);
+	}
+	validateAndFreezeAgentConfigurationCandidate(
+		schema,
+		validateConfigurationCandidateShape(request.candidate, 'completeSessionConfiguration.candidate'),
+		'session',
+	);
+	createAgentConfigurationPropertyId(requireString(request.property, 'completeSessionConfiguration.property'));
+	const query = requireString(request.query, 'completeSessionConfiguration.query', true);
+	if (query.length > 4_096) {
+		invalidProtocol('completeSessionConfiguration.query', query.length);
+	}
+	if (
+		typeof request.limit !== 'number'
+		|| !Number.isSafeInteger(request.limit)
+		|| request.limit < 1
+		|| request.limit > 100
+	) {
+		invalidProtocol('completeSessionConfiguration.limit', request.limit);
+	}
+}
+
+function validateSessionConfigurationCompletionsResult(
+	request: IAgentHostSessionConfigurationCompletionsRequest,
+	value: unknown,
+): IAgentHostSessionConfigurationCompletionsResult {
+	const result = requireRecord(value, 'completeSessionConfiguration.result');
+	requireExactKeys(
+		result,
+		['agent', 'runtimeRegistration', 'schema', 'completions'],
+		[],
+		'completeSessionConfiguration.result',
+	);
+	const agent = createAgentId(requireString(result.agent, 'completeSessionConfiguration.result.agent'));
+	if (agent !== request.resolvedSchema.agent) {
+		invalidProtocol('completeSessionConfiguration.result.agent', agent);
+	}
+	const runtimeRegistration = createAgentRuntimeRegistrationRevision(requireString(
+		result.runtimeRegistration,
+		'completeSessionConfiguration.result.runtimeRegistration',
+	));
+	const schema = createAgentConfigurationSchemaRevision(requireString(
+		result.schema,
+		'completeSessionConfiguration.result.schema',
+	));
+	if (schema !== request.resolvedSchema.revision) {
+		invalidProtocol('completeSessionConfiguration.result.schema', schema);
+	}
+	if (!Array.isArray(result.completions)) {
+		invalidProtocol('completeSessionConfiguration.result.completions', result.completions);
+	}
+	const completions = validateAndFreezeAgentConfigurationCompletions(
+		request.resolvedSchema,
+		request.property,
+		result.completions,
+	);
+	return Object.freeze({ agent, runtimeRegistration, schema, completions });
+}
+
+function assertPrepareSubmissionResult(value: unknown): void {
+	const result = requireRecord(value, 'prepareSubmission.result');
+	const kind = requireString(result.kind, 'prepareSubmission.result.kind');
+	if (kind === 'prepared') {
+		requireExactKeys(result, ['kind', 'submission'], [], 'prepareSubmission.result');
+		assertPreparedSubmission(result.submission, 'prepareSubmission.result.submission');
+		return;
+	}
+	if (kind !== 'rejected') {
+		invalidProtocol('prepareSubmission.result.kind', kind);
+	}
+	requireExactKeys(result, ['kind', 'failure'], [], 'prepareSubmission.result');
+	const failure = requireRecord(result.failure, 'prepareSubmission.result.failure');
+	requireExactKeys(
+		failure,
+		['code', 'message', 'reconciliation'],
+		['data'],
+		'prepareSubmission.result.failure',
+	);
+	requireString(failure.code, 'prepareSubmission.result.failure.code');
+	requireString(failure.message, 'prepareSubmission.result.failure.message', true);
+	requireString(failure.reconciliation, 'prepareSubmission.result.failure.reconciliation');
 }
 
 function assertMutationRequest(value: unknown): asserts value is IAgentHostMutationRequest {
@@ -579,6 +812,9 @@ export class AgentHostConnectionChannel extends Disposable implements IServerCha
 				case 'initialize':
 					assertInitializeRequest(arg, this.connection);
 					result = await raceCancellationError(this.connection.initialize(arg), cancellationToken);
+					if (requireRecord(result, 'initialize.result').protocolVersion !== localAgentHostProtocolVersion) {
+						invalidProtocol('initialize.result.protocolVersion', requireRecord(result, 'initialize.result').protocolVersion);
+					}
 					break;
 				case 'reconnect':
 					assertReconnectRequest(arg, this.connection);
@@ -590,9 +826,29 @@ export class AgentHostConnectionChannel extends Disposable implements IServerCha
 					result = await raceCancellationError(this.connection.setSubscriptions(arg), cancellationToken);
 					assertAgentHostSetSubscriptionsResult(arg, result as IAgentHostSetSubscriptionsResult);
 					break;
+				case 'resolveSessionConfiguration':
+					assertResolveSessionConfigurationRequest(arg);
+					result = validateResolveSessionConfigurationResult(
+						await raceCancellationError(
+							this.connection.resolveSessionConfiguration(arg),
+							cancellationToken,
+						),
+					);
+					break;
+				case 'completeSessionConfiguration':
+					assertSessionConfigurationCompletionsRequest(arg);
+					result = validateSessionConfigurationCompletionsResult(
+						arg,
+						await raceCancellationError(
+							this.connection.completeSessionConfiguration(arg),
+							cancellationToken,
+						),
+					);
+					break;
 				case 'prepareSubmission':
 					assertPrepareSubmissionRequest(arg);
 					result = await raceCancellationError(this.connection.prepareSubmission(arg), cancellationToken);
+					assertPrepareSubmissionResult(result);
 					break;
 				case 'mutate':
 					assertMutationRequest(arg);

@@ -9,22 +9,37 @@ import { Emitter, type Event } from 'cs/base/common/event';
 import { onUnexpectedError } from 'cs/base/common/errors';
 import { Disposable } from 'cs/base/common/lifecycle';
 import { generateUuid } from 'cs/base/common/uuid';
-import type { AgentChatOrigin } from 'cs/platform/agentHost/common/agent';
+import type { AgentChatOrigin, IAgentRuntimeRegistration } from 'cs/platform/agentHost/common/agent';
 import { AgentHostChannelStateReducer } from 'cs/platform/agentHost/common/channelState';
+import {
+	type IAgentConfigurationCandidate,
+	type IAgentConfigurationState,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
 import {
+	createAgentCapabilityRevision,
 	createAgentChatId,
+	createAgentConfigurationSchemaRevision,
+	createAgentDescriptorRevision,
 	createAgentHostOperationId,
 	createAgentHostProtocolVersion,
+	createAgentId,
 	createAgentModelId,
+	createAgentPackageId,
+	createAgentResumeSchemaId,
+	createAgentRuntimeRegistrationRevision,
 	createAgentSessionId,
 	createAgentSubmissionId,
+	createAgentToolSchemaProfileId,
 	createAgentTurnId,
 	type AgentChatId,
 	type AgentHostChannelId,
 	type AgentHostOperationId,
 	type AgentHostPayloadDigest,
 	type AgentHostSequence,
+	type AgentId,
 	type AgentModelId,
 	type AgentSessionId,
 } from 'cs/platform/agentHost/common/identities';
@@ -59,6 +74,7 @@ import {
 	type IAgentHostSessionSummary,
 	type IAgentHostSessionTypeDescriptor,
 } from 'cs/platform/agentHost/common/protocol';
+import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import {
 	AgentHostChat,
 	AgentHostSession,
@@ -121,6 +137,7 @@ interface IAgentHostDraftRecord {
 	readonly owner: IChatModelOwnerReference;
 	readonly descriptor: IAgentHostSessionTypeDescriptor;
 	readonly workspace: ISessionDraftOptions['workspace'];
+	readonly configuration: IAgentConfigurationCandidate;
 	model: AgentModelId | null;
 }
 
@@ -184,7 +201,119 @@ function typeSignature(root: IAgentHostRootState): string {
 	return JSON.stringify({
 		create: root.capabilities.supportsCreateSession,
 		types: root.sessionTypes,
+		registrations: root.agentRegistrations.map(registration => ({
+			agentId: registration.agentId,
+			packageId: registration.packageId,
+			revision: registration.revision,
+			initialSessionConfigurationSchema: registration.initialSessionConfigurationSchema,
+			supportedSessionConfigurationSchemas: registration.supportedSessionConfigurationSchemas,
+		})),
 	});
+}
+
+function sameConfigurationState(left: IAgentConfigurationState, right: IAgentConfigurationState): boolean {
+	return encodeAgentHostProtocolValue(left) === encodeAgentHostProtocolValue(right);
+}
+
+const runtimeRegistrationFields = Object.freeze([
+	'packageId',
+	'agentId',
+	'revision',
+	'descriptorRevision',
+	'capabilityRevision',
+	'hostDefaultsSchema',
+	'initialSessionConfigurationSchema',
+	'supportedSessionConfigurationSchemas',
+	'supportedToolSchemaProfiles',
+	'supportedResumeSchemas',
+	'resumeMigrationEdges',
+]);
+
+function assertExactObjectFields(value: unknown, fields: readonly string[], name: string): void {
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+		throw new Error(`Agent Host exposes invalid ${name}.`);
+	}
+	const keys = Object.keys(value);
+	if (
+		keys.length !== fields.length
+		|| fields.some(field => !Object.hasOwn(value, field))
+		|| keys.some(key => !fields.includes(key))
+	) {
+		throw new Error(`Agent Host exposes invalid ${name}.`);
+	}
+}
+
+function validateUniqueRegistrationIdentities(
+	value: unknown,
+	name: string,
+	validate: (identity: string) => void,
+): readonly string[] {
+	if (!Array.isArray(value)) {
+		throw new Error(`Agent Host exposes invalid ${name}.`);
+	}
+	const identities = new Set<string>();
+	for (const identity of value) {
+		if (typeof identity !== 'string') {
+			throw new Error(`Agent Host exposes invalid ${name}.`);
+		}
+		validate(identity);
+		if (identities.has(identity)) {
+			throw new Error(`Agent Host exposes duplicate ${name} '${identity}'.`);
+		}
+		identities.add(identity);
+	}
+	return value;
+}
+
+function validateRuntimeRegistration(registration: IAgentRuntimeRegistration) {
+	assertExactObjectFields(registration, runtimeRegistrationFields, 'runtime registration fields');
+	createAgentPackageId(registration.packageId);
+	createAgentId(registration.agentId);
+	createAgentRuntimeRegistrationRevision(registration.revision);
+	createAgentDescriptorRevision(registration.descriptorRevision);
+	createAgentCapabilityRevision(registration.capabilityRevision);
+	const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema(registration.hostDefaultsSchema, {
+		agent: registration.agentId,
+		scope: 'hostDefault',
+	});
+	createAgentConfigurationSchemaRevision(registration.initialSessionConfigurationSchema);
+	const supportedSessionConfigurationSchemas = validateUniqueRegistrationIdentities(
+		registration.supportedSessionConfigurationSchemas,
+		'Session configuration schema',
+		createAgentConfigurationSchemaRevision,
+	);
+	if (!supportedSessionConfigurationSchemas.includes(registration.initialSessionConfigurationSchema)) {
+		throw new Error(`Agent Host registration '${registration.revision}' has an unsupported initial Session schema.`);
+	}
+	validateUniqueRegistrationIdentities(
+		registration.supportedToolSchemaProfiles,
+		'Tool schema profile',
+		createAgentToolSchemaProfileId,
+	);
+	const supportedResumeSchemas = validateUniqueRegistrationIdentities(
+		registration.supportedResumeSchemas,
+		'resume schema',
+		createAgentResumeSchemaId,
+	);
+	if (!Array.isArray(registration.resumeMigrationEdges)) {
+		throw new Error('Agent Host exposes invalid resume migration edges.');
+	}
+	const migrationEdges = new Set<string>();
+	for (const edge of registration.resumeMigrationEdges) {
+		assertExactObjectFields(edge, ['sourceSchema', 'targetSchema'], 'resume migration edge');
+		createAgentResumeSchemaId(edge.sourceSchema);
+		createAgentResumeSchemaId(edge.targetSchema);
+		const key = `${edge.sourceSchema}\0${edge.targetSchema}`;
+		if (
+			edge.sourceSchema === edge.targetSchema
+			|| migrationEdges.has(key)
+			|| !supportedResumeSchemas.includes(edge.targetSchema)
+		) {
+			throw new Error(`Agent Host exposes invalid resume migration edge '${key}'.`);
+		}
+		migrationEdges.add(key);
+	}
+	return hostDefaultsSchema;
 }
 
 function modelSignature(root: IAgentHostRootState): string {
@@ -354,6 +483,11 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			throw new Error(`Agent Host provider '${this.id}' does not expose Session type '${options.sessionType}'.`);
 		}
 		this.assertWorkspaceAllowed(descriptor, options.workspace);
+		const registration = this.requireRuntimeRegistration(descriptor.agentId, descriptor.packageId);
+		const configuration: IAgentConfigurationCandidate = Object.freeze({
+			schema: registration.initialSessionConfigurationSchema,
+			values: Object.freeze({}),
+		});
 
 		const sessionId = createAgentSessionId(`draft-${generateUuid()}`);
 		const chatId = createAgentChatId(`draft-${generateUuid()}`);
@@ -413,7 +547,15 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		} catch (error) {
 			throw error;
 		}
-		this.draft = { session, chat, owner, descriptor, workspace: options.workspace, model: null };
+		this.draft = {
+			session,
+			chat,
+			owner,
+			descriptor,
+			workspace: options.workspace,
+			configuration,
+			model: null,
+		};
 		return session;
 	}
 
@@ -635,13 +777,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		const sessionsChannel = getAgentHostSessionsChannelId();
 		const result = await this.connection.initialize({
 			connection: this.connection.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('1')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
 			capabilities: Object.freeze([]),
 			locale: this.options.locale,
 			implementation: this.options.implementation,
 			subscriptions: Object.freeze([rootChannel, sessionsChannel]),
 		});
-		if (result.protocolVersion !== '1') {
+		if (result.protocolVersion !== '2') {
 			throw new Error(`Agent Host selected unsupported protocol version '${result.protocolVersion}'.`);
 		}
 		this.assertNoMissingChannels(result.missingChannels);
@@ -659,6 +801,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	): Promise<void> {
 		let hostAccepted = false;
 		try {
+			const root = this.requireRootState();
 			const descriptor = this.requireDescriptor(ownership.state.type, ownership.state.agentId);
 			const model = chat.modelId.get() === undefined ? null : createAgentModelId(chat.modelId.get()!);
 			this.assertModelAllowed(descriptor, ownership.state.agentId, model);
@@ -671,11 +814,41 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			const targetWorkspace = ownership.kind === 'draft'
 				? toAgentWorkspace(ownership.record.workspace)
 				: undefined;
+			let expectedSessionConfiguration: IAgentConfigurationState;
+			if (ownership.kind === 'draft') {
+				const registration = this.requireRuntimeRegistration(descriptor.agentId, descriptor.packageId);
+				const resolved = await this.connection.resolveSessionConfiguration(Object.freeze({
+					sessionType: descriptor.id,
+					...(targetWorkspace === undefined ? {} : { workspace: targetWorkspace }),
+					candidate: ownership.record.configuration,
+				}));
+				if (resolved.agent !== descriptor.agentId) {
+					throw new Error(`Agent Host resolved draft configuration for another Agent '${resolved.agent}'.`);
+				}
+				if (resolved.runtimeRegistration !== registration.revision) {
+					throw new Error('Agent Host resolved draft configuration with another runtime registration.');
+				}
+				expectedSessionConfiguration = validateAndFreezeAgentConfigurationState(resolved.configuration, {
+					agent: descriptor.agentId,
+					scope: 'session',
+				});
+				if (!registration.supportedSessionConfigurationSchemas.includes(
+					expectedSessionConfiguration.schema.revision,
+				)) {
+					throw new Error('Agent Host resolved draft configuration to an unsupported Session schema.');
+				}
+			} else {
+				expectedSessionConfiguration = validateAndFreezeAgentConfigurationState(
+					ownership.record.state.configuration,
+					{ agent: ownership.state.agentId, scope: 'session' },
+				);
+			}
 			const target = ownership.kind === 'draft'
 				? Object.freeze({
 					kind: 'draft' as const,
 					sessionType: ownership.record.descriptor.id,
 					...(targetWorkspace ? { workspace: targetWorkspace } : {}),
+					configuration: ownership.record.configuration,
 				})
 				: Object.freeze({
 					kind: 'chat' as const,
@@ -687,7 +860,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 				target,
 				capture,
 				captureDigest,
-				executionSelection: toExecutionSelection(descriptor, model),
+				executionSelection: toExecutionSelection(root, descriptor, ownership.state.agentId, model),
 				toolPolicy: descriptor.toolPolicy,
 			});
 			if (preparation.kind === 'rejected') {
@@ -695,6 +868,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			}
 			if (preparation.submission.submission !== composerSubmission.capture.submissionId) {
 				throw new Error('Agent Host changed the prepared submission identity.');
+			}
+			const preparedSessionConfiguration = validateAndFreezeAgentConfigurationState(
+				preparation.submission.sessionConfiguration,
+				{ agent: ownership.state.agentId, scope: 'session' },
+			);
+			if (!sameConfigurationState(preparedSessionConfiguration, expectedSessionConfiguration)) {
+				throw new Error('Agent Host changed the resolved Session configuration during preparation.');
 			}
 			const preparedCaptureDigest = await computeAgentHostSubmissionCaptureDigest({
 				message: preparation.submission.message,
@@ -715,6 +895,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 					kind: 'createSession',
 					sessionType: descriptor.id,
 					...(workspace ? { workspace } : {}),
+					configuration: draft.configuration,
 					chats: Object.freeze([{
 						model,
 						origin: Object.freeze({ kind: 'user' }),
@@ -1577,6 +1758,25 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		return descriptor;
 	}
 
+	private requireRuntimeRegistration(
+		agentId: AgentId,
+		packageId: IAgentHostSessionTypeDescriptor['packageId'],
+	): IAgentRuntimeRegistration {
+		const registrations = this.requireRootState().agentRegistrations.filter(candidate => (
+			candidate.agentId === agentId && candidate.packageId === packageId
+		));
+		if (registrations.length !== 1) {
+			throw new Error(`Agent Host does not expose one exact runtime registration for Agent '${agentId}'.`);
+		}
+		const registration = registrations[0];
+		if (!registration.supportedSessionConfigurationSchemas.includes(
+			registration.initialSessionConfigurationSchema,
+		)) {
+			throw new Error(`Agent Host registration '${registration.revision}' has an unsupported initial Session schema.`);
+		}
+		return registration;
+	}
+
 	private requireCommittedRecord(session: ISession): IAgentHostSessionRecord {
 		this.assertNotDisposed();
 		const record = [...this.records.values()].find(candidate => candidate.session === session);
@@ -1670,6 +1870,47 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			throw new Error(`Agent Host root authority '${state.authority}' does not match connection '${this.connection.authority}'.`);
 		}
 		this.assertDisplayProjection(state);
+		const registrations = new Map<AgentId, IAgentRuntimeRegistration>();
+		const hostDefaultSchemas = new Map<AgentId, ReturnType<typeof validateRuntimeRegistration>>();
+		for (const registration of state.agentRegistrations) {
+			const hostDefaultsSchema = validateRuntimeRegistration(registration);
+			if (registrations.has(registration.agentId)) {
+				throw new Error(`Agent Host exposes duplicate runtime registrations for Agent '${registration.agentId}'.`);
+			}
+			if (!state.agents.some(agent => (
+				agent.id === registration.agentId && agent.packageId === registration.packageId
+			))) {
+				throw new Error(`Agent Host registration '${registration.revision}' has no exact Agent descriptor.`);
+			}
+			registrations.set(registration.agentId, registration);
+			hostDefaultSchemas.set(registration.agentId, hostDefaultsSchema);
+		}
+		const defaults = new Map<AgentId, IAgentConfigurationState>();
+		for (const value of state.agentDefaults) {
+			const validated = validateAndFreezeAgentConfigurationState(value);
+			const registration = registrations.get(validated.schema.agent);
+			if (registration === undefined || defaults.has(validated.schema.agent)) {
+				throw new Error(`Agent Host exposes invalid defaults for Agent '${validated.schema.agent}'.`);
+			}
+			const exact = validateAndFreezeAgentConfigurationState(validated, {
+				agent: registration.agentId,
+				scope: 'hostDefault',
+				revision: registration.hostDefaultsSchema.revision,
+			});
+			const registeredSchema = hostDefaultSchemas.get(registration.agentId);
+			if (
+				registeredSchema === undefined
+				|| encodeAgentHostProtocolValue(exact.schema) !== encodeAgentHostProtocolValue(registeredSchema)
+			) {
+				throw new Error(`Agent Host defaults for Agent '${registration.agentId}' do not match its runtime registration schema.`);
+			}
+			defaults.set(registration.agentId, exact);
+		}
+		for (const registration of registrations.values()) {
+			if (!defaults.has(registration.agentId)) {
+				throw new Error(`Agent Host registration '${registration.revision}' has no defaults state.`);
+			}
+		}
 		const typeIds = new Set<string>();
 		for (const descriptor of state.sessionTypes) {
 			if (typeIds.has(descriptor.id)) {
@@ -1678,6 +1919,9 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			typeIds.add(descriptor.id);
 			if (!state.agents.some(agent => agent.id === descriptor.agentId && agent.packageId === descriptor.packageId)) {
 				throw new Error(`Agent Host Session type '${descriptor.id}' has no exact Agent owner.`);
+			}
+			if (!registrations.has(descriptor.agentId)) {
+				throw new Error(`Agent Host Session type '${descriptor.id}' has no runtime registration.`);
 			}
 			const exposedModels = new Set(descriptor.models);
 			if (exposedModels.size !== descriptor.models.length) {
@@ -1714,6 +1958,14 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	private assertSessionMatchesSummary(state: IAgentHostSessionState, summary: IAgentHostSessionSummary): void {
+		const configuration = validateAndFreezeAgentConfigurationState(state.configuration, {
+			agent: state.agentId,
+			scope: 'session',
+		});
+		const registration = this.requireRuntimeRegistration(state.agentId, state.packageId);
+		if (!registration.supportedSessionConfigurationSchemas.includes(configuration.schema.revision)) {
+			throw new Error(`Agent Host Session '${state.id}' uses an unsupported configuration schema.`);
+		}
 		if (state.id !== summary.id
 			|| state.packageId !== summary.packageId
 			|| state.agentId !== summary.agentId

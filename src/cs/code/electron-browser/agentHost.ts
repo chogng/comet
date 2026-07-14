@@ -75,7 +75,7 @@ export async function initializeLocalAgentHostWorkbench(): Promise<void> {
 				),
 				implementation: Object.freeze({
 					name: 'comet.desktop.renderer',
-					build: 'agent-host.v1',
+					build: 'agent-host.v2',
 				}),
 			}),
 		));

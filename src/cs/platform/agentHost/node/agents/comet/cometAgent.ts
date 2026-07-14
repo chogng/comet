@@ -13,12 +13,14 @@ import {
 	AgentChatOrigin,
 	IAgent,
 	IAgentAction,
+	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	AgentTurnProgress,
 	IAgentCancelTurnRequest,
 	IAgentCapabilities,
 	IAgentChatBacking,
 	IAgentChatRequest,
 	IAgentChats,
+	IAgentConfiguration,
 	IAgentCreateChatOptions,
 	IAgentCreateSessionOptions,
 	IAgentDeleteChatRequest,
@@ -33,15 +35,31 @@ import {
 	IAgentModelDescriptor,
 	IAgentReleaseChatRequest,
 	IAgentReleaseSessionRequest,
+	IAgentResolveSessionConfigurationRequest,
 	IAgentResumeMigrationRequest,
 	IAgentResumeState,
 	IAgentResumeStates,
 	IAgentRuntimeRegistration,
 	IAgentSessionBacking,
 	IAgentSessions,
+	IAgentSessionConfigurationCompletionRequest,
+	IAgentPrepareSessionConfigurationUpdateRequest,
+	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentSteerRequest,
 	IAgentWorkspace,
 } from 'cs/platform/agentHost/common/agent';
+import {
+	IAgentConfigurationCompletion,
+	IAgentConfigurationState,
+	collectAgentConfigurationCredentialReferences,
+	resolveAgentModelConfigurationCandidate,
+	resolveAgentSessionConfigurationValues,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCompletions,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
+import { validateAndFreezeAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
 import {
 	IAgentHostInteractionTarget,
 	assertAgentHostInteractionTarget,
@@ -50,6 +68,7 @@ import type { IAgentContentResourcePort } from 'cs/platform/agentHost/common/con
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import {
 	AgentChatId,
+	AgentConfigurationStateRevision,
 	AgentExecutionProfileDigest,
 	AgentExecutionProfileRevision,
 	AgentHostOperationId,
@@ -63,6 +82,7 @@ import {
 	createAgentCapabilityRevision,
 	createAgentCancellationId,
 	createAgentChatId,
+	createAgentConfigurationStateRevision,
 	createAgentDescriptorRevision,
 	createAgentExecutionProfileDigest,
 	createAgentExecutionProfileRevision,
@@ -111,6 +131,11 @@ import {
 	ICometModelStepResult,
 } from './cometModel.js';
 import {
+	COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+	COMET_SESSION_CONFIGURATION_SCHEMA,
+	COMET_SESSION_CONFIGURATION_SCHEMA_REVISION,
+} from './cometConfiguration.js';
+import {
 	COMET_AGENT_RESUME_SCHEMA,
 	encodeCometChatResumeV1,
 	encodeCometSessionResumeV1,
@@ -118,7 +143,7 @@ import {
 
 export const COMET_AGENT_ID = createAgentId('comet');
 export const COMET_AGENT_PACKAGE_ID = createAgentPackageId('comet');
-export const COMET_AGENT_DESCRIPTOR_REVISION = createAgentDescriptorRevision('comet.descriptor.v1');
+export const COMET_AGENT_DESCRIPTOR_REVISION = createAgentDescriptorRevision('comet.descriptor.v2');
 export const COMET_AGENT_CAPABILITY_REVISION = createAgentCapabilityRevision('comet.capabilities.v1');
 export const COMET_AGENT_INSTRUCTION_PROFILE = 'comet.instructions.v1';
 
@@ -131,6 +156,7 @@ const maximumCometTurnsInResume = 10_000;
 const maximumCometMessagesInResume = 100_000;
 const maximumCometModelPartsPerMessage = 256;
 const maximumCometToolFailureMessageLength = 8_192;
+const maximumRetainedCometOperations = 16_384;
 const cometModelRuntimePattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const cometSystemPrompt = [
 	'You are the Comet Studio assistant.',
@@ -139,7 +165,7 @@ const cometSystemPrompt = [
 ].join(' ');
 
 export interface ICometAgentConfiguration {
-	readonly authenticationRequired: boolean;
+	readonly requiresAgentAuthentication: boolean;
 	readonly models: readonly ICometModelRuntime[];
 	readonly executionProfileResolver: ICometExecutionProfileResolver;
 }
@@ -148,11 +174,6 @@ export interface ICometAgentOptions extends ICometAgentConfiguration {
 	readonly runtimeRegistration: AgentRuntimeRegistrationRevision;
 	readonly toolExecution: IAgentToolExecutionPort;
 	readonly contentResources: IAgentContentResourcePort;
-}
-
-export interface ICometAgentConfigurationUpdate {
-	readonly descriptor: IAgentDescriptor;
-	commit(): void;
 }
 
 interface ICometExecutionProfileData {
@@ -213,9 +234,30 @@ interface ICometChatRecord {
 interface ICometSessionRecord {
 	readonly id: AgentSessionId;
 	readonly workspace?: IAgentWorkspace;
+	configuration: IAgentConfigurationState;
 	materialized: boolean;
 	readonly chats: Map<AgentChatId, ICometChatRecord>;
 }
+
+interface ICometPreparedSessionConfigurationTransaction {
+	readonly status: 'prepared';
+	readonly digest: AgentHostPayloadDigest;
+	readonly session: AgentSessionId;
+	readonly previous: IAgentConfigurationState;
+	readonly candidate: IAgentConfigurationState;
+}
+
+interface ICometTerminalSessionConfigurationTransaction {
+	readonly status: 'committed' | 'rolledBack';
+	readonly digest: AgentHostPayloadDigest;
+	readonly session: AgentSessionId;
+	readonly configuration: AgentConfigurationStateRevision;
+	readonly decision: 'commit' | 'rollback';
+}
+
+type ICometSessionConfigurationTransaction =
+	| ICometPreparedSessionConfigurationTransaction
+	| ICometTerminalSessionConfigurationTransaction;
 
 type CometOperationOutcome =
 	| {
@@ -231,10 +273,13 @@ type CometOperationOutcome =
 interface ICometOperationRecord {
 	readonly digest: AgentHostPayloadDigest;
 	readonly effects: Map<string, Promise<CometOperationOutcome>>;
+	pendingEffects: number;
+	pinned: boolean;
 }
 
 class CometOperationRegistry {
 	private readonly records = new Map<AgentHostOperationId, ICometOperationRecord>();
+	private readonly settledRecords = new Map<AgentHostOperationId, true>();
 
 	run(
 		kind: string,
@@ -255,7 +300,7 @@ class CometOperationRegistry {
 				);
 			}
 		} else {
-			record = { digest, effects: new Map() };
+			record = { digest, effects: new Map(), pendingEffects: 0, pinned: false };
 			this.records.set(operation, record);
 		}
 
@@ -265,8 +310,72 @@ class CometOperationRegistry {
 			return existing;
 		}
 		const outcome = execute();
+		record.pendingEffects += 1;
+		this.settledRecords.delete(operation);
 		record.effects.set(effect, outcome);
+		void outcome.then(
+			() => this.completeEffect(operation, record),
+			() => this.completeEffect(operation, record),
+		);
+		this.pruneSettledRecords();
 		return outcome;
+	}
+
+	pin(operation: AgentHostOperationId, digest: AgentHostPayloadDigest): void {
+		const record = this.requireRecord(operation, digest);
+		record.pinned = true;
+		this.settledRecords.delete(operation);
+	}
+
+	unpin(operation: AgentHostOperationId, digest: AgentHostPayloadDigest): void {
+		const record = this.requireRecord(operation, digest);
+		record.pinned = false;
+		if (record.pendingEffects === 0) {
+			this.settledRecords.delete(operation);
+			this.settledRecords.set(operation, true);
+		}
+		this.pruneSettledRecords();
+	}
+
+	private requireRecord(operation: AgentHostOperationId, digest: AgentHostPayloadDigest): ICometOperationRecord {
+		createAgentHostOperationId(operation);
+		createAgentHostPayloadDigest(digest);
+		const record = this.records.get(operation);
+		if (record === undefined) {
+			throw new AgentHostError(
+				AgentHostErrorCode.OperationNotPending,
+				'Comet operation is not retained',
+				{ operation },
+			);
+		}
+		if (record.digest !== digest) {
+			throw new AgentHostError(
+				AgentHostErrorCode.OperationDigestConflict,
+				'Comet operation ID is already bound to another payload',
+				{ operation, recordedDigest: record.digest, receivedDigest: digest },
+			);
+		}
+		return record;
+	}
+
+	private completeEffect(operation: AgentHostOperationId, record: ICometOperationRecord): void {
+		record.pendingEffects -= 1;
+		if (record.pendingEffects === 0 && !record.pinned && this.records.get(operation) === record) {
+			this.settledRecords.delete(operation);
+			this.settledRecords.set(operation, true);
+		}
+		this.pruneSettledRecords();
+	}
+
+	private pruneSettledRecords(): void {
+		while (this.records.size > maximumRetainedCometOperations) {
+			const settled = this.settledRecords.keys().next();
+			if (settled.done) {
+				return;
+			}
+			this.settledRecords.delete(settled.value);
+			this.records.delete(settled.value);
+		}
 	}
 }
 
@@ -713,7 +822,11 @@ function createSessionResume(record: ICometSessionRecord): IAgentResumeState {
 	return encodeCometSessionResumeV1(record.id, record.workspace);
 }
 
-function parseSessionResume(resume: IAgentResumeState, session: AgentSessionId): ICometSessionRecord {
+function parseSessionResume(
+	resume: IAgentResumeState,
+	session: AgentSessionId,
+	configuration: IAgentConfigurationState,
+): ICometSessionRecord {
 	const data = parseResumeData(resume, 'session');
 	assertExactKeys(data, ['kind', 'version', 'session', 'workspace'], [], 'resume.data');
 	const resumeSession = createAgentSessionId(asString(data.session, 'resume.data.session', 128));
@@ -723,6 +836,7 @@ function parseSessionResume(resume: IAgentResumeState, session: AgentSessionId):
 	return {
 		id: session,
 		workspace: parseWorkspace(data.workspace),
+		configuration,
 		materialized: true,
 		chats: new Map(),
 	};
@@ -835,11 +949,16 @@ function cloneModelDescriptor(descriptor: IAgentModelDescriptor): IAgentModelDes
 	for (const profile of descriptor.toolSchemaProfiles) {
 		createAgentToolSchemaProfileId(profile);
 	}
+	const configurationSchema = validateAndFreezeAgentConfigurationSchema(descriptor.configurationSchema, {
+		agent: COMET_AGENT_ID,
+		scope: 'model',
+	});
 	return Object.freeze({
 		id: descriptor.id,
 		revision: descriptor.revision,
 		displayName: descriptor.displayName,
 		enabled: descriptor.enabled,
+		configurationSchema,
 		toolSchemaProfiles: Object.freeze([...descriptor.toolSchemaProfiles]),
 		attachments: Object.freeze({
 			carriers: Object.freeze([...descriptor.attachments.carriers]),
@@ -1005,6 +1124,15 @@ export class CometAgent extends Disposable implements IAgent {
 		resolve: request => this.resolveExecutionProfile(request),
 	};
 
+	readonly configuration: IAgentConfiguration = {
+		resolveSession: request => this.resolveSessionConfiguration(request),
+		completeSession: request => this.completeSessionConfiguration(request),
+		prepareSessionUpdate: request => this.prepareSessionConfigurationUpdate(request),
+		commitSessionUpdate: request => this.commitSessionConfigurationUpdate(request),
+		rollbackSessionUpdate: request => this.rollbackSessionConfigurationUpdate(request),
+		acknowledgeSessionUpdate: request => this.acknowledgeSessionConfigurationUpdate(request),
+	};
+
 	readonly sessions: IAgentSessions = {
 		create: options => this.createSession(options),
 		materialize: request => this.materializeSession(request),
@@ -1031,6 +1159,7 @@ export class CometAgent extends Disposable implements IAgent {
 	private readonly profileResolutions = new Map<AgentSubmissionId, ICometProfileResolutionRecord>();
 	private readonly historicalModelRuntimes = new Map<string, ICometRegisteredModelRuntime>();
 	private readonly sessionRecords = new Map<AgentSessionId, ICometSessionRecord>();
+	private readonly sessionConfigurationTransactions = new Map<AgentHostOperationId, ICometSessionConfigurationTransaction>();
 	private readonly descriptorState: ISettableObservable<IAgentDescriptor>;
 	private activeModelCatalog: ICometActiveModelCatalog;
 	private readonly toolExecution: IAgentToolExecutionPort;
@@ -1052,6 +1181,9 @@ export class CometAgent extends Disposable implements IAgent {
 			revision: options.runtimeRegistration,
 			descriptorRevision: COMET_AGENT_DESCRIPTOR_REVISION,
 			capabilityRevision: COMET_AGENT_CAPABILITY_REVISION,
+			hostDefaultsSchema: COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+			initialSessionConfigurationSchema: COMET_SESSION_CONFIGURATION_SCHEMA_REVISION,
+			supportedSessionConfigurationSchemas: Object.freeze([COMET_SESSION_CONFIGURATION_SCHEMA_REVISION]),
 			supportedToolSchemaProfiles: Object.freeze(supportedToolSchemaProfiles),
 			supportedResumeSchemas: Object.freeze([COMET_AGENT_RESUME_SCHEMA]),
 			resumeMigrationEdges: Object.freeze([]),
@@ -1069,32 +1201,6 @@ export class CometAgent extends Disposable implements IAgent {
 		this.activeModelCatalog = initialConfiguration.activeModelCatalog;
 		this.descriptorState = observableValue('CometAgent.descriptor', initialConfiguration.descriptor);
 		this.descriptor = this.descriptorState;
-	}
-
-	prepareConfiguration(configuration: ICometAgentConfiguration): ICometAgentConfigurationUpdate {
-		const candidate = this.createConfigurationCandidate(configuration);
-		for (const model of candidate.descriptor.models) {
-			for (const profile of model.toolSchemaProfiles) {
-				if (!this.registration.supportedToolSchemaProfiles.includes(profile)) {
-					invalidValue('models.toolSchemaProfiles', profile);
-				}
-			}
-		}
-		let committed = false;
-		return Object.freeze({
-			descriptor: candidate.descriptor,
-			commit: () => {
-				if (committed) {
-					return;
-				}
-				committed = true;
-				for (const runtime of candidate.historicalModelRuntimes) {
-					this.historicalModelRuntimes.set(this.modelRuntimeKey(runtime.runtime.id, runtime.descriptor.revision), runtime);
-				}
-				this.activeModelCatalog = candidate.activeModelCatalog;
-				this.descriptorState.set(candidate.descriptor, undefined);
-			},
-		});
 	}
 
 	private createConfigurationCandidate(configuration: ICometAgentConfiguration): ICometConfigurationCandidate {
@@ -1151,7 +1257,7 @@ export class CometAgent extends Disposable implements IAgent {
 			description: localize('cometAgent.description', 'Comet\'s built-in general agent'),
 			capabilities,
 			models: Object.freeze(models),
-			authenticationRequired: configuration.authenticationRequired,
+			requiresAgentAuthentication: configuration.requiresAgentAuthentication,
 		});
 		return Object.freeze({
 			descriptor,
@@ -1165,6 +1271,355 @@ export class CometAgent extends Disposable implements IAgent {
 
 	private modelRuntimeKey(runtime: string, descriptor: AgentModelDescriptorRevision): string {
 		return `${runtime}\u0000${descriptor}`;
+	}
+
+	private assertRuntimeRegistration(runtimeRegistration: AgentRuntimeRegistrationRevision): void {
+		createAgentRuntimeRegistrationRevision(runtimeRegistration);
+		if (runtimeRegistration !== this.registration.revision) {
+			invalidValue('configuration.runtimeRegistration', runtimeRegistration);
+		}
+	}
+
+	private validateSessionConfigurationState(state: IAgentConfigurationState): IAgentConfigurationState {
+		const validated = validateAndFreezeAgentConfigurationState(state, {
+			agent: COMET_AGENT_ID,
+			scope: 'session',
+			revision: COMET_SESSION_CONFIGURATION_SCHEMA_REVISION,
+		});
+		if (encodeAgentHostProtocolValue(validated.schema) !== encodeAgentHostProtocolValue(
+			COMET_SESSION_CONFIGURATION_SCHEMA,
+		)) {
+			invalidValue('configuration.schema', validated.schema.revision);
+		}
+		return validated;
+	}
+
+	private sameSessionConfiguration(
+		left: IAgentConfigurationState,
+		right: IAgentConfigurationState,
+	): boolean {
+		return left.revision === right.revision
+			&& left.schema.revision === right.schema.revision
+			&& encodeAgentHostProtocolValue(left.values) === encodeAgentHostProtocolValue(right.values);
+	}
+
+	private async resolveSessionConfiguration(
+		request: IAgentResolveSessionConfigurationRequest,
+	): Promise<Awaited<ReturnType<IAgentConfiguration['resolveSession']>>> {
+		this.assertRuntimeRegistration(request.runtimeRegistration);
+		if (request.workspace !== undefined) {
+			parseWorkspace(workspaceToProtocolValue(request.workspace));
+		}
+		const hostDefaults = validateAndFreezeAgentConfigurationState(request.hostDefaults, {
+			agent: COMET_AGENT_ID,
+			scope: 'hostDefault',
+			revision: COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA.revision,
+		});
+		if (encodeAgentHostProtocolValue(hostDefaults.schema) !== encodeAgentHostProtocolValue(
+			COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+		)) {
+			invalidValue('configuration.hostDefaults.schema', hostDefaults.schema.revision);
+		}
+		const candidate = validateAndFreezeAgentConfigurationCandidate(
+			COMET_SESSION_CONFIGURATION_SCHEMA,
+			request.candidate,
+			'session',
+		);
+		return Object.freeze({
+			schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+			values: resolveAgentSessionConfigurationValues(
+				COMET_SESSION_CONFIGURATION_SCHEMA,
+				hostDefaults.values,
+				candidate.values,
+			),
+		});
+	}
+
+	private async completeSessionConfiguration(
+		request: IAgentSessionConfigurationCompletionRequest,
+	): Promise<readonly IAgentConfigurationCompletion[]> {
+		await this.resolveSessionConfiguration(request);
+		validateAndFreezeAgentConfigurationSchema(request.resolvedSchema, {
+			agent: COMET_AGENT_ID,
+			scope: 'session',
+			revision: COMET_SESSION_CONFIGURATION_SCHEMA_REVISION,
+		});
+		if (
+			typeof request.query !== 'string'
+			|| request.query.length > 4_096
+			|| !Number.isSafeInteger(request.limit)
+			|| request.limit < 1
+			|| request.limit > 100
+		) {
+			invalidValue('configuration.completion', 'invalidRequest');
+		}
+		return validateAndFreezeAgentConfigurationCompletions(
+			COMET_SESSION_CONFIGURATION_SCHEMA,
+			request.property,
+			Object.freeze([]),
+		);
+	}
+
+	private async prepareSessionConfigurationUpdate(
+		request: IAgentPrepareSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const outcome = await this.operations.run(
+			'session.configuration.prepare',
+			request.session,
+			request.operation,
+			request.payloadDigest,
+			async () => {
+				this.assertRuntimeRegistration(request.runtimeRegistration);
+				const session = this.requireMaterializedSession(request.session);
+				const current = this.validateSessionConfigurationState(request.current);
+				const candidate = this.validateSessionConfigurationState(request.candidate);
+				const recorded = this.sessionConfigurationTransactions.get(request.operation);
+				if (recorded !== undefined) {
+					this.assertSessionConfigurationTransaction(
+						request.operation,
+						request.payloadDigest,
+						request.session,
+						candidate.revision,
+						recorded,
+					);
+					if (
+						recorded.status === 'prepared'
+						&& (
+							!this.sameSessionConfiguration(recorded.previous, current)
+							|| !this.sameSessionConfiguration(recorded.candidate, candidate)
+						)
+					) {
+						invalidValue('configuration.transaction', request.operation);
+					}
+					return { kind: 'void' };
+				}
+				if (!this.sameSessionConfiguration(session.configuration, current)) {
+					invalidValue('configuration.current', current.revision);
+				}
+				for (const property of COMET_SESSION_CONFIGURATION_SCHEMA.properties) {
+					if (
+						encodeAgentHostProtocolValue(current.values[property.id] ?? null)
+						!== encodeAgentHostProtocolValue(candidate.values[property.id] ?? null)
+						&& !property.sessionMutable
+					) {
+						invalidValue('configuration.property', property.id);
+					}
+				}
+				this.sessionConfigurationTransactions.set(request.operation, {
+					status: 'prepared',
+					digest: request.payloadDigest,
+					session: request.session,
+					previous: current,
+					candidate,
+				});
+				this.operations.pin(request.operation, request.payloadDigest);
+				return { kind: 'void' };
+			},
+		);
+		if (outcome.kind !== 'void') {
+			invalidValue('configuration.prepare.outcome', outcome.kind);
+		}
+	}
+
+	private async commitSessionConfigurationUpdate(
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const outcome = await this.operations.run(
+			'session.configuration.commit',
+			request.session,
+			request.operation,
+			request.payloadDigest,
+			async () => {
+				this.assertRuntimeRegistration(request.runtimeRegistration);
+				const transaction = this.requireSessionConfigurationTransaction(request);
+				if (transaction.status === 'rolledBack') {
+					throw new AgentHostError(
+						AgentHostErrorCode.OperationNotPending,
+						'Comet Session configuration transaction was rolled back',
+						{ operation: request.operation },
+					);
+				}
+				if (transaction.status === 'prepared') {
+					const session = this.requireSession(request.session);
+					if (!this.sameSessionConfiguration(session.configuration, transaction.previous)) {
+						invalidValue('configuration.current', session.configuration.revision);
+					}
+					session.configuration = transaction.candidate;
+				}
+				this.retainTerminalSessionConfigurationTransaction(request.operation, {
+					status: 'committed',
+					digest: request.payloadDigest,
+					session: request.session,
+					configuration: request.configuration,
+					decision: 'commit',
+				});
+				return { kind: 'void' };
+			},
+		);
+		if (outcome.kind !== 'void') {
+			invalidValue('configuration.commit.outcome', outcome.kind);
+		}
+	}
+
+	private async rollbackSessionConfigurationUpdate(
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const outcome = await this.operations.run(
+			'session.configuration.rollback',
+			request.session,
+			request.operation,
+			request.payloadDigest,
+			async () => {
+				this.assertRuntimeRegistration(request.runtimeRegistration);
+				createAgentConfigurationStateRevision(request.configuration);
+				const recorded = this.sessionConfigurationTransactions.get(request.operation);
+				if (recorded === undefined) {
+					const session = this.requireSession(request.session);
+					if (session.configuration.revision === request.configuration) {
+						throw new AgentHostError(
+							AgentHostErrorCode.OperationNotPending,
+							'Comet Session configuration rollback addresses the active configuration',
+							{ operation: request.operation },
+						);
+					}
+					this.retainTerminalSessionConfigurationTransaction(request.operation, {
+						status: 'rolledBack',
+						digest: request.payloadDigest,
+						session: request.session,
+						configuration: request.configuration,
+						decision: 'rollback',
+					});
+					this.operations.pin(request.operation, request.payloadDigest);
+					return { kind: 'void' };
+				}
+				const transaction = this.requireSessionConfigurationTransaction(request);
+				if (transaction.status === 'committed') {
+					throw new AgentHostError(
+						AgentHostErrorCode.OperationNotPending,
+						'Comet Session configuration transaction was committed',
+						{ operation: request.operation },
+					);
+				}
+				if (transaction.status === 'prepared') {
+					const session = this.requireSession(request.session);
+					if (!this.sameSessionConfiguration(session.configuration, transaction.previous)) {
+						invalidValue('configuration.current', session.configuration.revision);
+					}
+					session.configuration = transaction.previous;
+				}
+				this.retainTerminalSessionConfigurationTransaction(request.operation, {
+					status: 'rolledBack',
+					digest: request.payloadDigest,
+					session: request.session,
+					configuration: request.configuration,
+					decision: 'rollback',
+				});
+				return { kind: 'void' };
+			},
+		);
+		if (outcome.kind !== 'void') {
+			invalidValue('configuration.rollback.outcome', outcome.kind);
+		}
+	}
+
+	private async acknowledgeSessionConfigurationUpdate(
+		request: IAgentAcknowledgeSessionConfigurationUpdateRequest,
+	): Promise<void> {
+		const outcome = await this.operations.run(
+			'session.configuration.acknowledge',
+			request.session,
+			request.operation,
+			request.payloadDigest,
+			async () => {
+				this.assertRuntimeRegistration(request.runtimeRegistration);
+				createAgentConfigurationStateRevision(request.configuration);
+				if (request.decision !== 'commit' && request.decision !== 'rollback') {
+					invalidValue('configuration.acknowledge.decision', request.decision);
+				}
+				this.requireSession(request.session);
+				const transaction = this.sessionConfigurationTransactions.get(request.operation);
+				if (transaction === undefined) {
+					return { kind: 'void' };
+				}
+				this.assertSessionConfigurationTransaction(
+					request.operation,
+					request.payloadDigest,
+					request.session,
+					request.configuration,
+					transaction,
+				);
+				const terminalStatus = request.decision === 'commit' ? 'committed' : 'rolledBack';
+				if (transaction.status !== terminalStatus) {
+					throw new AgentHostError(
+						AgentHostErrorCode.OperationNotPending,
+						'Comet Session configuration acknowledgement does not match the terminal decision',
+						{ operation: request.operation },
+					);
+				}
+				this.sessionConfigurationTransactions.delete(request.operation);
+				this.operations.unpin(request.operation, request.payloadDigest);
+				return { kind: 'void' };
+			},
+		);
+		if (outcome.kind !== 'void') {
+			invalidValue('configuration.acknowledge.outcome', outcome.kind);
+		}
+	}
+
+	private requireSessionConfigurationTransaction(
+		request: IAgentFinalizeSessionConfigurationUpdateRequest,
+	): ICometSessionConfigurationTransaction {
+		createAgentConfigurationStateRevision(request.configuration);
+		const transaction = this.sessionConfigurationTransactions.get(request.operation);
+		if (transaction === undefined) {
+			throw new AgentHostError(
+				AgentHostErrorCode.OperationNotPending,
+				'Comet Session configuration transaction is not pending',
+				{ operation: request.operation },
+			);
+		}
+		this.assertSessionConfigurationTransaction(
+			request.operation,
+			request.payloadDigest,
+			request.session,
+			request.configuration,
+			transaction,
+		);
+		return transaction;
+	}
+
+	private assertSessionConfigurationTransaction(
+		operation: AgentHostOperationId,
+		digest: AgentHostPayloadDigest,
+		session: AgentSessionId,
+		configuration: AgentConfigurationStateRevision,
+		transaction: ICometSessionConfigurationTransaction,
+	): void {
+		if (transaction.digest !== digest) {
+			throw new AgentHostError(
+				AgentHostErrorCode.OperationDigestConflict,
+				'Comet Session configuration operation is already bound to another payload',
+				{ operation, recordedDigest: transaction.digest, receivedDigest: digest },
+			);
+		}
+		const recordedConfiguration = transaction.status === 'prepared'
+			? transaction.candidate.revision
+			: transaction.configuration;
+		if (transaction.session !== session || recordedConfiguration !== configuration) {
+			throw new AgentHostError(
+				AgentHostErrorCode.OperationNotPending,
+				'Comet Session configuration transaction is not pending',
+				{ operation },
+			);
+		}
+	}
+
+	private retainTerminalSessionConfigurationTransaction(
+		operation: AgentHostOperationId,
+		transaction: ICometTerminalSessionConfigurationTransaction,
+	): void {
+		this.sessionConfigurationTransactions.delete(operation);
+		this.sessionConfigurationTransactions.set(operation, transaction);
 	}
 
 	private async resolveExecutionProfile(request: IAgentExecutionProfileRequest): Promise<IAgentExecutionProfile> {
@@ -1209,6 +1664,7 @@ export class CometAgent extends Disposable implements IAgent {
 	}
 
 	private async resolveNewExecutionProfile(request: IAgentExecutionProfileRequest): Promise<IAgentExecutionProfile> {
+		this.validateSessionConfigurationState(request.sessionConfiguration);
 		const catalog = this.activeModelCatalog;
 		const resolution = await catalog.executionProfileResolver.resolve(request);
 		const model = catalog.modelRuntimesById.get(resolution.modelRuntime);
@@ -1218,6 +1674,12 @@ export class CometAgent extends Disposable implements IAgent {
 		if (!model.descriptor.enabled) {
 			return unsupportedCapability(`model:${model.descriptor.id}`);
 		}
+		validateAndFreezeAgentConfigurationCandidate(
+			model.descriptor.configurationSchema,
+			request.selection.configuration,
+			'model',
+			true,
+		);
 		return createExecutionProfile(resolution, model, this.registration.revision);
 	}
 
@@ -1256,6 +1718,7 @@ export class CometAgent extends Disposable implements IAgent {
 			const record: ICometSessionRecord = {
 				id: options.session,
 				workspace: parseWorkspace(workspaceToProtocolValue(options.workspace)),
+				configuration: this.validateSessionConfigurationState(options.configuration),
 				materialized: true,
 				chats: new Map(),
 			};
@@ -1273,6 +1736,7 @@ export class CometAgent extends Disposable implements IAgent {
 
 	private async materializeSession(request: IAgentMaterializeSessionRequest): Promise<void> {
 		const outcome = await this.operations.run('session.materialize', request.session, request.operation, request.payloadDigest, async () => {
+			const configuration = this.validateSessionConfigurationState(request.configuration);
 			const existing = this.sessionRecords.get(request.session);
 			if (existing !== undefined) {
 				if (existing.materialized) {
@@ -1281,17 +1745,21 @@ export class CometAgent extends Disposable implements IAgent {
 				if (request.resume === undefined) {
 					return resourceMissing('sessionResume', request.session);
 				}
-				parseSessionResume(request.resume, request.session);
+				parseSessionResume(request.resume, request.session, configuration);
 				if (createSessionResume(existing).data !== request.resume.data) {
 					invalidValue('session.materialize.resume', 'conflict');
 				}
+				existing.configuration = configuration;
 				existing.materialized = true;
 				return { kind: 'void' };
 			}
 			if (request.resume === undefined) {
 				return resourceMissing('sessionResume', request.session);
 			}
-			this.sessionRecords.set(request.session, parseSessionResume(request.resume, request.session));
+			this.sessionRecords.set(
+				request.session,
+				parseSessionResume(request.resume, request.session, configuration),
+			);
 			return { kind: 'void' };
 		});
 		if (outcome.kind !== 'void') {
@@ -1540,7 +2008,7 @@ export class CometAgent extends Disposable implements IAgent {
 		let preparedAttachments: CometPreparedAttachments | undefined;
 		let userMessageAdded = false;
 		try {
-			const validated = await this.validateTurnBinding(request);
+			const validated = await this.validateTurnBinding(request, session.configuration);
 			if (request.binding.resume !== undefined) {
 				const restored = parseChatResume(request.binding.resume, request.session, request.chat);
 				if (createChatResume(request.session, chat).data !== request.binding.resume.data) {
@@ -1627,6 +2095,7 @@ export class CometAgent extends Disposable implements IAgent {
 
 	private async validateTurnBinding(
 		request: IAgentChatRequest,
+		sessionConfiguration: IAgentConfigurationState,
 	): Promise<{ readonly data: ICometExecutionProfileData; readonly model: ICometRegisteredModelRuntime }> {
 		createAgentCancellationId(request.binding.cancellation);
 		if (request.binding.runtimeRegistration !== this.registration.revision) {
@@ -1649,6 +2118,44 @@ export class CometAgent extends Disposable implements IAgent {
 			) {
 				invalidValue('turn.binding.profile', request.binding.profile.revision);
 			}
+		}
+		const modelConfiguration = resolveAgentModelConfigurationCandidate(
+			validated.model.descriptor.configurationSchema,
+			request.binding.modelConfiguration,
+		);
+		if (encodeAgentHostProtocolValue(modelConfiguration) !== encodeAgentHostProtocolValue(
+			request.binding.modelConfiguration,
+		)) {
+			invalidValue('turn.binding.modelConfiguration', modelConfiguration.schema);
+		}
+		if (!Array.isArray(request.binding.credentials)) {
+			invalidValue('turn.binding.credentials', request.binding.credentials);
+		}
+		const expectedCredentials = new Set([
+			...collectAgentConfigurationCredentialReferences(
+				sessionConfiguration.schema,
+				sessionConfiguration.values,
+				'session',
+			),
+			...collectAgentConfigurationCredentialReferences(
+				validated.model.descriptor.configurationSchema,
+				modelConfiguration.values,
+				'model',
+			),
+		].map(binding => encodeAgentHostProtocolValue(binding.credential)));
+		const receivedCredentials = new Set<string>();
+		for (const credential of request.binding.credentials) {
+			const encoded = encodeAgentHostProtocolValue(validateAndFreezeAgentCredentialReference(credential));
+			if (receivedCredentials.has(encoded)) {
+				invalidValue('turn.binding.credentials', 'duplicate');
+			}
+			receivedCredentials.add(encoded);
+		}
+		if (
+			receivedCredentials.size !== expectedCredentials.size
+			|| [...receivedCredentials].some(credential => !expectedCredentials.has(credential))
+		) {
+			invalidValue('turn.binding.credentials', 'mismatch');
 		}
 		this.validateToolSet(request.binding.toolSet, validated.model.descriptor);
 		this.validateInteractionTargets(request.interactionTargets);
@@ -1719,6 +2226,9 @@ export class CometAgent extends Disposable implements IAgent {
 			throwIfCancelled(activeTurn.cancellation.token);
 			const result = await model.runtime.executeStep({
 				profile: request.binding.profile,
+				modelConfiguration: request.binding.modelConfiguration,
+				credentials: request.binding.credentials,
+				runtimeRegistration: request.binding.runtimeRegistration,
 				settings: profileData.settings,
 				systemPrompt: cometSystemPrompt,
 				session: request.session,

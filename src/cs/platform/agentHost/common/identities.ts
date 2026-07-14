@@ -22,6 +22,9 @@ export type AgentPackageRevision = AgentHostIdentity<'AgentPackageRevision'>;
 export type AgentPackageContentDigest = AgentHostIdentity<'AgentPackageContentDigest'>;
 export type AgentPackageOperationId = AgentHostIdentity<'AgentPackageOperationId'>;
 export type AgentId = AgentHostIdentity<'AgentId'>;
+export type AgentConfigurationSchemaRevision = AgentHostIdentity<'AgentConfigurationSchemaRevision'>;
+export type AgentConfigurationPropertyId = AgentHostIdentity<'AgentConfigurationPropertyId'>;
+export type AgentConfigurationStateRevision = AgentHostIdentity<'AgentConfigurationStateRevision'>;
 export type AgentDescriptorRevision = AgentHostIdentity<'AgentDescriptorRevision'>;
 export type AgentModelDescriptorRevision = AgentHostIdentity<'AgentModelDescriptorRevision'>;
 export type AgentModelId = AgentHostIdentity<'AgentModelId'>;
@@ -159,6 +162,18 @@ export function createAgentPackageOperationId(value: string): AgentPackageOperat
 
 export function createAgentId(value: string): AgentId {
 	return createNamedIdentity(value, 'AgentId');
+}
+
+export function createAgentConfigurationSchemaRevision(value: string): AgentConfigurationSchemaRevision {
+	return createOpaqueIdentity(value, 'AgentConfigurationSchemaRevision');
+}
+
+export function createAgentConfigurationPropertyId(value: string): AgentConfigurationPropertyId {
+	return createNamedIdentity(value, 'AgentConfigurationPropertyId');
+}
+
+export function createAgentConfigurationStateRevision(value: string): AgentConfigurationStateRevision {
+	return createOpaqueIdentity(value, 'AgentConfigurationStateRevision');
 }
 
 export function createAgentDescriptorRevision(value: string): AgentDescriptorRevision {

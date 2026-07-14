@@ -34,6 +34,7 @@ import {
 	assertAgentHostProtocolValue,
 	computeAgentHostPayloadDigest,
 } from './protocolValues.js';
+import type { IAgentCredentialReference } from './credentials.js';
 
 export type AgentPackageDistribution = 'bundled' | 'user';
 export type AgentPackageRuntimeForm = 'embedded' | 'connected';
@@ -137,19 +138,13 @@ export interface IAgentHostPackageCatalogState {
 	readonly materializedBackings: readonly IAgentBackingIdentity[];
 }
 
-export interface IAgentAuthenticationCredentialReference {
-	readonly provider: string;
-	readonly scope: string;
-	readonly reference: string;
-}
-
 export interface IAgentAuthenticationRequest {
 	readonly operation: AgentHostOperationId;
 	readonly digest: AgentHostPayloadDigest;
 	readonly packageId: AgentPackageId;
 	readonly agentId: AgentId;
 	readonly registration: AgentRuntimeRegistrationRevision;
-	readonly credential: IAgentAuthenticationCredentialReference;
+	readonly credential: IAgentCredentialReference;
 }
 
 export interface IAgentAuthenticationPort {

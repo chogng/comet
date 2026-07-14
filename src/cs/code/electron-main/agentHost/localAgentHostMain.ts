@@ -9,15 +9,15 @@ import { pathToFileURL } from 'node:url';
 
 import type { IpcMainInvokeEvent } from 'electron';
 
-import { Sequencer } from 'cs/base/common/async';
-import { onUnexpectedError } from 'cs/base/common/errors';
+import type { CancellationToken } from 'cs/base/common/cancellation';
+import { CancellationError, onUnexpectedError } from 'cs/base/common/errors';
 import { Disposable, type IDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import type { ElectronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
 import type { IStorage } from 'cs/base/parts/storage/common/storage';
-import type { LlmSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { localAgentHostContentResourceLimits } from 'cs/code/common/agentHostConfiguration';
 import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/common/connectionChannel';
+import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import type {
 	IAgentBackingIdentity,
 	IAgentDescriptor,
@@ -29,6 +29,8 @@ import type {
 import {
 	createAgentCancellationId,
 	createAgentChatId,
+	createAgentConfigurationStateRevision,
+	createAgentDescriptorRevision,
 	createAgentHostAuthorityId,
 	createAgentHostClientConnectionId,
 	createAgentHostOperationId,
@@ -46,6 +48,7 @@ import {
 	type AgentPackageOperationId,
 } from 'cs/platform/agentHost/common/identities';
 import type { IAgentHostSessionTypeDescriptor } from 'cs/platform/agentHost/common/protocol';
+import { encodeAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
 import type {
 	AgentToolCallAuthorization,
 	IAgentToolTimerPort,
@@ -55,8 +58,20 @@ import type { IPreparedAgentToolSet } from 'cs/platform/agentHost/node/tools/age
 import {
 	COMET_AGENT_ID,
 	COMET_AGENT_PACKAGE_ID,
+	COMET_AGENT_CAPABILITY_REVISION,
 	CometAgent,
 } from 'cs/platform/agentHost/node/agents/comet/cometAgent';
+import {
+	COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+	COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+	COMET_SESSION_CONFIGURATION_SCHEMA,
+} from 'cs/platform/agentHost/node/agents/comet/cometConfiguration';
+import {
+	AgentCredentialService,
+	type IAgentCredentialSecretSource,
+} from 'cs/platform/agentHost/node/credentials/agentCredentialService';
+import type { IAgentCredentialReference } from 'cs/platform/agentHost/common/credentials';
+import type { IProviderApiKeySecretStorage } from 'cs/platform/secrets/common/secret';
 import { COMET_AGENT_RESUME_SCHEMA } from 'cs/platform/agentHost/node/agents/comet/cometResume';
 import {
 	AgentContentResourceService,
@@ -107,13 +122,23 @@ import {
 import { LegacyChatMigrationCompanion } from './legacyChatMigration.js';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('1');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
 const cometSessionType = createAgentSessionTypeId('comet');
 const maximumPreparedToolSets = 4_096;
 const maximumBoundToolTurns = 1_024;
 const maximumToolCallRecords = 16_384;
 const maximumReplayActions = 16_384;
 const maximumTurnMilliseconds = 5 * 60 * 1_000;
+const initialCometAgentDefaults = Object.freeze({
+	schema: COMET_HOST_DEFAULT_CONFIGURATION_SCHEMA,
+	revision: createAgentConfigurationStateRevision('comet.host-defaults.initial.v1'),
+	values: Object.freeze({}),
+});
+const legacyCometSessionConfiguration = Object.freeze({
+	schema: COMET_SESSION_CONFIGURATION_SCHEMA,
+	revision: createAgentConfigurationStateRevision('comet.session.legacy.v1'),
+	values: Object.freeze({}),
+});
 
 interface ILocalAgentHostChannelServer {
 	registerChannel(
@@ -126,8 +151,7 @@ interface ILocalAgentHostChannelServer {
 /** Dependencies required to create the production desktop Agent Host. */
 export interface ILocalAgentHostMainOptions {
 	readonly storage: IStorage;
-	readonly settings: LlmSettings;
-	readonly loadSettings: (signal: AbortSignal) => Promise<LlmSettings>;
+	readonly providerApiKeySecretStorage: IProviderApiKeySecretStorage;
 	readonly contentMaterializationRoot: string;
 	readonly bundledArtifactPath: string;
 	readonly channelServer: ILocalAgentHostChannelServer;
@@ -166,6 +190,14 @@ function exactRegistration(
 		&& actual.revision === expected.revision
 		&& actual.descriptorRevision === expected.descriptorRevision
 		&& actual.capabilityRevision === expected.capabilityRevision
+		&& encodeAgentHostProtocolValue(actual.hostDefaultsSchema)
+			=== encodeAgentHostProtocolValue(expected.hostDefaultsSchema)
+		&& actual.initialSessionConfigurationSchema === expected.initialSessionConfigurationSchema
+		&& actual.supportedSessionConfigurationSchemas.length
+			=== expected.supportedSessionConfigurationSchemas.length
+		&& actual.supportedSessionConfigurationSchemas.every((schema, index) => (
+			schema === expected.supportedSessionConfigurationSchemas[index]
+		))
 		&& actual.supportedToolSchemaProfiles.length === expected.supportedToolSchemaProfiles.length
 		&& actual.supportedToolSchemaProfiles.every((profile, index) => profile === expected.supportedToolSchemaProfiles[index])
 		&& actual.supportedResumeSchemas.length === expected.supportedResumeSchemas.length
@@ -527,6 +559,39 @@ class LocalAgentToolTimers implements IAgentToolTimerPort {
 	}
 }
 
+const productionCredentialReferences = new Set(['glm', 'kimi', 'deepseek', 'openai']);
+
+class LocalCometCredentialSecretSource implements IAgentCredentialSecretSource {
+	constructor(private readonly secrets: IProviderApiKeySecretStorage) {}
+
+	requiredPrivilege(credential: IAgentCredentialReference): string {
+		if (
+			credential.provider !== COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER
+			|| credential.scope !== 'llm'
+			|| !productionCredentialReferences.has(credential.reference)
+		) {
+			throw new AgentHostError(
+				AgentHostErrorCode.CredentialUnauthorized,
+				'Comet credential reference is not supported',
+				{ provider: credential.provider, scope: credential.scope },
+			);
+		}
+		return 'configured.model.api-key';
+	}
+
+	async resolve(credential: IAgentCredentialReference, token: CancellationToken): Promise<string | undefined> {
+		this.requiredPrivilege(credential);
+		if (token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+		const apiKey = await this.secrets.getApiKey({ scope: 'llm', providerId: credential.reference });
+		if (token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+		return apiKey.length === 0 ? undefined : apiKey;
+	}
+}
+
 function randomIdentity(): string {
 	return randomUUID().replaceAll('-', '');
 }
@@ -561,9 +626,7 @@ function requiresBundledUpdate(
 /** Owns the local Agent Host, its IPC channel, and its shutdown ordering. */
 export class LocalAgentHostMain extends Disposable {
 	private authority: AgentHostAuthority | undefined;
-	private cometAgent: CometAgent | undefined;
 	private channelFactory: AgentHostConnectionChannelFactory | undefined;
-	private readonly settingsUpdates = new Sequencer();
 	private shutdownPromise: Promise<void> | undefined;
 
 	private constructor(private readonly options: ILocalAgentHostMainOptions) {
@@ -586,36 +649,13 @@ export class LocalAgentHostMain extends Disposable {
 		return this.shutdownPromise;
 	}
 
-	updateSettings(settings: LlmSettings): Promise<void> {
-		return this.settingsUpdates.queue(async () => {
-			const authority = this.authority;
-			const cometAgent = this.cometAgent;
-			if (authority === undefined || cometAgent === undefined) {
-				throw new Error('Local Agent Host is not initialized');
-			}
-			const modelCatalog = this.createModelCatalog(settings);
-			const agentUpdate = cometAgent.prepareConfiguration({
-				authenticationRequired: this.activeModelRequiresAuthentication(settings),
-				models: modelCatalog.models,
-				executionProfileResolver: modelCatalog.executionProfileResolver,
-			});
-			await authority.updateRootConfiguration(Object.freeze({
-				agents: Object.freeze([Object.freeze({
-					agent: cometAgent,
-					descriptor: agentUpdate.descriptor,
-					commit: agentUpdate.commit,
-				})]),
-				sessionTypes: Object.freeze([
-					this.createCometSessionType(agentUpdate.descriptor, modelCatalog, settings),
-				]),
-			}));
-		});
-	}
-
 	private async initialize(): Promise<void> {
 		const bundledPackage = await createCurrentBundledCometPackage(this.options.bundledArtifactPath);
-		const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.embedded.v1');
-		const modelCatalog = this.createModelCatalog(this.options.settings);
+		const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
+		const credentials = new AgentCredentialService(
+			new LocalCometCredentialSecretSource(this.options.providerApiKeySecretStorage),
+		);
+		const modelCatalog = this.createModelCatalog(credentials);
 		const contentResources = this._register(new AgentContentResourceService(
 			this.options.contentMaterializationRoot,
 			localAgentHostContentResourceLimits,
@@ -646,13 +686,16 @@ export class LocalAgentHostMain extends Disposable {
 		});
 		const cometAgent = this._register(new CometAgent({
 			runtimeRegistration,
-			authenticationRequired: this.activeModelRequiresAuthentication(this.options.settings),
+			requiresAgentAuthentication: false,
 			models: modelCatalog.models,
 			executionProfileResolver: modelCatalog.executionProfileResolver,
 			toolExecution,
 			contentResources,
 		}));
-		const catalogStore = new ApplicationStorageAgentHostCatalogStore(this.options.storage);
+		const catalogStore = new ApplicationStorageAgentHostCatalogStore(this.options.storage, {
+			agentDefaults: Object.freeze([initialCometAgentDefaults]),
+			sessionConfigurations: Object.freeze([legacyCometSessionConfiguration]),
+		});
 		await migrateLegacySessionsCatalog({
 			source: new ApplicationStorageLegacyAgentHostCatalogSource(this.options.storage),
 			store: catalogStore,
@@ -661,6 +704,8 @@ export class LocalAgentHostMain extends Disposable {
 			agentId: COMET_AGENT_ID,
 			sessionType: cometSessionType,
 			resumeSchema: COMET_AGENT_RESUME_SCHEMA,
+			agentDefaults: Object.freeze([initialCometAgentDefaults]),
+			sessionConfiguration: legacyCometSessionConfiguration,
 		});
 		const artifactPort = new BundledCometArtifactPort(bundledPackage.verifiedPackage);
 		const runtimePort = new EmbeddedCometPackageRuntimePort(cometAgent, bundledPackage.verifiedPackage);
@@ -671,7 +716,21 @@ export class LocalAgentHostMain extends Disposable {
 				verifiedPackage: bundledPackage.verifiedPackage,
 				registrations: Object.freeze([cometAgent.registration]),
 			}),
-			stateStore: new ApplicationStorageAgentPackageStateStore(this.options.storage),
+			stateStore: new ApplicationStorageAgentPackageStateStore(this.options.storage, {
+				registrations: Object.freeze([Object.freeze({
+					source: Object.freeze({
+						packageId: COMET_AGENT_PACKAGE_ID,
+						agentId: COMET_AGENT_ID,
+						revision: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
+						descriptorRevision: createAgentDescriptorRevision('comet.descriptor.v1'),
+						capabilityRevision: COMET_AGENT_CAPABILITY_REVISION,
+						supportedToolSchemaProfiles: cometAgent.registration.supportedToolSchemaProfiles,
+						supportedResumeSchemas: cometAgent.registration.supportedResumeSchemas,
+						resumeMigrationEdges: cometAgent.registration.resumeMigrationEdges,
+					}),
+					target: cometAgent.registration,
+				})]),
+			}),
 			artifactPort,
 			runtimePort,
 		});
@@ -680,12 +739,13 @@ export class LocalAgentHostMain extends Disposable {
 			label: Object.freeze({ kind: 'localized' as const, key: 'agentHost.local.label' as const }),
 			supportedProtocolVersions: Object.freeze([localAgentHostProtocolVersion]),
 			capabilities: Object.freeze([]),
-			implementation: Object.freeze({ name: 'comet.desktop.main', build: 'agent-host.v1' }),
+			implementation: Object.freeze({ name: 'comet.desktop.main', build: 'agent-host.v2' }),
 			sessionTypes: Object.freeze([
-				this.createCometSessionType(cometAgent.descriptor.get(), modelCatalog, this.options.settings),
+				this.createCometSessionType(cometAgent.descriptor.get(), modelCatalog),
 			]),
 			agentRuntimes: new EmbeddedCometRuntimeResolver(cometAgent),
 			packageLifecycle,
+			credentials,
 			catalogStore,
 			identityFactory: new LocalAgentHostIdentityFactory(),
 			submissionPolicy: new LocalAgentHostSubmissionPolicy(this.options.now),
@@ -716,7 +776,6 @@ export class LocalAgentHostMain extends Disposable {
 			});
 		}
 		this.authority = host;
-		this.cometAgent = cometAgent;
 		const channelFactory = this._register(new AgentHostConnectionChannelFactory(
 			() => host.createConnection(createAgentHostClientConnectionId(`desktop:${randomIdentity()}`)),
 			contentResources,
@@ -728,10 +787,9 @@ export class LocalAgentHostMain extends Disposable {
 		this.channelFactory = channelFactory;
 	}
 
-	private createModelCatalog(settings: LlmSettings): IProductionCometModelCatalog {
+	private createModelCatalog(credentials: AgentCredentialService): IProductionCometModelCatalog {
 		return createProductionCometModelCatalog({
-			settings,
-			loadSettings: this.options.loadSettings,
+			credentials,
 			fetch: this.options.fetch,
 			now: this.options.now,
 		});
@@ -740,10 +798,8 @@ export class LocalAgentHostMain extends Disposable {
 	private createCometSessionType(
 		descriptor: IAgentDescriptor,
 		modelCatalog: IProductionCometModelCatalog,
-		settings: LlmSettings,
 	): IAgentHostSessionTypeDescriptor {
-		const activeModel = settings.providers[settings.activeProvider].selectedModelOption;
-		const automaticModel = descriptor.models.find(candidate => candidate.id === activeModel);
+		const automaticModel = descriptor.models.find(candidate => candidate.id === modelCatalog.automaticModel);
 		if (automaticModel === undefined) {
 			throw new Error('Comet automatic model is absent from the Agent descriptor');
 		}
@@ -770,11 +826,6 @@ export class LocalAgentHostMain extends Disposable {
 			automaticExecutionPreset: modelCatalog.automaticPreset,
 			toolPolicy: Object.freeze({ kind: 'all' as const }),
 		});
-	}
-
-	private activeModelRequiresAuthentication(settings: LlmSettings): boolean {
-		const provider = settings.providers[settings.activeProvider];
-		return provider.apiKey.length === 0;
 	}
 
 	private async doShutdown(): Promise<void> {

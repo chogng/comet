@@ -11,6 +11,13 @@ import { constObservable } from 'cs/base/common/observable';
 import type { IAgent, IAgentAction, IAgentCancelTurnRequest, IAgentChatRequest, IAgentDescriptor, IAgentRuntimeRegistration, IAgentSteerRequest } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostAttachment } from 'cs/platform/agentHost/common/attachments';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
+import {
+	AgentConfigurationSchemaProfile,
+	IAgentConfigurationCandidate,
+	IAgentConfigurationSchema,
+	IAgentConfigurationState,
+	resolveAgentSessionConfigurationValues,
+} from 'cs/platform/agentHost/common/configuration';
 import type { IAgentContentResourceOpenRequest, IAgentContentResourcePort } from 'cs/platform/agentHost/common/contentResources';
 import {
 	AgentPackageOperationId,
@@ -19,6 +26,9 @@ import {
 	createAgentCancellationId,
 	createAgentCapabilityRevision,
 	createAgentChatId,
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationSchemaRevision,
+	createAgentConfigurationStateRevision,
 	createAgentContentDigest,
 	createAgentContentLeaseId,
 	createAgentContentReferenceId,
@@ -88,6 +98,7 @@ import { COMET_AGENT_RESUME_SCHEMA } from 'cs/platform/agentHost/node/agents/com
 import { AgentHostAuthority, type IAgentHostAuthorityOptions } from 'cs/platform/agentHost/node/host/agentHostAuthority';
 import {
 	createEmptyAgentHostCatalog,
+	maximumRetainedAgentHostSessionConfigurationFinalizations,
 	migrateLegacySessionsCatalog,
 	type IAgentHostCatalogStore,
 	type IAgentHostLegacyCatalogSource,
@@ -100,24 +111,123 @@ const agentId = createAgentId('comet');
 const sessionTypeId = createAgentSessionTypeId('comet.session');
 const resumeSchema = COMET_AGENT_RESUME_SCHEMA;
 const registrationRevision = createAgentRuntimeRegistrationRevision('comet.runtime.v1');
-const descriptorRevision = createAgentDescriptorRevision('comet.descriptor.v1');
+const descriptorRevision = createAgentDescriptorRevision('comet.descriptor.v2');
 const capabilityRevision = createAgentCapabilityRevision('comet.capabilities.v1');
 const modelId = createAgentModelId('model-a');
 const modelRevision = createAgentModelDescriptorRevision('model-a.v1');
 const toolSchema = createAgentToolSchemaProfileId('comet.tools.v1');
 const presetId = createAgentExecutionPresetId('automatic');
-const protocolVersion = createAgentHostProtocolVersion('1');
+const protocolVersion = createAgentHostProtocolVersion('2');
 const authorityId = createAgentHostAuthorityId('local');
 const optionalPackageId = createAgentPackageId('optional-agent');
 const optionalAgentId = createAgentId('optional-agent');
 const optionalDescriptorRevision = createAgentDescriptorRevision('optional.descriptor.v1');
 const optionalCapabilityRevision = createAgentCapabilityRevision('optional.capabilities.v1');
+
+function createConfigurationSchema(
+	owner: ReturnType<typeof createAgentId>,
+	scope: 'hostDefault' | 'session' | 'model',
+	revision: string,
+	properties: IAgentConfigurationSchema['properties'] = Object.freeze([]),
+): IAgentConfigurationSchema {
+	return Object.freeze({
+		profile: AgentConfigurationSchemaProfile,
+		agent: owner,
+		scope,
+		revision: createAgentConfigurationSchemaRevision(revision),
+		properties,
+	});
+}
+
+const modeProperty = Object.freeze({
+	id: createAgentConfigurationPropertyId('comet.mode'),
+	owner: Object.freeze({ kind: 'agent' as const, agent: agentId }),
+	scopes: Object.freeze(['hostDefault', 'session'] as const),
+	value: Object.freeze({ type: 'string' as const, enum: Object.freeze(['balanced', 'precise']) }),
+	required: true,
+	default: 'balanced',
+	sessionMutable: true,
+	dynamicCompletion: true,
+	display: Object.freeze({ label: 'Mode' }),
+	persistence: 'persisted' as const,
+	redaction: 'public' as const,
+});
+const safetyProperty = Object.freeze({
+	id: createAgentConfigurationPropertyId('comet.safety'),
+	owner: Object.freeze({ kind: 'agent' as const, agent: agentId }),
+	scopes: Object.freeze(['hostDefault', 'session'] as const),
+	value: Object.freeze({ type: 'string' as const, enum: Object.freeze(['strict', 'permissive']) }),
+	required: true,
+	default: 'strict',
+	sessionMutable: false,
+	dynamicCompletion: false,
+	display: Object.freeze({ label: 'Safety' }),
+	persistence: 'persisted' as const,
+	redaction: 'public' as const,
+});
+const hostDefaultsSchema = createConfigurationSchema(agentId, 'hostDefault', 'comet.host-defaults.v1', Object.freeze([modeProperty, safetyProperty]));
+const initialSessionConfigurationSchema = createConfigurationSchema(agentId, 'session', 'comet.session-config.initial.v1');
+const sessionConfigurationSchema = createConfigurationSchema(agentId, 'session', 'comet.session-config.v1', Object.freeze([modeProperty, safetyProperty]));
+const modelConfigurationSchema = createConfigurationSchema(agentId, 'model', 'comet.model-config.v1');
+const optionalHostDefaultsSchema = createConfigurationSchema(optionalAgentId, 'hostDefault', 'optional.host-defaults.v1');
+const optionalSessionConfigurationSchema = createConfigurationSchema(optionalAgentId, 'session', 'optional.session-config.v1');
+const optionalModelConfigurationSchema = createConfigurationSchema(optionalAgentId, 'model', 'optional.model-config.v1');
+const conflictingHostDefaultsSchema: IAgentConfigurationSchema = Object.freeze({
+	...hostDefaultsSchema,
+	properties: Object.freeze([
+		Object.freeze({ ...modeProperty, display: Object.freeze({ label: 'Conflicting mode' }) }),
+		safetyProperty,
+	]),
+});
+const conflictingSessionConfigurationSchema: IAgentConfigurationSchema = Object.freeze({
+	...sessionConfigurationSchema,
+	properties: Object.freeze([
+		Object.freeze({ ...modeProperty, display: Object.freeze({ label: 'Conflicting mode' }) }),
+		safetyProperty,
+	]),
+});
+const conflictingModelConfigurationSchema: IAgentConfigurationSchema = Object.freeze({
+	...modelConfigurationSchema,
+	properties: Object.freeze([Object.freeze({
+		...modeProperty,
+		scopes: Object.freeze(['model'] as const),
+		sessionMutable: false,
+		display: Object.freeze({ label: 'Conflicting model mode' }),
+	})]),
+});
+const sessionConfigurationCandidate: IAgentConfigurationCandidate = Object.freeze({
+	schema: initialSessionConfigurationSchema.revision,
+	values: Object.freeze({}),
+});
+const modelConfigurationCandidate: IAgentConfigurationCandidate = Object.freeze({
+	schema: modelConfigurationSchema.revision,
+	values: Object.freeze({}),
+});
+const migrationAgentDefaults: IAgentConfigurationState = Object.freeze({
+	schema: hostDefaultsSchema,
+	revision: createAgentConfigurationStateRevision('migration-host-defaults-v1'),
+	values: Object.freeze({}),
+});
+const migrationSessionConfiguration: IAgentConfigurationState = Object.freeze({
+	schema: sessionConfigurationSchema,
+	revision: createAgentConfigurationStateRevision('migration-session-config-v1'),
+	values: Object.freeze({ 'comet.mode': 'balanced', 'comet.safety': 'strict' }),
+});
+const optionalMigrationAgentDefaults: IAgentConfigurationState = Object.freeze({
+	schema: optionalHostDefaultsSchema,
+	revision: createAgentConfigurationStateRevision('optional-migration-host-defaults-v1'),
+	values: Object.freeze({}),
+});
+
 const optionalRegistrationV1: IAgentRuntimeRegistration = Object.freeze({
 	packageId: optionalPackageId,
 	agentId: optionalAgentId,
 	revision: createAgentRuntimeRegistrationRevision('optional.runtime.v1'),
 	descriptorRevision: optionalDescriptorRevision,
 	capabilityRevision: optionalCapabilityRevision,
+	hostDefaultsSchema: optionalHostDefaultsSchema,
+	initialSessionConfigurationSchema: optionalSessionConfigurationSchema.revision,
+	supportedSessionConfigurationSchemas: Object.freeze([optionalSessionConfigurationSchema.revision]),
 	supportedToolSchemaProfiles: Object.freeze([toolSchema]),
 	supportedResumeSchemas: Object.freeze([resumeSchema]),
 	resumeMigrationEdges: Object.freeze([]),
@@ -133,6 +243,9 @@ const registration: IAgentRuntimeRegistration = Object.freeze({
 	revision: registrationRevision,
 	descriptorRevision,
 	capabilityRevision,
+	hostDefaultsSchema,
+	initialSessionConfigurationSchema: initialSessionConfigurationSchema.revision,
+	supportedSessionConfigurationSchemas: Object.freeze([initialSessionConfigurationSchema.revision, sessionConfigurationSchema.revision]),
 	supportedToolSchemaProfiles: Object.freeze([toolSchema]),
 	supportedResumeSchemas: Object.freeze([resumeSchema]),
 	resumeMigrationEdges: Object.freeze([]),
@@ -168,6 +281,7 @@ const descriptor: IAgentDescriptor = Object.freeze({
 		revision: modelRevision,
 		displayName: 'Model A',
 		enabled: true,
+		configurationSchema: modelConfigurationSchema,
 		toolSchemaProfiles: Object.freeze([toolSchema]),
 		attachments: Object.freeze({
 			carriers: Object.freeze(['inline', 'reference'] as const),
@@ -181,7 +295,7 @@ const descriptor: IAgentDescriptor = Object.freeze({
 			supportsClientContentForBackgroundExecution: false,
 		}),
 	})]),
-	authenticationRequired: false,
+	requiresAgentAuthentication: false,
 });
 
 const optionalDescriptor: IAgentDescriptor = Object.freeze({
@@ -195,7 +309,8 @@ const optionalDescriptor: IAgentDescriptor = Object.freeze({
 	}),
 	displayName: 'Optional test Agent',
 	description: 'Explicitly installed test Agent',
-	authenticationRequired: true,
+	models: Object.freeze(descriptor.models.map(model => Object.freeze({ ...model, configurationSchema: optionalModelConfigurationSchema }))),
+	requiresAgentAuthentication: true,
 });
 
 const sessionType: IAgentHostSessionTypeDescriptor = Object.freeze({
@@ -244,14 +359,16 @@ class MemoryCatalogStore implements IAgentHostCatalogStore {
 	state: IAgentHostPersistedCatalog | undefined;
 	readonly commits: IAgentHostPersistedCatalog[] = [];
 	failNextCommit = false;
+	failCommitWhen: ((state: IAgentHostPersistedCatalog) => boolean) | undefined;
 
 	async read(): Promise<IAgentHostPersistedCatalog | undefined> {
 		return this.state;
 	}
 
 	async commit(expectedRevision: number | undefined, state: IAgentHostPersistedCatalog): Promise<void> {
-		if (this.failNextCommit) {
+		if (this.failNextCommit || this.failCommitWhen?.(state)) {
 			this.failNextCommit = false;
+			this.failCommitWhen = undefined;
 			throw new Error('injected Host catalog commit failure');
 		}
 		assert.equal(expectedRevision, this.state?.revision);
@@ -508,6 +625,8 @@ class TestAgent implements IAgent {
 	readonly sessionsById = new Map<string, Set<string>>();
 	readonly sessionCreates: string[] = [];
 	readonly sessionMaterializes: string[] = [];
+	readonly sessionCreateRequests: Parameters<IAgent['sessions']['create']>[0][] = [];
+	readonly sessionMaterializeRequests: Parameters<IAgent['sessions']['materialize']>[0][] = [];
 	readonly sessionReleases: string[] = [];
 	readonly sessionDeletes: string[] = [];
 	readonly chatCreates: string[] = [];
@@ -517,6 +636,16 @@ class TestAgent implements IAgent {
 	readonly sends: IAgentChatRequest[] = [];
 	readonly steers: IAgentSteerRequest[] = [];
 	readonly cancels: IAgentCancelTurnRequest[] = [];
+	readonly configurationPrepares: Parameters<IAgent['configuration']['prepareSessionUpdate']>[0][] = [];
+	readonly configurationCommits: Parameters<IAgent['configuration']['commitSessionUpdate']>[0][] = [];
+	readonly configurationRollbacks: Parameters<IAgent['configuration']['rollbackSessionUpdate']>[0][] = [];
+	readonly configurationAcknowledgements: Parameters<IAgent['configuration']['acknowledgeSessionUpdate']>[0][] = [];
+	failNextConfigurationPrepareAfterAccept = false;
+	failNextConfigurationCommit = false;
+	failNextConfigurationRollback = false;
+	failNextConfigurationAcknowledgementAfterAccept = false;
+	onPrepareSessionConfiguration?: (request: Parameters<IAgent['configuration']['prepareSessionUpdate']>[0]) => void;
+	resolvedSessionConfigurationSchema: IAgentConfigurationSchema;
 
 	constructor(
 		runtimeRegistration: IAgentRuntimeRegistration = registration,
@@ -525,7 +654,61 @@ class TestAgent implements IAgent {
 		this.id = runtimeRegistration.agentId;
 		this.registration = runtimeRegistration;
 		this.descriptor = constObservable(agentDescriptor);
+		this.resolvedSessionConfigurationSchema = this.id === agentId
+			? sessionConfigurationSchema
+			: optionalSessionConfigurationSchema;
 	}
+
+	readonly configuration: IAgent['configuration'] = {
+		resolveSession: async request => {
+			const schema = this.resolvedSessionConfigurationSchema;
+			if (this.id === agentId) {
+				assert.ok(
+					request.candidate.schema === initialSessionConfigurationSchema.revision
+					|| request.candidate.schema === sessionConfigurationSchema.revision,
+				);
+			} else {
+				assert.equal(request.candidate.schema, schema.revision);
+			}
+			return Object.freeze({
+				schema,
+				values: resolveAgentSessionConfigurationValues(schema, request.hostDefaults.values, request.candidate.values),
+			});
+		},
+		completeSession: async request => Object.freeze([Object.freeze({
+			label: `${request.query} precise`,
+			value: 'precise',
+		})]),
+		prepareSessionUpdate: async request => {
+			this.onPrepareSessionConfiguration?.(request);
+			this.configurationPrepares.push(request);
+			if (this.failNextConfigurationPrepareAfterAccept) {
+				this.failNextConfigurationPrepareAfterAccept = false;
+				throw new Error('injected configuration prepare acknowledgement loss');
+			}
+		},
+		commitSessionUpdate: async request => {
+			this.configurationCommits.push(request);
+			if (this.failNextConfigurationCommit) {
+				this.failNextConfigurationCommit = false;
+				throw new Error('injected configuration commit acknowledgement loss');
+			}
+		},
+		rollbackSessionUpdate: async request => {
+			this.configurationRollbacks.push(request);
+			if (this.failNextConfigurationRollback) {
+				this.failNextConfigurationRollback = false;
+				throw new Error('injected configuration rollback acknowledgement loss');
+			}
+		},
+		acknowledgeSessionUpdate: async request => {
+			this.configurationAcknowledgements.push(request);
+			if (this.failNextConfigurationAcknowledgementAfterAccept) {
+				this.failNextConfigurationAcknowledgementAfterAccept = false;
+				throw new Error('injected configuration acknowledgement response loss');
+			}
+		},
+	};
 
 	readonly executionProfiles: IAgent['executionProfiles'] = {
 		resolve: async () => Object.freeze({
@@ -539,11 +722,15 @@ class TestAgent implements IAgent {
 
 	readonly sessions: IAgent['sessions'] = {
 		create: async request => {
+			this.sessionCreateRequests.push(request);
 			this.sessionCreates.push(request.session);
 			this.sessionsById.set(request.session, new Set());
 			return Object.freeze({ session: request.session, resume: Object.freeze({ schema: resumeSchema, data: '{}' }) });
 		},
-		materialize: async request => { this.sessionMaterializes.push(request.session); },
+		materialize: async request => {
+			this.sessionMaterializeRequests.push(request);
+			this.sessionMaterializes.push(request.session);
+		},
 		release: async request => { this.sessionReleases.push(request.session); },
 		delete: async request => {
 			this.sessionDeletes.push(request.session);
@@ -761,7 +948,7 @@ async function prepare(
 		target,
 		capture,
 		captureDigest: await computeAgentHostSubmissionCaptureDigest(capture),
-		executionSelection: Object.freeze({ kind: 'preset', preset: presetId }),
+		executionSelection: Object.freeze({ kind: 'preset', preset: presetId, configuration: modelConfigurationCandidate }),
 		toolPolicy: Object.freeze({ kind: 'all' }),
 	});
 	assert.equal(result.kind, 'prepared');
@@ -801,7 +988,12 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const authority = await createAuthority(store, agent);
 		const subscriptions = Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]);
 		const connection = await initialize(authority, 'client-1', subscriptions);
-		const payload: AgentHostMutationPayload = Object.freeze({ kind: 'createSession', sessionType: sessionTypeId, chats: Object.freeze([]) });
+		const payload: AgentHostMutationPayload = Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		});
 		const first = await mutate(connection, 'operation-create-empty', payload);
 		assert.equal(first.outcome.kind, 'succeeded');
 		assert.equal(agent.sessionCreates.length, 1);
@@ -825,6 +1017,791 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		restarted.dispose();
 	});
 
+	test('publishes exact configuration registrations and persists Agent defaults across restart', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-configuration-root', Object.freeze([getAgentHostRootChannelId()]));
+		const subscribed = await connection.setSubscriptions({ subscriptions: Object.freeze([getAgentHostRootChannelId()]) });
+		const root = subscribed.snapshots[0];
+		assert.equal(root.kind, 'root');
+		if (root.kind !== 'root') {
+			throw new Error('Missing Agent Host root snapshot');
+		}
+		assert.equal(root.state.agentRegistrations[0].initialSessionConfigurationSchema, initialSessionConfigurationSchema.revision);
+		assert.deepStrictEqual(root.state.agentRegistrations[0].supportedSessionConfigurationSchemas, [
+			initialSessionConfigurationSchema.revision,
+			sessionConfigurationSchema.revision,
+		]);
+		const initial = await connection.resolveSessionConfiguration({
+			sessionType: sessionTypeId,
+			candidate: sessionConfigurationCandidate,
+		});
+		assert.equal(initial.configuration.schema.revision, sessionConfigurationSchema.revision);
+		assert.deepStrictEqual(initial.configuration.values, {
+			'comet.mode': 'balanced',
+			'comet.safety': 'strict',
+		});
+		const completions = await connection.completeSessionConfiguration({
+			sessionType: sessionTypeId,
+			candidate: Object.freeze({ schema: sessionConfigurationSchema.revision, values: initial.configuration.values }),
+			resolvedSchema: initial.configuration.schema,
+			property: modeProperty.id,
+			query: 'most',
+			limit: 10,
+		});
+		assert.deepStrictEqual(completions.completions, [Object.freeze({ label: 'most precise', value: 'precise' })]);
+		const defaults = root.state.agentDefaults[0];
+		const updated = await mutate(connection, 'operation-update-agent-defaults', Object.freeze({
+			kind: 'updateAgentDefaults',
+			agent: agentId,
+			expectedRevision: defaults.revision,
+			candidate: Object.freeze({
+				schema: hostDefaultsSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'succeeded');
+		connection.dispose();
+		authority.dispose();
+
+		const restarted = await createAuthority(store, agent);
+		const restartedConnection = await initialize(restarted, 'client-configuration-root-restarted', Object.freeze([]));
+		const resolved = await restartedConnection.resolveSessionConfiguration({
+			sessionType: sessionTypeId,
+			candidate: sessionConfigurationCandidate,
+		});
+		assert.deepStrictEqual(resolved.configuration.values, {
+			'comet.mode': 'precise',
+			'comet.safety': 'strict',
+		});
+		restartedConnection.dispose();
+		restarted.dispose();
+	});
+
+	test('rejects persisted Agent defaults whose schema reuses the registered revision with different content', async () => {
+		const store = new MemoryCatalogStore();
+		store.state = createEmptyAgentHostCatalog(Object.freeze([Object.freeze({
+			schema: conflictingHostDefaultsSchema,
+			revision: createAgentConfigurationStateRevision('conflicting-host-defaults-state'),
+			values: Object.freeze({}),
+		})]));
+		await assert.rejects(
+			createAuthority(store, new TestAgent()),
+			/does not match its exact runtime registration/,
+		);
+	});
+
+	test('rejects model and resolved Session schemas that reuse a revision with different content', async () => {
+		const conflictingDescriptor: IAgentDescriptor = Object.freeze({
+			...descriptor,
+			models: Object.freeze([
+				descriptor.models[0],
+				Object.freeze({
+					...descriptor.models[0],
+					id: createAgentModelId('model-conflict'),
+					revision: createAgentModelDescriptorRevision('model-conflict.v1'),
+					configurationSchema: conflictingModelConfigurationSchema,
+				}),
+			]),
+		});
+		await assert.rejects(
+			createAuthority(new MemoryCatalogStore(), new TestAgent(registration, conflictingDescriptor)),
+			/reuses configuration schema revision.*different content/,
+		);
+
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-session-schema-conflict', Object.freeze([]));
+		const first = await connection.resolveSessionConfiguration({
+			sessionType: sessionTypeId,
+			candidate: sessionConfigurationCandidate,
+		});
+		assert.equal(first.configuration.schema.revision, sessionConfigurationSchema.revision);
+		agent.resolvedSessionConfigurationSchema = conflictingSessionConfigurationSchema;
+		await assert.rejects(
+			connection.resolveSessionConfiguration({
+				sessionType: sessionTypeId,
+				candidate: sessionConfigurationCandidate,
+			}),
+			/reuses configuration schema revision.*different content/,
+		);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('rejects a persisted Session schema that conflicts with runtime resolution under the same revision', async () => {
+		const store = new MemoryCatalogStore();
+		const authority = await createAuthority(store, new TestAgent());
+		const connection = await initialize(authority, 'client-persisted-session-schema-conflict', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-persisted-schema-conflict', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		assert.equal(created.outcome.kind, 'succeeded');
+		connection.dispose();
+		authority.dispose();
+
+		const catalog = store.state!;
+		const record = catalog.sessions[0];
+		store.state = Object.freeze({
+			...catalog,
+			sessions: Object.freeze([Object.freeze({
+				...record,
+				state: Object.freeze({
+					...record.state,
+					configuration: Object.freeze({
+						...record.state.configuration,
+						schema: conflictingSessionConfigurationSchema,
+					}),
+				}),
+			})]),
+		});
+		await assert.rejects(
+			createAuthority(store, new TestAgent()),
+			/reuses configuration schema revision.*different content/,
+		);
+	});
+
+	test('applies a materialized Session configuration transaction after Host persistence', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-session-configuration', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-configured-session', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		assert.equal(created.outcome.kind, 'succeeded');
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Configured Session was not created');
+		}
+		const session = created.outcome.result.session;
+		assert.deepStrictEqual(agent.sessionCreateRequests[0].configuration.values, {
+			'comet.mode': 'balanced',
+			'comet.safety': 'strict',
+		});
+		const snapshot = await connection.setSubscriptions({ subscriptions: Object.freeze([getAgentHostSessionChannelId(session)]) });
+		const before = snapshot.snapshots[0];
+		assert.equal(before.kind, 'session');
+		if (before.kind !== 'session') {
+			throw new Error('Missing configured Session snapshot');
+		}
+		agent.onPrepareSessionConfiguration = request => {
+			const intent = store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === request.operation
+			));
+			assert.equal(intent?.status, 'intent');
+			assert.equal(intent?.status === 'intent' ? intent.decision : undefined, 'rollback');
+			assert.equal(intent?.status === 'intent' ? intent.configuration : undefined, request.candidate.revision);
+		};
+		const updated = await mutate(connection, 'operation-update-session-configuration', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: before.state.configuration.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'succeeded');
+		assert.equal(agent.configurationPrepares.length, 1);
+		assert.equal(agent.configurationCommits.length, 1);
+		assert.equal(agent.configurationRollbacks.length, 0);
+		assert.deepStrictEqual(agent.configurationAcknowledgements, [{
+			...agent.configurationCommits[0],
+			decision: 'commit',
+		}]);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === 'operation-update-session-configuration'
+			))?.status,
+			'acknowledged',
+		);
+		assert.deepStrictEqual(store.state?.sessions[0].state.configuration.values, {
+			'comet.mode': 'precise',
+			'comet.safety': 'strict',
+		});
+		const immutable = await mutate(connection, 'operation-update-immutable-session-configuration', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: store.state!.sessions[0].state.configuration.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'permissive' }),
+			}),
+		}));
+		assert.equal(immutable.outcome.kind, 'failed');
+		assert.equal(immutable.outcome.kind === 'failed' ? immutable.outcome.failure.code : undefined, 'invalidPayload');
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('retries an exact Session configuration acknowledgement after its response is lost', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-session-configuration-acknowledgement-loss', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-configuration-acknowledgement-loss', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Acknowledgement-loss Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const current = store.state!.sessions[0].state.configuration;
+		agent.failNextConfigurationAcknowledgementAfterAccept = true;
+		const updated = await mutate(connection, 'operation-session-configuration-acknowledgement-loss', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'pending');
+		assert.equal(agent.configurationCommits.length, 1);
+		assert.equal(agent.configurationAcknowledgements.length, 1);
+		const completed = store.state?.sessionConfigurationFinalizations.find(candidate => (
+			candidate.operation === 'operation-session-configuration-acknowledgement-loss'
+		));
+		assert.equal(completed?.status, 'completed');
+		if (completed?.status !== 'completed') {
+			throw new Error('Runtime terminal configuration decision was not retained for acknowledgement');
+		}
+		assert.deepStrictEqual(agent.configurationAcknowledgements[0], {
+			operation: completed.operation,
+			payloadDigest: completed.digest,
+			runtimeRegistration: completed.runtimeRegistration,
+			session: completed.session,
+			configuration: completed.configuration,
+			decision: completed.decision,
+		});
+
+		const reconciled = await connection.getOperationOutcome({
+			operation: completed.operation,
+			digest: completed.digest,
+		});
+		assert.equal(reconciled.kind, 'succeeded');
+		assert.equal(agent.configurationCommits.length, 1);
+		assert.equal(agent.configurationAcknowledgements.length, 2);
+		assert.deepStrictEqual(agent.configurationAcknowledgements[1], agent.configurationAcknowledgements[0]);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => candidate.operation === completed.operation)?.status,
+			'acknowledged',
+		);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('retries a completed Session configuration acknowledgement after Host and runtime restart', async () => {
+		const store = new MemoryCatalogStore();
+		let agent = new TestAgent();
+		let authority = await createAuthority(store, agent);
+		let connection = await initialize(authority, 'client-session-configuration-cold-acknowledgement', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-cold-configuration-acknowledgement', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Cold-acknowledgement Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const current = store.state!.sessions[0].state.configuration;
+		const operation = createAgentHostOperationId('operation-session-configuration-cold-acknowledgement');
+		store.failCommitWhen = state => state.sessionConfigurationFinalizations.some(candidate => (
+			candidate.operation === operation && candidate.status === 'acknowledged'
+		));
+		const updated = await mutate(connection, operation, Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'pending');
+		assert.equal(agent.configurationAcknowledgements.length, 1);
+		const completed = store.state?.sessionConfigurationFinalizations.find(candidate => candidate.operation === operation);
+		assert.equal(completed?.status, 'completed');
+		if (completed?.status !== 'completed') {
+			throw new Error('Completed configuration update was not retained across restart');
+		}
+		connection.dispose();
+		authority.dispose();
+
+		agent = new TestAgent();
+		authority = await createAuthority(store, agent);
+		assert.deepStrictEqual(agent.configurationAcknowledgements, [{
+			operation: completed.operation,
+			payloadDigest: completed.digest,
+			runtimeRegistration: completed.runtimeRegistration,
+			session: completed.session,
+			configuration: completed.configuration,
+			decision: completed.decision,
+		}]);
+		assert.deepStrictEqual(agent.sessionMaterializeRequests.at(-1)?.configuration, store.state?.sessions[0].state.configuration);
+		connection = await initialize(authority, 'client-session-configuration-cold-acknowledgement', Object.freeze([]));
+		assert.equal((await connection.getOperationOutcome({ operation, digest: completed.digest })).kind, 'succeeded');
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => candidate.operation === operation)?.status,
+			'acknowledged',
+		);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('rolls a prepared Session configuration back when Host persistence fails', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-session-configuration-rollback', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-config-rollback', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Rollback Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const current = store.state!.sessions[0].state.configuration;
+		store.failCommitWhen = state => state.sessionConfigurationFinalizations.some(candidate => (
+			candidate.operation === 'operation-session-config-persistence-failure'
+			&& candidate.status === 'pending'
+			&& candidate.decision === 'commit'
+		));
+		const updated = await mutate(connection, 'operation-session-config-persistence-failure', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'failed');
+		assert.equal(agent.configurationPrepares.length, 1);
+		assert.equal(agent.configurationCommits.length, 0);
+		assert.equal(agent.configurationRollbacks.length, 1);
+		assert.deepStrictEqual(agent.configurationAcknowledgements, [{
+			...agent.configurationRollbacks[0],
+			decision: 'rollback',
+		}]);
+		assert.deepStrictEqual(store.state?.sessions[0].state.configuration, current);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('recovers a durable rollback intent when preparation acknowledgement is lost before candidate commit', async () => {
+		const store = new MemoryCatalogStore();
+		let agent = new TestAgent();
+		let authority = await createAuthority(store, agent);
+		let connection = await initialize(authority, 'client-session-configuration-prepare-loss', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-prepare-loss', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Prepare-loss Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const current = store.state!.sessions[0].state.configuration;
+		agent.failNextConfigurationPrepareAfterAccept = true;
+		agent.failNextConfigurationRollback = true;
+		const updated = await mutate(connection, 'operation-session-config-prepare-ack-loss', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'pending');
+		assert.equal(agent.configurationPrepares.length, 1);
+		assert.equal(agent.configurationRollbacks.length, 1);
+		assert.deepStrictEqual(store.state?.sessions[0].state.configuration, current);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === 'operation-session-config-prepare-ack-loss'
+			))?.status,
+			'pending',
+		);
+		connection.dispose();
+		authority.dispose();
+
+		agent = new TestAgent();
+		authority = await createAuthority(store, agent);
+		connection = await initialize(authority, 'client-session-configuration-prepare-loss', Object.freeze([]));
+		const outcome = await connection.getOperationOutcome({
+			operation: createAgentHostOperationId('operation-session-config-prepare-ack-loss'),
+			digest: updated.digest,
+		});
+		assert.equal(outcome.kind, 'failed');
+		assert.equal(agent.configurationRollbacks.length, 0);
+		assert.deepStrictEqual(agent.sessionMaterializeRequests.at(-1)?.configuration, current);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('reconciles lost Session configuration finalization acknowledgements across Host restart', async () => {
+		const store = new MemoryCatalogStore();
+		let agent = new TestAgent();
+		let authority = await createAuthority(store, agent);
+		let connection = await initialize(authority, 'client-session-configuration-reconcile', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-config-reconcile', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Reconciliation Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const initial = store.state!.sessions[0].state.configuration;
+		agent.failNextConfigurationCommit = true;
+		const committed = await mutate(connection, 'operation-session-config-commit-ack-loss', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: initial.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(committed.outcome.kind, 'pending');
+		assert.equal(agent.configurationCommits.length, 1);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === 'operation-session-config-commit-ack-loss'
+			))?.status,
+			'pending',
+		);
+		connection.dispose();
+		authority.dispose();
+
+		agent = new TestAgent();
+		authority = await createAuthority(store, agent);
+		connection = await initialize(authority, 'client-session-configuration-reconcile', Object.freeze([]));
+		assert.deepStrictEqual(
+			agent.sessionMaterializeRequests.at(-1)?.configuration,
+			store.state?.sessions[0].state.configuration,
+		);
+		const commitOutcome = await connection.getOperationOutcome({
+			operation: createAgentHostOperationId('operation-session-config-commit-ack-loss'),
+			digest: committed.digest,
+		});
+		assert.equal(commitOutcome.kind, 'succeeded');
+		assert.equal(agent.configurationCommits.length, 0);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === 'operation-session-config-commit-ack-loss'
+			))?.status,
+			'acknowledged',
+		);
+		const repeatedCommit = await connection.mutate({
+			operation: createAgentHostOperationId('operation-session-config-commit-ack-loss'),
+			digest: committed.digest,
+			payload: Object.freeze({
+				kind: 'updateSessionConfiguration',
+				session,
+				expectedRevision: initial.revision,
+				candidate: Object.freeze({
+					schema: sessionConfigurationSchema.revision,
+					values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+				}),
+			}),
+		});
+		assert.deepStrictEqual(repeatedCommit, commitOutcome);
+		assert.equal(agent.configurationCommits.length, 0);
+		const otherConnection = await initialize(authority, 'client-session-configuration-other-owner', Object.freeze([]));
+		assert.deepStrictEqual(
+			await otherConnection.getOperationOutcome({
+				operation: createAgentHostOperationId('operation-session-config-commit-ack-loss'),
+				digest: committed.digest,
+			}),
+			Object.freeze({ kind: 'unknown' }),
+		);
+		otherConnection.dispose();
+		const forgedPayload = Object.freeze({
+			kind: 'updateSessionConfiguration' as const,
+			session,
+			expectedRevision: initial.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'balanced', 'comet.safety': 'strict' }),
+			}),
+		});
+		const forgedOutcome = await connection.mutate({
+			operation: createAgentHostOperationId('operation-session-config-commit-ack-loss'),
+			digest: committed.digest,
+			payload: forgedPayload,
+		});
+		assert.equal(forgedOutcome.kind, 'failed');
+		assert.equal(forgedOutcome.kind === 'failed' ? forgedOutcome.failure.code : undefined, 'invalidPayload');
+
+		const current = store.state!.sessions[0].state.configuration;
+		store.failCommitWhen = state => state.sessionConfigurationFinalizations.some(candidate => (
+			candidate.operation === 'operation-session-config-rollback-ack-loss'
+			&& candidate.status === 'pending'
+			&& candidate.decision === 'commit'
+		));
+		agent.failNextConfigurationRollback = true;
+		const rolledBack = await mutate(connection, 'operation-session-config-rollback-ack-loss', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'balanced', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(rolledBack.outcome.kind, 'pending');
+		assert.equal(agent.configurationRollbacks.length, 1);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === 'operation-session-config-rollback-ack-loss'
+			))?.status,
+			'pending',
+		);
+		connection.dispose();
+		authority.dispose();
+
+		agent = new TestAgent();
+		authority = await createAuthority(store, agent);
+		connection = await initialize(authority, 'client-session-configuration-reconcile', Object.freeze([]));
+		assert.deepStrictEqual(
+			agent.sessionMaterializeRequests.at(-1)?.configuration,
+			store.state?.sessions[0].state.configuration,
+		);
+		const rollbackOutcome = await connection.getOperationOutcome({
+			operation: createAgentHostOperationId('operation-session-config-rollback-ack-loss'),
+			digest: rolledBack.digest,
+		});
+		assert.equal(rollbackOutcome.kind, 'failed');
+		assert.equal(agent.configurationRollbacks.length, 0);
+		assert.deepStrictEqual(store.state?.sessions[0].state.configuration, current);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => (
+				candidate.operation === 'operation-session-config-rollback-ack-loss'
+			))?.status,
+			'acknowledged',
+		);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('evicts the oldest acknowledged Session configuration result from durable and in-memory reconciliation', async () => {
+		const store = new MemoryCatalogStore();
+		let agent = new TestAgent();
+		let authority = await createAuthority(store, agent);
+		const ownerId = 'client-session-configuration-retention';
+		let connection = await initialize(authority, ownerId, Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-configuration-retention', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Configuration-retention Session was not created');
+		}
+		const session = created.outcome.result.session;
+		connection.dispose();
+		authority.dispose();
+
+		const owner = createAgentHostClientConnectionId(ownerId);
+		const retained = Object.freeze(Array.from(
+			{ length: maximumRetainedAgentHostSessionConfigurationFinalizations },
+			(_, index) => Object.freeze({
+				operation: createAgentHostOperationId(`retained-session-configuration-${index}`),
+				digest: createAgentHostPayloadDigest(`sha256:${index.toString(16).padStart(64, '0')}`),
+				connection: owner,
+				status: 'acknowledged' as const,
+				outcome: Object.freeze({
+					kind: 'failed' as const,
+					failure: Object.freeze({
+						code: 'invalidState' as const,
+						message: 'Retained terminal configuration result',
+						reconciliation: 'terminal' as const,
+					}),
+				}),
+			}),
+		));
+		const oldest = retained[0];
+		store.state = Object.freeze({
+			...store.state!,
+			revision: store.state!.revision + 1,
+			sessionConfigurationFinalizations: retained,
+		});
+
+		agent = new TestAgent();
+		authority = await createAuthority(store, agent);
+		connection = await initialize(authority, ownerId, Object.freeze([]));
+		assert.deepEqual(await connection.getOperationOutcome({
+			operation: oldest.operation,
+			digest: oldest.digest,
+		}), oldest.outcome);
+
+		const current = store.state!.sessions[0].state.configuration;
+		const updated = await mutate(connection, 'operation-fill-configuration-retention-ledger', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'succeeded');
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.length,
+			maximumRetainedAgentHostSessionConfigurationFinalizations,
+		);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.some(record => record.operation === oldest.operation),
+			false,
+		);
+		assert.deepEqual(await connection.getOperationOutcome({
+			operation: oldest.operation,
+			digest: oldest.digest,
+		}), Object.freeze({ kind: 'unknown' }));
+
+		const otherConnection = await initialize(authority, 'client-session-configuration-retention-reuse', Object.freeze([]));
+		const defaults = store.state!.agentDefaults.find(configuration => configuration.schema.agent === agentId);
+		if (defaults === undefined) {
+			throw new Error('Comet Agent defaults are missing');
+		}
+		const reused = await mutate(otherConnection, oldest.operation, Object.freeze({
+			kind: 'updateAgentDefaults',
+			agent: agentId,
+			expectedRevision: defaults.revision,
+			candidate: Object.freeze({ schema: defaults.schema.revision, values: defaults.values }),
+		}));
+		assert.equal(reused.outcome.kind, 'succeeded');
+		otherConnection.dispose();
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('keeps a runtime-finalized Session configuration pending until its terminal ledger commit succeeds', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-session-configuration-terminal-ledger', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-session-for-terminal-ledger', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Terminal-ledger Session was not created');
+		}
+		const session = created.outcome.result.session;
+		const current = store.state!.sessions[0].state.configuration;
+		const operation = createAgentHostOperationId('operation-session-config-terminal-ledger');
+		store.failCommitWhen = state => state.sessionConfigurationFinalizations.some(candidate => (
+			candidate.operation === operation && candidate.status === 'completed'
+		));
+		const updated = await mutate(connection, operation, Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'pending');
+		assert.equal(agent.configurationCommits.length, 1);
+		const pendingSequence = store.state!.hostSequence;
+		const pendingRevisions = store.state!.channelRevisions;
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => candidate.operation === operation)?.status,
+			'pending',
+		);
+		const packageMutation = await authority.acquirePackageMutation(
+			createAgentPackageOperationId('package-operation-waits-for-configuration'),
+			createAgentHostPayloadDigest(`sha256:${'9'.repeat(64)}`),
+			Object.freeze([agentId]),
+		);
+		let drained = false;
+		const drain = packageMutation.drain().then(() => { drained = true; });
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.equal(drained, false);
+		const reconciled = await connection.getOperationOutcome({ operation, digest: updated.digest });
+		assert.equal(reconciled.kind, 'succeeded');
+		await drain;
+		assert.equal(drained, true);
+		await packageMutation.rollback();
+		assert.equal(agent.configurationCommits.length, 2);
+		assert.equal(store.state!.hostSequence, pendingSequence);
+		assert.deepStrictEqual(store.state!.channelRevisions, pendingRevisions);
+		assert.equal(
+			store.state?.sessionConfigurationFinalizations.find(candidate => candidate.operation === operation)?.status,
+			'acknowledged',
+		);
+		connection.dispose();
+		authority.dispose();
+	});
+
+	test('updates released Session configuration without runtime prepare and materializes the committed state', async () => {
+		const store = new MemoryCatalogStore();
+		const agent = new TestAgent();
+		const authority = await createAuthority(store, agent);
+		const connection = await initialize(authority, 'client-released-session-configuration', Object.freeze([]));
+		const created = await mutate(connection, 'operation-create-released-config-session', Object.freeze({
+			kind: 'createSession',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+			chats: Object.freeze([]),
+		}));
+		if (created.outcome.kind !== 'succeeded' || created.outcome.result.kind !== 'createSession') {
+			throw new Error('Released configuration Session was not created');
+		}
+		const session = created.outcome.result.session;
+		await mutate(connection, 'operation-release-config-session', Object.freeze({ kind: 'releaseSession', session }));
+		const current = store.state!.sessions[0].state.configuration;
+		const updated = await mutate(connection, 'operation-update-released-session-configuration', Object.freeze({
+			kind: 'updateSessionConfiguration',
+			session,
+			expectedRevision: current.revision,
+			candidate: Object.freeze({
+				schema: sessionConfigurationSchema.revision,
+				values: Object.freeze({ 'comet.mode': 'precise', 'comet.safety': 'strict' }),
+			}),
+		}));
+		assert.equal(updated.outcome.kind, 'succeeded');
+		assert.equal(agent.configurationPrepares.length, 0);
+		assert.equal(agent.configurationCommits.length, 0);
+		await mutate(connection, 'operation-materialize-config-session', Object.freeze({ kind: 'materializeSession', session }));
+		assert.deepStrictEqual(agent.sessionMaterializeRequests.at(-1)?.configuration.values, {
+			'comet.mode': 'precise',
+			'comet.safety': 'strict',
+		});
+		connection.dispose();
+		authority.dispose();
+	});
+
 	test('conforms to exact subscription replacement and reconnect filtering', async () => {
 		const authority = await createAuthority(new MemoryCatalogStore(), new TestAgent());
 		const connection = await initialize(authority, 'client-subscriptions', Object.freeze([
@@ -835,6 +1812,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			const created = await mutate(connection, 'operation-create-subscription-session', Object.freeze({
 				kind: 'createSession',
 				sessionType: sessionTypeId,
+				configuration: sessionConfigurationCandidate,
 				chats: Object.freeze([
 					Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) }),
 					Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) }),
@@ -1019,6 +1997,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			const created = await mutate(connection, 'purge-recovery-create', Object.freeze({
 				kind: 'createSession',
 				sessionType: optionalSessionType.id,
+				configuration: Object.freeze({ schema: optionalSessionConfigurationSchema.revision, values: Object.freeze({}) }),
 				chats: Object.freeze([]),
 			}));
 			assert.equal(created.outcome.kind, 'succeeded');
@@ -1190,11 +2169,12 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const agent = new TestAgent();
 		const authority = await createAuthority(store, agent);
 		const connection = await initialize(authority, 'client-draft', Object.freeze([getAgentHostSessionsChannelId()]));
-		const target = Object.freeze({ kind: 'draft', sessionType: sessionTypeId }) satisfies AgentHostSubmissionTarget;
+		const target = Object.freeze({ kind: 'draft', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate }) satisfies AgentHostSubmissionTarget;
 		const prepared = await prepare(connection, 'submission-1', target);
 		const created = await mutate(connection, 'operation-draft', Object.freeze({
 			kind: 'createSession',
 			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({ model: null, origin: Object.freeze({ kind: 'user' }), initialSubmission: prepared })]),
 		}));
 		assert.equal(created.outcome.kind, 'succeeded');
@@ -1222,7 +2202,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		assert.equal(snapshot.state.turns[0].state, 'completed');
 		assert.deepStrictEqual(snapshot.state.turns[0].response.map(part => part.kind), ['toolCall', 'toolResult', 'text']);
 		const reused = await mutate(connection, 'operation-reuse-submission', Object.freeze({
-			kind: 'createSession', sessionType: sessionTypeId,
+			kind: 'createSession', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({ model: null, origin: Object.freeze({ kind: 'user' }), initialSubmission: prepared })]),
 		}));
 		assert.equal(reused.outcome.kind, 'failed');
@@ -1244,7 +2224,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			contentResources,
 		);
 		const connection = await initialize(authority, 'client-content-draft', Object.freeze([getAgentHostSessionsChannelId()]));
-		const target = Object.freeze({ kind: 'draft', sessionType: sessionTypeId }) satisfies AgentHostSubmissionTarget;
+		const target = Object.freeze({ kind: 'draft', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate }) satisfies AgentHostSubmissionTarget;
 		const prepared = await prepare(
 			connection,
 			'submission-content-draft',
@@ -1255,6 +2235,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const payload = Object.freeze({
 			kind: 'createSession' as const,
 			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({
 				model: modelId,
 				origin: Object.freeze({ kind: 'user' as const }),
@@ -1316,6 +2297,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const created = await mutate(connection, 'operation-content-session', Object.freeze({
 			kind: 'createSession',
 			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({ model: null, origin: Object.freeze({ kind: 'user' }) })]),
 		}));
 		assert.equal(created.outcome.kind, 'succeeded');
@@ -1359,7 +2341,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const authority = await createAuthority(store, agent, 32, packageLifecycle);
 		const connection = await initialize(authority, 'client-delete', Object.freeze([getAgentHostSessionsChannelId()]));
 		const created = await mutate(connection, 'operation-create-two', Object.freeze({
-			kind: 'createSession', sessionType: sessionTypeId,
+			kind: 'createSession', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([
 				Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) }),
 				Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) }),
@@ -1406,6 +2388,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const created = await mutate(connection, 'operation-create-fails', Object.freeze({
 			kind: 'createSession',
 			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([]),
 		}));
 		assert.equal(created.outcome.kind, 'failed');
@@ -1424,10 +2407,15 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const packageLifecycle = await createPackageLifecycle(packageState, staged);
 		const authority = await createAuthority(store, agent, 32, packageLifecycle);
 		const connection = await initialize(authority, 'client-update-drain', Object.freeze([getAgentHostSessionsChannelId()]));
-		const prepared = await prepare(connection, 'submission-update-drain', Object.freeze({ kind: 'draft', sessionType: sessionTypeId }));
+		const prepared = await prepare(connection, 'submission-update-drain', Object.freeze({
+			kind: 'draft',
+			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
+		}));
 		const created = await mutate(connection, 'operation-update-session', Object.freeze({
 			kind: 'createSession',
 			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }), initialSubmission: prepared })]),
 		}));
 		assert.equal(created.outcome.kind, 'succeeded');
@@ -1482,6 +2470,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const created = await mutate(connection, 'operation-create-after-runtime-update', Object.freeze({
 			kind: 'createSession',
 			sessionType: sessionTypeId,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([]),
 		}));
 
@@ -1501,7 +2490,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const authority = await createAuthority(store, agent, 32, packageLifecycle);
 		const connection = await initialize(authority, 'client-update-rollback', Object.freeze([getAgentHostSessionsChannelId()]));
 		const created = await mutate(connection, 'operation-update-rollback-session', Object.freeze({
-			kind: 'createSession', sessionType: sessionTypeId,
+			kind: 'createSession', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }) })]),
 		}));
 		assert.equal(created.outcome.kind, 'succeeded');
@@ -1533,11 +2522,11 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const toolAuthority = new TestToolTurnAuthority();
 		const authority = await createAuthority(store, agent, 32, packageLifecycle, toolAuthority);
 		const connection = await initialize(authority, 'client-close', Object.freeze([getAgentHostSessionsChannelId()]));
-		const target = Object.freeze({ kind: 'draft', sessionType: sessionTypeId }) satisfies AgentHostSubmissionTarget;
+		const target = Object.freeze({ kind: 'draft', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate }) satisfies AgentHostSubmissionTarget;
 		const firstSubmission = await prepare(connection, 'submission-close-1', target);
 		const secondSubmission = await prepare(connection, 'submission-close-2', target);
 		const created = await mutate(connection, 'operation-close-session', Object.freeze({
-			kind: 'createSession', sessionType: sessionTypeId,
+			kind: 'createSession', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([
 				Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }), initialSubmission: firstSubmission }),
 				Object.freeze({ model: modelId, origin: Object.freeze({ kind: 'user' }), initialSubmission: secondSubmission }),
@@ -1559,6 +2548,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 
 	test('imports the one legacy key atomically before deletion with history and image ownership preserved', async () => {
 		const store = new MemoryCatalogStore();
+		store.state = createEmptyAgentHostCatalog(Object.freeze([optionalMigrationAgentDefaults]));
 		const serialized = JSON.stringify({
 			version: 3,
 			sessions: [{
@@ -1602,6 +2592,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			agentId,
 			sessionType: sessionTypeId,
 			resumeSchema,
+			agentDefaults: Object.freeze([migrationAgentDefaults]),
+			sessionConfiguration: migrationSessionConfiguration,
 		});
 		assert.equal(deletedAfterCommit, true);
 		const record = store.state?.sessions[0];
@@ -1612,6 +2604,11 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		assert.equal(record?.chats[0].state.turns[0].user.attachments[0].content?.kind, 'inline');
 		assert.equal(record?.chats[0].state.turns[0].response[0].kind, 'text');
 		assert.equal(record?.resume?.schema, resumeSchema);
+		assert.deepStrictEqual(
+			store.state?.agentDefaults.map(state => state.schema.agent),
+			[optionalAgentId, agentId],
+		);
+		assert.deepStrictEqual(store.state?.agentDefaults[0], optionalMigrationAgentDefaults);
 		assert.deepStrictEqual(JSON.parse(record?.resume?.data ?? ''), {
 			kind: 'session',
 			version: 1,
@@ -1675,6 +2672,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			agentId,
 			sessionType: sessionTypeId,
 			resumeSchema,
+			agentDefaults: Object.freeze([migrationAgentDefaults]),
+			sessionConfiguration: migrationSessionConfiguration,
 		};
 		await assert.rejects(migrateLegacySessionsCatalog(options), /injected companion crash/);
 		assert.ok(sourceValue);
@@ -1718,6 +2717,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			agentId,
 			sessionType: sessionTypeId,
 			resumeSchema,
+			agentDefaults: Object.freeze([migrationAgentDefaults]),
+			sessionConfiguration: migrationSessionConfiguration,
 		};
 		await assert.rejects(migrateLegacySessionsCatalog(options), /source deletion crash/);
 		assert.ok(sourceValue);
@@ -1733,7 +2734,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		let hostSourceDeleted = false;
 		const hostStore = new MemoryCatalogStore();
 		hostStore.state = Object.freeze({
-			...createEmptyAgentHostCatalog(),
+			...createEmptyAgentHostCatalog(Object.freeze([migrationAgentDefaults])),
 			completedMigrations: Object.freeze([Object.freeze({
 				id: 'legacy-sessions-v3',
 				sourceDigest: createAgentHostPayloadDigest(`sha256:${'a'.repeat(64)}`),
@@ -1750,6 +2751,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			agentId,
 			sessionType: sessionTypeId,
 			resumeSchema,
+			agentDefaults: Object.freeze([migrationAgentDefaults]),
+			sessionConfiguration: migrationSessionConfiguration,
 		}), /Agent Host catalog conflicts/);
 		assert.equal(hostSourceDeleted, false);
 
@@ -1772,6 +2775,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			agentId,
 			sessionType: sessionTypeId,
 			resumeSchema,
+			agentDefaults: Object.freeze([migrationAgentDefaults]),
+			sessionConfiguration: migrationSessionConfiguration,
 		}), /Chat presentation storage conflicts/);
 		assert.equal(companionSourceDeleted, false);
 		assert.equal(companionStore.state, undefined);

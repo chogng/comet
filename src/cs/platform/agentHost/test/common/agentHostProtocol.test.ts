@@ -233,6 +233,8 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 				materializedBackings: [],
 			},
 			agents: [],
+			agentRegistrations: [],
+			agentDefaults: [],
 			sessionTypes: [],
 		};
 		const result = {
@@ -291,6 +293,8 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 				materializedBackings: [],
 			},
 			agents: [],
+			agentRegistrations: [],
+			agentDefaults: [],
 			sessionTypes: [],
 		};
 		const replay: AgentHostReconnectResult = {
@@ -360,6 +364,10 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 			() => registry.begin(operationId, digest2),
 			error => assertErrorCode(error, AgentHostErrorCode.OperationDigestConflict),
 		);
+		assert.equal(registry.delete(operationId), true);
+		assert.equal(registry.size, 0);
+		assert.deepStrictEqual(registry.reconcile(operationId, digest1), { kind: 'unknown' });
+		assert.equal(registry.delete(operationId), false);
 	});
 
 	test('computes the same canonical payload digest regardless of object key order', async () => {

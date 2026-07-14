@@ -11,6 +11,7 @@ import path from 'node:path';
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { CancellationError } from 'cs/base/common/errors';
 import type { IAgentModelDescriptor } from 'cs/platform/agentHost/common/agent';
+import { validateAndFreezeAgentConfigurationSchema } from 'cs/platform/agentHost/common/configuration';
 import {
 	assertAgentHostAttachment,
 	assertAgentHostInteractionTarget,
@@ -72,6 +73,11 @@ export interface IOpenAIChatCompletionsConnection {
 export interface IOpenAIChatCompletionsConnectionResolutionRequest {
 	readonly runtime: string;
 	readonly model: AgentModelId;
+	readonly step: Pick<
+		ICometModelStepRequest,
+		'modelConfiguration' | 'credentials' | 'runtimeRegistration' | 'session' | 'chat' | 'turn'
+	>;
+	readonly token: CancellationToken;
 	readonly signal: AbortSignal;
 }
 
@@ -747,6 +753,10 @@ function validateDescriptor(descriptor: IAgentModelDescriptor): IAgentModelDescr
 		revision: descriptor.revision,
 		displayName: descriptor.displayName,
 		enabled: descriptor.enabled,
+		configurationSchema: validateAndFreezeAgentConfigurationSchema(descriptor.configurationSchema, {
+			agent: COMET_AGENT_ID,
+			scope: 'model',
+		}),
 		toolSchemaProfiles: Object.freeze([COMET_TOOL_SCHEMA_PROFILE]),
 		attachments: Object.freeze({
 			carriers: Object.freeze([...attachments.carriers]),
@@ -771,7 +781,7 @@ function validateEndpoint(value: unknown): string {
 		return invalid('invalidConfiguration', 'Invalid OpenAI Chat Completions endpoint', 'endpoint', value);
 	}
 	if (
-		(endpoint.protocol !== 'https:' && endpoint.protocol !== 'http:')
+		endpoint.protocol !== 'https:'
 		|| endpoint.username.length !== 0
 		|| endpoint.password.length !== 0
 		|| endpoint.hash.length !== 0
@@ -1618,7 +1628,7 @@ export class OpenAIChatCompletionsModelRuntime implements ICometModelRuntime {
 			? request.systemPrompt
 			: `${request.systemPrompt}\n\nCanonical workspace context: ${encodeAgentHostProtocolValue(request.workspace)}`;
 		return this.runControlled(request.deadline, token, async signal => {
-			const connection = await this.resolveConnection(signal);
+			const connection = await this.resolveConnection(request, token, signal);
 			const converted = await convertMessages(request, projected, this.attachmentMediaTypes, signal);
 			const requestValue: Record<string, AgentHostProtocolValue> = {
 				model: connection.providerModel,
@@ -1677,10 +1687,20 @@ export class OpenAIChatCompletionsModelRuntime implements ICometModelRuntime {
 		});
 	}
 
-	private async resolveConnection(signal: AbortSignal): Promise<IOpenAIChatCompletionsConnection> {
+	private async resolveConnection(
+		request: ICometModelStepRequest,
+		token: CancellationToken,
+		signal: AbortSignal,
+	): Promise<IOpenAIChatCompletionsConnection> {
 		let connection: IOpenAIChatCompletionsConnection;
 		try {
-			connection = await this.connectionResolver.resolve({ runtime: this.id, model: this.descriptor.id, signal });
+			connection = await this.connectionResolver.resolve({
+				runtime: this.id,
+				model: this.descriptor.id,
+				step: request,
+				token,
+				signal,
+			});
 		} catch (error) {
 			if (error instanceof CometModelError || error instanceof CancellationError) {
 				throw error;
@@ -1694,7 +1714,7 @@ export class OpenAIChatCompletionsModelRuntime implements ICometModelRuntime {
 			invalid('connectionResolutionFailed', 'OpenAI Chat Completions connection resolver returned an invalid value', 'connection', connection);
 		}
 		if (typeof connection.apiKey !== 'string' || connection.apiKey.length === 0) {
-			invalid('authenticationRequired', 'OpenAI Chat Completions authentication is required', 'connection.apiKey', 'missing');
+			invalid('providerCredentialRequired', 'OpenAI Chat Completions credential is required', 'connection.apiKey', 'missing');
 		}
 		if (connection.apiKey.length > 8_192 || connection.apiKey.trim() !== connection.apiKey || /[\r\n]/.test(connection.apiKey)) {
 			invalid('invalidConfiguration', 'Invalid OpenAI Chat Completions API key', 'connection.apiKey', 'invalid-secret');

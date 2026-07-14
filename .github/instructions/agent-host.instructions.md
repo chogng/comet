@@ -74,6 +74,12 @@ binding, target-backed Tools, or lazy Feature operations.
 - Connected runtime authentication grants registration authority for exact
   Agent IDs and is separate from product-client transport authentication and
   Agent SDK or model-provider credentials.
+- Configuration may persist only typed credential references. Before execution,
+  bind the exact declared references and installed package secret grants to the
+  accepted package, Agent, runtime registration, Session, Chat, and Turn. Raw
+  values resolve only through that active Turn authority, are never copied into
+  configuration, profiles, catalogs, logs, or diagnostics, and have no
+  alternate credential source.
 - Agent runtimes own their execution strategy, capabilities, opaque resume
   data, SDK or model-provider calls, event conversion, and Tool projection.
   The Comet runtime owns Comet's model and Tool orchestration loop. Runtimes

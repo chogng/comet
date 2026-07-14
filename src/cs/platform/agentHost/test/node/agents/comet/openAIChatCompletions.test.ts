@@ -13,6 +13,11 @@ import { suite, test } from 'node:test';
 import { CancellationTokenNone } from 'cs/base/common/cancellation';
 import type { IAgentModelDescriptor } from 'cs/platform/agentHost/common/agent';
 import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationSchema,
+} from 'cs/platform/agentHost/common/configuration';
+import {
 	createAgentAttachmentId,
 	createAgentAttachmentProducerTypeId,
 	createAgentAttachmentRepresentationSchemaId,
@@ -48,6 +53,7 @@ import {
 	type ICometModelAttachment,
 	type ICometModelStepRequest,
 } from 'cs/platform/agentHost/node/agents/comet/cometModel';
+import { COMET_AGENT_ID } from 'cs/platform/agentHost/node/agents/comet/cometAgent';
 import {
 	OpenAIChatCompletionsModelRuntime,
 	type IOpenAIChatCompletionsConnectionResolver,
@@ -56,18 +62,32 @@ import {
 
 const modelId = createAgentModelId('chat-model');
 const modelRevision = createAgentModelDescriptorRevision('chat-model.v1');
-const agentDescriptorRevision = createAgentDescriptorRevision('comet.descriptor.v1');
+const agentDescriptorRevision = createAgentDescriptorRevision('comet.descriptor.v2');
 const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.runtime.v1');
 const sessionId = createAgentSessionId('session-1');
 const chatId = createAgentChatId('chat-1');
 const turnId = createAgentTurnId('turn-1');
 const registrationId = createAgentToolRegistrationId('read-registration');
+const modelConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: COMET_AGENT_ID,
+	scope: 'model',
+	revision: 'chat-model.configuration.v1',
+	properties: [],
+});
+const modelConfiguration = validateAndFreezeAgentConfigurationCandidate(
+	modelConfigurationSchema,
+	{ schema: modelConfigurationSchema.revision, values: {} },
+	'model',
+	true,
+);
 
 const descriptor: IAgentModelDescriptor = {
 	id: modelId,
 	revision: modelRevision,
 	displayName: 'Chat Completions test model',
 	enabled: true,
+	configurationSchema: modelConfigurationSchema,
 	toolSchemaProfiles: [COMET_TOOL_SCHEMA_PROFILE],
 	attachments: {
 		carriers: ['inline', 'reference'],
@@ -192,6 +212,9 @@ function stepRequest(overrides: Partial<ICometModelStepRequest> = {}): ICometMod
 			modelDescriptor: modelRevision,
 			data: '{}',
 		},
+		modelConfiguration,
+		credentials: [],
+		runtimeRegistration,
 		settings: maxTokensSettings as unknown as AgentHostProtocolValue,
 		systemPrompt: 'You are the exact Comet assistant.',
 		session: sessionId,
@@ -342,6 +365,25 @@ async function assertModelError(promise: Promise<unknown>, code: CometModelError
 }
 
 suite('OpenAIChatCompletionsModelRuntime', () => {
+	test('rejects plaintext HTTP endpoints before sending credentials', async () => {
+		let fetchCalls = 0;
+		const model = runtime(
+			async () => {
+				fetchCalls += 1;
+				return chatResponse({ role: 'assistant', content: 'Unexpected.' }, 'stop');
+			},
+			{
+				resolve: async () => ({
+					endpoint: 'http://attacker.example.test/v1/chat/completions',
+					apiKey: 'secret-test-key',
+					providerModel: 'provider-model',
+				}),
+			},
+		);
+		await assertModelError(model.executeStep(stepRequest(), CancellationTokenNone), 'invalidConfiguration');
+		assert.equal(fetchCalls, 0);
+	});
+
 	test('projects native history, tools, text, images, workspace, and max_tokens', async () => {
 		let capturedUrl: string | undefined;
 		let capturedInit: RequestInit | undefined;

@@ -13,6 +13,10 @@ import type {
 	IAgentRuntimeRegistration,
 } from 'cs/platform/agentHost/common/agent';
 import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationSchema,
+} from 'cs/platform/agentHost/common/configuration';
+import {
 	AgentId,
 	AgentPackageContentDigest,
 	AgentPackageId,
@@ -138,6 +142,20 @@ function createRegistration(
 	} = {},
 ): IAgentRuntimeRegistration {
 	const agentId = options.agentId ?? verifiedPackage.manifest.agentIds[0];
+	const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
+		profile: AgentConfigurationSchemaProfile,
+		agent: agentId,
+		scope: 'hostDefault',
+		revision: `host-defaults.${verifiedPackage.manifest.revision}.${agentId}`,
+		properties: [],
+	});
+	const sessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+		profile: AgentConfigurationSchemaProfile,
+		agent: agentId,
+		scope: 'session',
+		revision: `session.${verifiedPackage.manifest.revision}.${agentId}`,
+		properties: [],
+	});
 	return {
 		packageId: verifiedPackage.manifest.packageId,
 		agentId,
@@ -150,6 +168,9 @@ function createRegistration(
 		capabilityRevision: createAgentCapabilityRevision(
 			`capability.${verifiedPackage.manifest.revision}.${agentId}`,
 		),
+		hostDefaultsSchema,
+		initialSessionConfigurationSchema: sessionConfigurationSchema.revision,
+		supportedSessionConfigurationSchemas: [sessionConfigurationSchema.revision],
 		supportedToolSchemaProfiles: [createAgentToolSchemaProfileId('comet.tool.v1')],
 		supportedResumeSchemas: options.schemas ?? [createAgentResumeSchemaId('resume.v1')],
 		resumeMigrationEdges: options.migrationEdges ?? [],

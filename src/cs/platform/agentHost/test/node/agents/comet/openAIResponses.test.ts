@@ -15,6 +15,12 @@ import { CancellationError } from 'cs/base/common/errors';
 import type { IAgentExecutionProfileRequest, IAgentModelDescriptor } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
 import {
+	AgentConfigurationSchemaProfile,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
+import {
 	createAgentAttachmentId,
 	createAgentAttachmentProducerTypeId,
 	createAgentAttachmentRepresentationSchemaId,
@@ -22,6 +28,7 @@ import {
 	createAgentContentDigest,
 	createAgentContentReferenceId,
 	createAgentContentVersion,
+	createAgentConfigurationStateRevision,
 	createAgentDescriptorRevision,
 	createAgentExecutionPresetId,
 	createAgentExecutionProfileDigest,
@@ -66,7 +73,7 @@ import {
 
 const modelId = createAgentModelId('openai-model');
 const modelRevision = createAgentModelDescriptorRevision('openai-model.v1');
-const agentDescriptorRevision = createAgentDescriptorRevision('comet.descriptor.v1');
+const agentDescriptorRevision = createAgentDescriptorRevision('comet.descriptor.v2');
 const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.runtime.v1');
 const sessionId = createAgentSessionId('session-1');
 const chatId = createAgentChatId('chat-1');
@@ -75,6 +82,31 @@ const previousTurnId = createAgentTurnId('turn-1');
 const registrationId = createAgentToolRegistrationId('read-target-registration');
 const targetType = createAgentInteractionTargetTypeId('browser.document');
 const targetId = createAgentInteractionTargetId('target-1');
+const sessionConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: COMET_AGENT_ID,
+	scope: 'session',
+	revision: 'openai-responses.session-configuration.v1',
+	properties: [],
+});
+const sessionConfiguration = validateAndFreezeAgentConfigurationState({
+	schema: sessionConfigurationSchema,
+	revision: createAgentConfigurationStateRevision('openai-responses.session-state.v1'),
+	values: {},
+});
+const modelConfigurationSchema = validateAndFreezeAgentConfigurationSchema({
+	profile: AgentConfigurationSchemaProfile,
+	agent: COMET_AGENT_ID,
+	scope: 'model',
+	revision: 'openai-responses.model-configuration.v1',
+	properties: [],
+});
+const modelConfiguration = validateAndFreezeAgentConfigurationCandidate(
+	modelConfigurationSchema,
+	{ schema: modelConfigurationSchema.revision, values: {} },
+	'model',
+	true,
+);
 
 const settings: IOpenAIResponsesExecutionSettings = {
 	version: 1,
@@ -90,6 +122,7 @@ const descriptor: IAgentModelDescriptor = {
 	revision: modelRevision,
 	displayName: 'OpenAI Responses test model',
 	enabled: true,
+	configurationSchema: modelConfigurationSchema,
 	toolSchemaProfiles: [COMET_TOOL_SCHEMA_PROFILE],
 	attachments: {
 		carriers: ['inline', 'reference'],
@@ -247,6 +280,9 @@ function stepRequest(overrides: Partial<ICometModelStepRequest> = {}): ICometMod
 			modelDescriptor: modelRevision,
 			data: '{}',
 		},
+		modelConfiguration,
+		credentials: [],
+		runtimeRegistration,
 		settings: settings as unknown as AgentHostProtocolValue,
 		systemPrompt: 'You are the exact Comet assistant.',
 		session: sessionId,
@@ -434,25 +470,61 @@ suite('OpenAIResponsesExecutionProfileResolver', () => {
 			submission: createAgentSubmissionId('submission-1'),
 			selectionDigest: createAgentHostPayloadDigest(`sha256:${'d'.repeat(64)}`),
 			runtimeRegistration,
+			sessionConfiguration,
 		};
-		const user = await resolver.resolve({ ...base, selection: { kind: 'user', value: { model: modelId } } });
+		const user = await resolver.resolve({
+			...base,
+			selection: { kind: 'user', value: { model: modelId }, configuration: modelConfiguration },
+		});
 		assert.equal(user.modelRuntime, 'openai.responses.gpt-test');
 		assert.equal(user.maximumSteps, 6);
 		assert.deepEqual(user.settings, settings);
-		const product = await resolver.resolve({ ...base, selection: { kind: 'product', value: { preset } } });
+		const product = await resolver.resolve({
+			...base,
+			selection: { kind: 'product', value: { preset }, configuration: modelConfiguration },
+		});
 		assert.equal(product.maximumSteps, 4);
+		const selectionWithUnknownField: IAgentExecutionProfileRequest = {
+			...base,
+			selection: {
+				kind: 'user',
+				value: { model: modelId, fallback: preset },
+				configuration: modelConfiguration,
+			},
+		};
+		await assertModelError(resolver.resolve(selectionWithUnknownField), 'invalidExecutionSelection');
 		await assertModelError(resolver.resolve({
 			...base,
-			selection: { kind: 'user', value: { model: modelId, fallback: preset } },
-		} as IAgentExecutionProfileRequest), 'invalidExecutionSelection');
-		await assertModelError(resolver.resolve({
-			...base,
-			selection: { kind: 'user', value: { model: createAgentModelId('unknown-model') } },
+			selection: {
+				kind: 'user',
+				value: { model: createAgentModelId('unknown-model') },
+				configuration: modelConfiguration,
+			},
 		}), 'invalidExecutionSelection');
 	});
 });
 
 suite('OpenAIResponsesModelRuntime', () => {
+	test('rejects plaintext HTTP endpoints before sending credentials', async () => {
+		let fetchCalls = 0;
+		const model = runtime(
+			async () => {
+				fetchCalls += 1;
+				return response([]);
+			},
+			5_000,
+			{
+				resolve: async () => ({
+					endpoint: 'http://attacker.example.test/v1/responses',
+					apiKey: 'secret-test-key',
+					providerModel: 'gpt-test',
+				}),
+			},
+		);
+		await assertModelError(model.executeStep(stepRequest(), CancellationTokenNone), 'invalidConfiguration');
+		assert.equal(fetchCalls, 0);
+	});
+
 	test('registers without credentials and fails execution with a typed authentication error', async () => {
 		let fetchCalls = 0;
 		const model = runtime(
@@ -470,7 +542,7 @@ suite('OpenAIResponsesModelRuntime', () => {
 			},
 		);
 		assert.equal(model.descriptor.id, modelId);
-		await assertModelError(model.executeStep(stepRequest(), CancellationTokenNone), 'authenticationRequired');
+		await assertModelError(model.executeStep(stepRequest(), CancellationTokenNone), 'providerCredentialRequired');
 		assert.equal(fetchCalls, 0);
 	});
 

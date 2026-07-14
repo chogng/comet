@@ -15,7 +15,6 @@ import type {
   DeleteLibraryDocumentPayload,
   IndexDownloadedPdfPayload,
   LibraryDocumentStatusPayload,
-  LlmSettings,
   ListTranslationModelsPayload,
   ListLibraryDocumentsPayload,
   NativeOpenDialogOptions,
@@ -270,7 +269,6 @@ async function invokeCommand<TCommand extends AppCommand>(
   storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
-	updateLlmSettings: (settings: LlmSettings) => Promise<void>,
 	playwrightService: IPlaywrightService,
 	cancellationToken: CancellationToken,
   emitToRenderer?: (channel: string, payload: unknown) => void,
@@ -287,7 +285,6 @@ async function invokeCommand<TCommand extends AppCommand>(
     case 'save_settings':
       {
         const saved = await storage.saveSettings((payload as SaveSettingsPayload)?.settings ?? {});
-		await updateLlmSettings(saved.llm);
         themeMainService.updateSettings(saved);
         setMenuBarIconEnabled(saved.menuBarIconEnabled);
         if (micaMaterialTimeout) {
@@ -477,7 +474,6 @@ export function registerAppIpc(
   storage: AppStorageService,
   nativeHostMainService: NativeHostMainService,
   themeMainService: IThemeMainService,
-	updateLlmSettings: (settings: LlmSettings) => Promise<void>,
 ) {
   electronMainChannelServer.register();
 	const sharedProcessMainChannels = new Map<string, IServerChannel<string>>([
@@ -547,7 +543,6 @@ export function registerAppIpc(
         storage,
         nativeHostMainService,
         themeMainService,
-		updateLlmSettings,
 		getPlaywrightService(event),
 		cancellationToken,
         (channel, eventPayload) => {
@@ -574,7 +569,6 @@ export function registerAppIpc(
           storage,
           nativeHostMainService,
           themeMainService,
-		  updateLlmSettings,
 		  getPlaywrightService(_event),
 		  CancellationTokenNone,
           (channel, eventPayload) => {

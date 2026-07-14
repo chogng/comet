@@ -14,11 +14,11 @@ import type { IpcMainInvokeEvent } from 'electron';
 
 import { Event, type Event as EventType } from 'cs/base/common/event';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
-import type { LlmSettings } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { InMemoryStorageDatabase, Storage } from 'cs/base/parts/storage/common/storage';
 import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHostMain';
 import { COMET_AUTOMATIC_EXECUTION_PRESET } from 'cs/code/electron-main/agentHost/cometModelCatalog';
 import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/common/connectionChannel';
+import { resolveAgentModelConfigurationCandidate } from 'cs/platform/agentHost/common/configuration';
 import {
 	createAgentHostOperationId,
 	createAgentHostProtocolVersion,
@@ -30,7 +30,6 @@ import {
 	computeAgentHostSubmissionCaptureDigest,
 	getAgentHostRootChannelId,
 	getAgentHostSessionsChannelId,
-	type AgentHostChannelAction,
 	type AgentHostMutationOutcome,
 	type AgentHostMutationPayload,
 	type AgentHostPrepareSubmissionResult,
@@ -41,49 +40,72 @@ import {
 	ApplicationStorageAgentHostCatalogStore,
 	ApplicationStorageAgentPackageStateStore,
 } from 'cs/platform/agentHost/node/storage/agentHostStateStores';
+import {
+	COMET_MODEL_CREDENTIAL_CONFIGURATION_PROPERTY,
+	COMET_MODEL_ENDPOINT_CONFIGURATION_PROPERTY,
+	COMET_MODEL_PROVIDER_MODEL_CONFIGURATION_PROPERTY,
+	COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+	COMET_SESSION_CONFIGURATION_SCHEMA,
+} from 'cs/platform/agentHost/node/agents/comet/cometConfiguration';
+import type { IProviderApiKeySecretStorage, ProviderApiKeyRef } from 'cs/platform/secrets/common/secret';
 
-const modelOption = 'openai:gpt-5.5:medium';
-const packageStateStorageKey = 'agentHost.packages.v2';
+const productModels = Object.freeze([
+	Object.freeze({
+		id: 'glm:glm-4.7-flash',
+		endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+		providerModel: 'glm-4.7-flash',
+		credentialReference: 'glm',
+	}),
+	Object.freeze({
+		id: 'glm:glm-4.6v-flash',
+		endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+		providerModel: 'glm-4.6v-flash',
+		credentialReference: 'glm',
+	}),
+	Object.freeze({
+		id: 'kimi:kimi-k2.5',
+		endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+		providerModel: 'kimi-k2.5',
+		credentialReference: 'kimi',
+	}),
+	Object.freeze({
+		id: 'deepseek:deepseek-v4-flash',
+		endpoint: 'https://api.deepseek.com/chat/completions',
+		providerModel: 'deepseek-v4-flash',
+		credentialReference: 'deepseek',
+	}),
+	Object.freeze({
+		id: 'openai:gpt-5-codex:medium',
+		endpoint: 'https://api.openai.com/v1/responses',
+		providerModel: 'gpt-5-codex',
+		credentialReference: 'openai',
+	}),
+	Object.freeze({
+		id: 'openai:gpt-5.5:medium',
+		endpoint: 'https://api.openai.com/v1/responses',
+		providerModel: 'gpt-5.5',
+		credentialReference: 'openai',
+	}),
+]);
+const automaticModelOption = productModels[0].id;
+const packageStateStorageKey = 'agentHost.packages.v3';
+const sessionConfigurationCandidate = Object.freeze({
+	schema: COMET_SESSION_CONFIGURATION_SCHEMA.revision,
+	values: Object.freeze({}),
+});
 
-function provider(baseUrl = '') {
-	return {
-		apiKey: '',
-		baseUrl,
-		selectedModelOption: '',
-		enabledModelOptions: [] as string[],
-	};
-}
+class TestProviderApiKeySecretStorage implements IProviderApiKeySecretStorage {
+	getApiKey(ref: ProviderApiKeyRef): Promise<string> {
+		return Promise.resolve(`${ref.providerId}-test-key`);
+	}
 
-function settings(): LlmSettings {
-	return {
-		activeProvider: 'openai',
-		providers: {
-			glm: provider('https://open.bigmodel.cn/api/paas/v4'),
-			kimi: provider('https://api.moonshot.cn/v1'),
-			deepseek: provider('https://api.deepseek.com'),
-			anthropic: provider(),
-			openai: {
-				apiKey: 'test-key',
-				baseUrl: 'https://api.openai.com/v1',
-				selectedModelOption: modelOption,
-				enabledModelOptions: [modelOption],
-			},
-			gemini: provider('https://generativelanguage.googleapis.com/v1beta/openai/'),
-			custom: provider(),
-		},
-	};
-}
+	setApiKey(_ref: ProviderApiKeyRef, _apiKey: string): Promise<void> {
+		return Promise.resolve();
+	}
 
-function nextSettings(): LlmSettings {
-	const result = settings();
-	const nextModel = 'glm:glm-4.7-flash';
-	result.activeProvider = 'glm';
-	result.providers.openai.selectedModelOption = '';
-	result.providers.openai.enabledModelOptions = [];
-	result.providers.glm.apiKey = 'next-test-key';
-	result.providers.glm.selectedModelOption = nextModel;
-	result.providers.glm.enabledModelOptions = [nextModel];
-	return result;
+	deleteApiKey(_ref: ProviderApiKeyRef): Promise<void> {
+		return Promise.resolve();
+	}
 }
 
 class TestRendererSender {
@@ -161,15 +183,10 @@ async function createHost(
 	artifactPath: string,
 	contentRoot: string,
 	channelServer: RecordingChannelServer,
-	settingsAuthority: { current: LlmSettings } = { current: settings() },
 ): Promise<LocalAgentHostMain> {
 	return LocalAgentHostMain.create({
 		storage,
-		settings: settingsAuthority.current,
-		loadSettings: async signal => {
-			assert.equal(signal.aborted, false);
-			return settingsAuthority.current;
-		},
+		providerApiKeySecretStorage: new TestProviderApiKeySecretStorage(),
 		contentMaterializationRoot: contentRoot,
 		bundledArtifactPath: artifactPath,
 		channelServer,
@@ -214,6 +231,8 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 			throw new Error('Production Agent package state was not persisted.');
 		}
 		assert.equal(packageState.installedPackages.length, 1);
+		assert.equal(packageState.activeRegistrations[0].revision, 'comet.embedded.v2');
+		assert.equal(packageState.activeRegistrations[0].descriptorRevision, 'comet.descriptor.v2');
 		const installed = packageState.installedPackages[0];
 		assert.equal(installed.packageId, 'comet');
 		assert.equal(installed.distribution, 'bundled');
@@ -233,7 +252,7 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		const identity = await channel.call<{ readonly connection: string }>(context, 'identity', undefined);
 		const initialized = await channel.call<IAgentHostInitializeResult>(context, 'initialize', {
 			connection: identity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('1')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
 			capabilities: Object.freeze([]),
 			locale: 'en',
 			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
@@ -244,9 +263,53 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 			throw new Error('Agent Host root snapshot is missing.');
 		}
 		assert.equal(root.state.agents.length, 1);
+		assert.equal(root.state.agentRegistrations.length, 1);
+		assert.equal(
+			root.state.agentRegistrations[0].initialSessionConfigurationSchema,
+			COMET_SESSION_CONFIGURATION_SCHEMA.revision,
+		);
+		assert.equal(root.state.agentDefaults.length, 1);
 		assert.equal(root.state.agents[0].id, 'comet');
-		assert.equal(root.state.agents[0].authenticationRequired, false);
-		assert.deepEqual(root.state.agents[0].models.map(model => model.id), [createAgentModelId(modelOption)]);
+		assert.equal(root.state.agents[0].requiresAgentAuthentication, false);
+		assert.deepEqual(
+			root.state.agents[0].models.map(model => model.id),
+			productModels.map(model => createAgentModelId(model.id)),
+		);
+		assert.deepEqual(
+			root.state.agents[0].models.map(model => {
+				const configuration = resolveAgentModelConfigurationCandidate(
+					model.configurationSchema,
+					Object.freeze({
+						schema: model.configurationSchema.revision,
+						values: Object.freeze({}),
+					}),
+				);
+				return {
+					id: model.id,
+					scope: model.configurationSchema.scope,
+					properties: model.configurationSchema.properties.map(property => property.id),
+					values: configuration.values,
+				};
+			}),
+			productModels.map(model => ({
+				id: createAgentModelId(model.id),
+				scope: 'model',
+				properties: [
+					COMET_MODEL_ENDPOINT_CONFIGURATION_PROPERTY,
+					COMET_MODEL_PROVIDER_MODEL_CONFIGURATION_PROPERTY,
+					COMET_MODEL_CREDENTIAL_CONFIGURATION_PROPERTY,
+				],
+				values: {
+					[COMET_MODEL_ENDPOINT_CONFIGURATION_PROPERTY]: model.endpoint,
+					[COMET_MODEL_PROVIDER_MODEL_CONFIGURATION_PROPERTY]: model.providerModel,
+					[COMET_MODEL_CREDENTIAL_CONFIGURATION_PROPERTY]: {
+						provider: COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+						scope: 'llm',
+						reference: model.credentialReference,
+					},
+				},
+			})),
+		);
 		assert.equal(root.state.sessionTypes.length, 1);
 		const sessionType = root.state.sessionTypes[0];
 		assert.equal(sessionType.id, 'comet');
@@ -257,8 +320,21 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 				kind: 'localized',
 				key: 'agentHost.executionPreset.automatic',
 			},
-			model: createAgentModelId(modelOption),
+			model: createAgentModelId(automaticModelOption),
 		}]);
+		const automaticModel = root.state.agents[0].models.find(model => (
+			model.id === createAgentModelId(automaticModelOption)
+		));
+		if (automaticModel === undefined) {
+			throw new Error('Comet automatic model is missing.');
+		}
+		const modelConfigurationCandidate = resolveAgentModelConfigurationCandidate(
+			automaticModel.configurationSchema,
+			Object.freeze({
+				schema: automaticModel.configurationSchema.revision,
+				values: Object.freeze({}),
+			}),
+		);
 
 		const capture = Object.freeze({
 			message: 'Use the configured automatic model.',
@@ -267,10 +343,18 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		});
 		const prepareRequest: IAgentHostPrepareSubmissionRequest = Object.freeze({
 			submission: createAgentSubmissionId('production-automatic'),
-			target: Object.freeze({ kind: 'draft', sessionType: sessionType.id }),
+			target: Object.freeze({
+				kind: 'draft',
+				sessionType: sessionType.id,
+				configuration: sessionConfigurationCandidate,
+			}),
 			capture,
 			captureDigest: await computeAgentHostSubmissionCaptureDigest(capture),
-			executionSelection: Object.freeze({ kind: 'preset', preset: COMET_AUTOMATIC_EXECUTION_PRESET }),
+			executionSelection: Object.freeze({
+				kind: 'preset',
+				preset: COMET_AUTOMATIC_EXECUTION_PRESET,
+				configuration: modelConfigurationCandidate,
+			}),
 			toolPolicy: Object.freeze({ kind: 'all' }),
 		});
 		const prepared = await channel.call<AgentHostPrepareSubmissionResult>(
@@ -282,12 +366,20 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		if (prepared.kind !== 'prepared') {
 			throw new Error('Automatic submission was not prepared.');
 		}
-		assert.equal(prepared.submission.executionProfile.modelDescriptor, root.state.agents[0].models[0].revision);
+		assert.equal(prepared.submission.executionProfile.modelDescriptor, automaticModel.revision);
+		assert.deepEqual(prepared.submission.modelConfiguration, modelConfigurationCandidate);
+		assert.deepEqual(prepared.submission.credentials, [{
+			provider: COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
+			scope: 'llm',
+			reference: 'glm',
+		}]);
+		assert.equal(JSON.stringify(prepared).includes('glm-test-key'), false);
 		assert.deepEqual(prepared.submission.toolSet.registrations, []);
 
 		const payload: AgentHostMutationPayload = Object.freeze({
 			kind: 'createSession',
 			sessionType: sessionType.id,
+			configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([]),
 		});
 		const outcome = await channel.call<AgentHostMutationOutcome>(context, 'mutate', {
@@ -309,116 +401,6 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		}
 		assert.equal(catalog.sessions.length, 1);
 		assert.equal(catalog.sessions[0].state.type, 'comet');
-	} finally {
-		await host?.shutdown();
-		storage.dispose();
-		await rm(temporaryRoot, { recursive: true, force: true });
-	}
-});
-
-test('saved LLM settings hot-publish one contiguous root revision and route only new preparations to the new catalog', async () => {
-	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'comet-agent-host-hot-settings-'));
-	const storage = await createStorage();
-	let host: LocalAgentHostMain | undefined;
-	try {
-		const artifactPath = path.join(temporaryRoot, 'comet-main.js');
-		await writeFile(artifactPath, 'verified embedded Comet artifact');
-		const channelServer = new RecordingChannelServer();
-		const settingsAuthority = { current: settings() };
-		host = await createHost(
-			storage,
-			artifactPath,
-			path.join(temporaryRoot, 'content'),
-			channelServer,
-			settingsAuthority,
-		);
-		const channel = channelServer.registeredChannel;
-		if (channel === undefined) {
-			throw new Error('Agent Host IPC channel was not registered.');
-		}
-		const context = { sender: new TestRendererSender() } as unknown as IpcMainInvokeEvent;
-		const identity = await channel.call<{ readonly connection: string }>(context, 'identity', undefined);
-		const initialized = await channel.call<IAgentHostInitializeResult>(context, 'initialize', {
-			connection: identity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('1')]),
-			capabilities: Object.freeze([]),
-			locale: 'en',
-			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
-			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
-		});
-		const initialRoot = initialized.snapshots.find(snapshot => snapshot.kind === 'root');
-		if (initialRoot === undefined || initialRoot.kind !== 'root') {
-			throw new Error('Agent Host root snapshot is missing.');
-		}
-		const actions: AgentHostChannelAction[] = [];
-		const listener = channel.listen<AgentHostChannelAction>(context, 'onDidReceiveAction', undefined)(action => {
-			actions.push(action);
-		});
-		try {
-			const capture = Object.freeze({
-				message: 'Capture the old automatic profile.',
-				attachments: Object.freeze([]),
-				interactionTargets: Object.freeze([]),
-			});
-			const oldPreparation = await channel.call<AgentHostPrepareSubmissionResult>(context, 'prepareSubmission', {
-				submission: createAgentSubmissionId('hot-settings-old'),
-				target: Object.freeze({ kind: 'draft', sessionType: initialRoot.state.sessionTypes[0].id }),
-				capture,
-				captureDigest: await computeAgentHostSubmissionCaptureDigest(capture),
-				executionSelection: Object.freeze({ kind: 'preset', preset: COMET_AUTOMATIC_EXECUTION_PRESET }),
-				toolPolicy: Object.freeze({ kind: 'all' }),
-			});
-			assert.equal(oldPreparation.kind, 'prepared');
-			if (oldPreparation.kind !== 'prepared') {
-				throw new Error('Old automatic submission was not prepared.');
-			}
-
-			settingsAuthority.current = nextSettings();
-			await host.updateSettings(settingsAuthority.current);
-			assert.equal(channelServer.registeredChannel, channel);
-			assert.equal(actions.length, 1);
-			const rootAction = actions[0];
-			assert.equal(rootAction.kind, 'root');
-			if (rootAction.kind !== 'root') {
-				throw new Error('Hot settings did not publish a root action.');
-			}
-			assert.equal(rootAction.hostSequence, initialized.hostSequence + 1);
-			assert.equal(rootAction.revision, initialRoot.revision + 1);
-			assert.equal(rootAction.cause.kind, 'host');
-			assert.deepEqual(rootAction.action.state.agents[0].models.map(model => model.id), [
-				createAgentModelId('glm:glm-4.7-flash'),
-			]);
-			assert.deepEqual(rootAction.action.state.sessionTypes[0].models, [
-				createAgentModelId('glm:glm-4.7-flash'),
-			]);
-
-			const nextPreparation = await channel.call<AgentHostPrepareSubmissionResult>(context, 'prepareSubmission', {
-				submission: createAgentSubmissionId('hot-settings-next'),
-				target: Object.freeze({ kind: 'draft', sessionType: rootAction.action.state.sessionTypes[0].id }),
-				capture,
-				captureDigest: await computeAgentHostSubmissionCaptureDigest(capture),
-				executionSelection: Object.freeze({ kind: 'preset', preset: COMET_AUTOMATIC_EXECUTION_PRESET }),
-				toolPolicy: Object.freeze({ kind: 'all' }),
-			});
-			assert.equal(nextPreparation.kind, 'prepared');
-			if (nextPreparation.kind !== 'prepared') {
-				throw new Error('New automatic submission was not prepared.');
-			}
-			assert.equal(
-				oldPreparation.submission.executionProfile.modelDescriptor,
-				initialRoot.state.agents[0].models[0].revision,
-			);
-			assert.equal(
-				nextPreparation.submission.executionProfile.modelDescriptor,
-				rootAction.action.state.agents[0].models[0].revision,
-			);
-			assert.notEqual(
-				nextPreparation.submission.executionProfile.modelDescriptor,
-				oldPreparation.submission.executionProfile.modelDescriptor,
-			);
-		} finally {
-			listener.dispose();
-		}
 	} finally {
 		await host?.shutdown();
 		storage.dispose();
@@ -486,11 +468,10 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.ok(closeHostIndex < closeStorageIndex);
 	assert.match(mainSource, /bundledArtifactPath: fileURLToPath\(import\.meta\.url\)/);
 	assert.match(mainSource, /contentMaterializationRoot: environmentMainPaths\.agentHostContentDir/);
-	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService, settings => agentHost\.updateSettings\(settings\)\)/);
+	assert.match(mainSource, /providerApiKeySecretStorage: storage\.providerApiKeySecretStorage/);
+	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService\)/);
 	const saveSettingsIndex = ipcSource.indexOf('const saved = await storage.saveSettings');
-	const updateAgentHostIndex = ipcSource.indexOf('await updateLlmSettings(saved.llm)', saveSettingsIndex);
 	const updateThemeIndex = ipcSource.indexOf('themeMainService.updateSettings(saved)', saveSettingsIndex);
 	assert.ok(saveSettingsIndex >= 0);
-	assert.ok(saveSettingsIndex < updateAgentHostIndex);
-	assert.ok(updateAgentHostIndex < updateThemeIndex);
+	assert.ok(saveSettingsIndex < updateThemeIndex);
 });

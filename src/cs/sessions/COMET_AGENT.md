@@ -36,10 +36,15 @@ for package updates. Product distribution retains the previous Comet endpoint
 until that transaction commits.
 
 Being installed does not imply that a usable model endpoint or credentials
-exist. Comet publishes truthful readiness and authentication state. If no exact
-model execution profile can be resolved, an initial-Turn submission or
-later send fails explicitly; Comet does not select an unrelated provider or
-Agent. Empty Session creation remains governed by the ordinary Host capability.
+exist. Agent authentication state describes only authentication of the Agent
+runtime registration; the bundled embedded Comet runtime requires none. A
+model descriptor's enabled state describes product-catalog availability, not
+the presence of its referenced provider secret. Credential material is neither
+probed nor cached as model discovery state and resolves only for an accepted
+Turn. If no exact model execution profile or credential can be resolved, the
+addressed Turn fails explicitly; Comet does not select an unrelated provider,
+credential, runtime, or Agent. Empty Session creation remains governed by the
+ordinary Host capability.
 
 Package lifecycle is defined in
 [Agent package architecture](AGENT_PACKAGES.md). The Host-facing runtime,
@@ -73,10 +78,12 @@ Agent Host invokes the common resolution operation with the exact Comet runtime
 registration, stable submission, and normalized user or product selection.
 Comet returns one bounded immutable profile before attachment and Tool-set
 preparation. Its common envelope names exact Agent and model descriptor
-revisions, while its opaque body contains only Comet-owned execution choices:
+revisions. Agent Host binds the separately resolved model configuration to the
+same accepted Turn, while the opaque profile body contains only Comet-owned
+execution choices:
 
-- the exact model endpoint binding corresponding to the envelope's model
-  descriptor revision;
+- the exact model runtime and provider-projection revision corresponding to the
+  envelope's model descriptor revision;
 - the exact Comet instruction-profile revision;
 - reasoning, response, and provider settings supported by that model;
 - Agent-owned step, token, context, and concurrency budget policy, subsequently
@@ -87,6 +94,8 @@ Agent Host validates the envelope and separately creates one immutable Turn
 execution binding after request preparation. It contains:
 
 - the complete bounded Comet execution-profile envelope;
+- the complete resolved model configuration and its exact schema revision;
+- the exact typed credential references authorized for this Turn;
 - the exact Agent runtime registration revision;
 - the accepted canonical Tool-set revision, including its Tool Schema Profile;
 - Host policy ceilings, accepted deadline, cancellation identity, and output
@@ -108,11 +117,27 @@ successful provider, and installed SDKs never choose a model implicitly. A
 later model change creates a new profile revision and affects only Turns that
 bind it.
 
-Secrets are referenced through the Agent authentication boundary and are not
-stored in Chat configuration, Turn input, package manifests, or opaque resume
-data. Model availability is validated before Host acceptance where possible.
-If the exact endpoint becomes unavailable after acceptance, the committed Turn
-fails; it is not rerouted to another model, provider, runtime, or Agent.
+Product composition owns the exact Comet model catalog and automatic preset.
+Each model descriptor publishes its own model-configuration schema with one
+fixed HTTPS provider endpoint, provider-native model identity, and exact typed
+credential reference as complete validated values. These values cannot be
+recombined across product-owned model descriptors. The configuration-schema
+revision content-addresses the complete schema. The model-descriptor revision
+content-addresses that schema together with the runtime identity, provider
+protocol settings, and attachment capabilities. Provider-specific request
+controls remain opaque execution-profile data interpreted by that model
+runtime. Comet does not derive Agent Host models from the general application
+settings object, SDK discovery, credential presence, or a mutable provider
+registry.
+
+Secrets are referenced through the Agent credential boundary and are not
+stored in Chat configuration, model configuration, Turn input, package
+manifests, execution profiles, or opaque resume data. Each model step resolves
+only the reference bound to its exact package, runtime registration, Session,
+Chat, and Turn. Model availability is validated before Host acceptance where
+possible. If the exact endpoint or credential becomes unavailable after
+acceptance, the committed Turn fails; it is not rerouted to another model,
+provider, runtime, credential source, or Agent.
 
 The Host supplies hard policy ceilings and the accepted deadline. Comet may
 allocate smaller per-step budgets inside those ceilings, but it records the
@@ -128,8 +153,9 @@ Comet receives one normalized `IAgent` request containing:
 - normalized attachments and their immutable content references;
 - explicitly bound interaction targets;
 - the immutable Host Turn execution binding, containing the resolved Comet
-  profile envelope, runtime registration, canonical Tool-set, deadline,
-  cancellation, output, and optional resume-state authorities;
+  profile envelope, resolved model configuration, credential references,
+  runtime registration, canonical Tool-set, deadline, cancellation, output,
+  and optional resume-state authorities;
 - current permission, cancellation, steering, and user-input operation state.
 
 The request is the complete execution authority. Comet does not query the

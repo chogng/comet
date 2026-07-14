@@ -6,6 +6,10 @@
 import { Codicon } from 'cs/base/common/codicons';
 import { URI } from 'cs/base/common/uri';
 import type { IAgentWorkspace } from 'cs/platform/agentHost/common/agent';
+import {
+	validateAndFreezeAgentConfigurationSchema,
+	resolveAgentModelConfigurationCandidate,
+} from 'cs/platform/agentHost/common/configuration';
 import type { AgentChatId, AgentId, AgentModelId, AgentSessionTypeId } from 'cs/platform/agentHost/common/identities';
 import type {
 	AgentHostDisplayText,
@@ -216,20 +220,55 @@ export function toSessionModelState(
 }
 
 export function toExecutionSelection(
+	root: IAgentHostRootState,
 	descriptor: IAgentHostSessionTypeDescriptor,
+	agentId: AgentId,
 	model: AgentModelId | null,
 ): AgentHostExecutionSelection {
+	if (descriptor.agentId !== agentId) {
+		throw new Error(`Agent Host Session type '${descriptor.id}' does not belong to Agent '${agentId}'.`);
+	}
+	let selectedModel: AgentModelId;
+	let preset: IAgentHostSessionTypeDescriptor['executionPresets'][number] | undefined;
 	if (model !== null) {
 		if (!descriptor.models.includes(model)) {
 			throw new Error(`Agent Host Session type '${descriptor.id}' does not expose model '${model}'.`);
 		}
-		return Object.freeze({ kind: 'model', model });
+		selectedModel = model;
+	} else {
+		if (descriptor.automaticExecutionPreset === null) {
+			throw new Error(`Agent Host Session type '${descriptor.id}' has no automatic execution preset.`);
+		}
+		preset = descriptor.executionPresets.find(candidate => candidate.id === descriptor.automaticExecutionPreset);
+		if (preset === undefined) {
+			throw new Error(`Agent Host Session type '${descriptor.id}' has no exact automatic execution preset.`);
+		}
+		selectedModel = preset.model;
 	}
 
-	if (descriptor.automaticExecutionPreset === null) {
-		throw new Error(`Agent Host Session type '${descriptor.id}' has no automatic execution preset.`);
+	const agents = root.agents.filter(candidate => candidate.id === agentId && candidate.packageId === descriptor.packageId);
+	if (agents.length !== 1) {
+		throw new Error(`Agent Host does not expose one exact Agent '${agentId}'.`);
 	}
-	return Object.freeze({ kind: 'preset', preset: descriptor.automaticExecutionPreset });
+	const modelDescriptor = agents[0].models.find(candidate => candidate.id === selectedModel);
+	if (modelDescriptor === undefined || !modelDescriptor.enabled) {
+		throw new Error(`Agent Host does not expose enabled model '${selectedModel}' for Agent '${agentId}'.`);
+	}
+	const schema = validateAndFreezeAgentConfigurationSchema(modelDescriptor.configurationSchema, {
+		agent: agentId,
+		scope: 'model',
+	});
+	const configuration = resolveAgentModelConfigurationCandidate(
+		schema,
+		Object.freeze({ schema: schema.revision, values: Object.freeze({}) }),
+	);
+	if (model !== null) {
+		return Object.freeze({ kind: 'model', model, configuration });
+	}
+	if (preset === undefined) {
+		throw new Error(`Agent Host Session type '${descriptor.id}' has no exact automatic execution preset.`);
+	}
+	return Object.freeze({ kind: 'preset', preset: preset.id, configuration });
 }
 
 export function toModels(

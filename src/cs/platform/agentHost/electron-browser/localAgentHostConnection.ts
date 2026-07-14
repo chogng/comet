@@ -9,6 +9,14 @@ import { onUnexpectedError } from 'cs/base/common/errors';
 import { Disposable } from 'cs/base/common/lifecycle';
 import type { IChannel } from 'cs/base/parts/ipc/common/ipc';
 import { ClientAgentToolService } from 'cs/platform/agentHost/browser/clientAgentTools';
+import {
+	type IAgentConfigurationCandidate,
+	type IAgentConfigurationState,
+	validateAndFreezeAgentConfigurationCandidate,
+	validateAndFreezeAgentConfigurationCompletions,
+	validateAndFreezeAgentConfigurationSchema,
+	validateAndFreezeAgentConfigurationState,
+} from 'cs/platform/agentHost/common/configuration';
 import type { IAgentHostConnection } from 'cs/platform/agentHost/common/connections';
 import {
 	AgentHostError,
@@ -16,8 +24,13 @@ import {
 	type IAgentHostErrorDataByCode,
 } from 'cs/platform/agentHost/common/errors';
 import {
+	createAgentConfigurationPropertyId,
+	createAgentConfigurationSchemaRevision,
 	createAgentHostAuthorityId,
 	createAgentHostClientConnectionId,
+	createAgentHostProtocolVersion,
+	createAgentId,
+	createAgentRuntimeRegistrationRevision,
 	type AgentHostAuthorityId,
 	type AgentHostClientConnectionId,
 } from 'cs/platform/agentHost/common/identities';
@@ -34,8 +47,12 @@ import {
 	type IAgentHostOperationOutcomeRequest,
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostReconnectRequest,
+	type IAgentHostResolveSessionConfigurationRequest,
+	type IAgentHostResolveSessionConfigurationResult,
 	type IAgentHostSetSubscriptionsRequest,
 	type IAgentHostSetSubscriptionsResult,
+	type IAgentHostSessionConfigurationCompletionsRequest,
+	type IAgentHostSessionConfigurationCompletionsResult,
 } from 'cs/platform/agentHost/common/protocol';
 import {
 	assertAgentPackageOperationOutcome,
@@ -45,11 +62,15 @@ import {
 	type IAgentPackageOperationOutcomeRequest,
 	type IAgentPackageOperationRequest,
 } from 'cs/platform/agentHost/common/packages';
-import { assertAgentHostProtocolValue } from 'cs/platform/agentHost/common/protocolValues';
+import {
+	assertAgentHostProtocolValue,
+	type AgentHostProtocolValue,
+} from 'cs/platform/agentHost/common/protocolValues';
 import type { IAgentClientToolPublicationSnapshot } from 'cs/platform/agentHost/common/tools';
 
 const localAgentHostErrorCode = 'AGENT_HOST_ERROR';
 const localAgentHostCancellationErrorCode = 'AGENT_HOST_CANCELLED';
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
 
 type ErrorRecord = Readonly<Record<string, unknown>>;
 
@@ -57,6 +78,202 @@ function asRecord(value: unknown): ErrorRecord | undefined {
 	return value !== null && typeof value === 'object' && !Array.isArray(value)
 		? value as ErrorRecord
 		: undefined;
+}
+
+function invalidProtocol(field: string, value: unknown): never {
+	const diagnostic = typeof value === 'number'
+		? value
+		: typeof value === 'string'
+			? value.slice(0, 256)
+			: typeof value;
+	throw new AgentHostError(
+		AgentHostErrorCode.InvalidProtocolValue,
+		'Invalid local Agent Host connection value',
+		{ field, value: diagnostic },
+	);
+}
+
+function requireRecord(value: unknown, field: string): ErrorRecord {
+	assertAgentHostProtocolValue(value);
+	return asRecord(value) ?? invalidProtocol(field, value);
+}
+
+function requireExactKeys(
+	record: ErrorRecord,
+	required: readonly string[],
+	optional: readonly string[],
+	field: string,
+): void {
+	const allowed = new Set([...required, ...optional]);
+	for (const key of Object.keys(record)) {
+		if (!allowed.has(key)) {
+			invalidProtocol(`${field}.${key}`, key);
+		}
+	}
+	for (const key of required) {
+		if (!Object.hasOwn(record, key)) {
+			invalidProtocol(`${field}.${key}`, 'missing');
+		}
+	}
+}
+
+function requireString(value: unknown, field: string, allowEmpty = false): string {
+	if (typeof value !== 'string' || (!allowEmpty && value.length === 0)) {
+		return invalidProtocol(field, value);
+	}
+	return value;
+}
+
+function validateConfigurationCandidateShape(value: unknown, field: string): IAgentConfigurationCandidate {
+	const candidate = requireRecord(value, field);
+	requireExactKeys(candidate, ['schema', 'values'], [], field);
+	const schema = createAgentConfigurationSchemaRevision(requireString(candidate.schema, `${field}.schema`));
+	const values = requireRecord(candidate.values, `${field}.values`) as Readonly<Record<string, AgentHostProtocolValue>>;
+	return Object.freeze({ schema, values: Object.freeze({ ...values }) });
+}
+
+function validateSessionConfigurationState(
+	value: unknown,
+	field: string,
+	agent?: ReturnType<typeof createAgentId>,
+): IAgentConfigurationState {
+	const state = requireRecord(value, field);
+	const schema = validateAndFreezeAgentConfigurationSchema(state.schema);
+	return validateAndFreezeAgentConfigurationState(value as IAgentConfigurationState, {
+		agent: agent ?? schema.agent,
+		scope: 'session',
+	});
+}
+
+function validateResolveRequest(
+	request: IAgentHostResolveSessionConfigurationRequest,
+): IAgentHostResolveSessionConfigurationRequest {
+	const record = requireRecord(request, 'resolveSessionConfiguration');
+	requireExactKeys(record, ['sessionType', 'candidate'], ['workspace'], 'resolveSessionConfiguration');
+	validateConfigurationCandidateShape(record.candidate, 'resolveSessionConfiguration.candidate');
+	return request;
+}
+
+function validateResolveResult(value: unknown): IAgentHostResolveSessionConfigurationResult {
+	const result = requireRecord(value, 'resolveSessionConfiguration.result');
+	requireExactKeys(
+		result,
+		['agent', 'runtimeRegistration', 'configuration'],
+		[],
+		'resolveSessionConfiguration.result',
+	);
+	const agent = createAgentId(requireString(result.agent, 'resolveSessionConfiguration.result.agent'));
+	const runtimeRegistration = createAgentRuntimeRegistrationRevision(requireString(
+		result.runtimeRegistration,
+		'resolveSessionConfiguration.result.runtimeRegistration',
+	));
+	const configuration = validateSessionConfigurationState(
+		result.configuration,
+		'resolveSessionConfiguration.result.configuration',
+		agent,
+	);
+	return Object.freeze({ agent, runtimeRegistration, configuration });
+}
+
+function validateCompletionRequest(
+	request: IAgentHostSessionConfigurationCompletionsRequest,
+): IAgentHostSessionConfigurationCompletionsRequest {
+	const record = requireRecord(request, 'completeSessionConfiguration');
+	requireExactKeys(record, [
+		'sessionType',
+		'candidate',
+		'resolvedSchema',
+		'property',
+		'query',
+		'limit',
+	], ['workspace'], 'completeSessionConfiguration');
+	const schema = validateAndFreezeAgentConfigurationSchema(record.resolvedSchema);
+	if (schema.scope !== 'session') {
+		invalidProtocol('completeSessionConfiguration.resolvedSchema.scope', schema.scope);
+	}
+	validateAndFreezeAgentConfigurationCandidate(
+		schema,
+		validateConfigurationCandidateShape(record.candidate, 'completeSessionConfiguration.candidate'),
+		'session',
+	);
+	createAgentConfigurationPropertyId(requireString(record.property, 'completeSessionConfiguration.property'));
+	const query = requireString(record.query, 'completeSessionConfiguration.query', true);
+	if (query.length > 4_096) {
+		invalidProtocol('completeSessionConfiguration.query', query.length);
+	}
+	if (typeof record.limit !== 'number' || !Number.isSafeInteger(record.limit) || record.limit < 1 || record.limit > 100) {
+		invalidProtocol('completeSessionConfiguration.limit', record.limit);
+	}
+	return request;
+}
+
+function validateCompletionResult(
+	request: IAgentHostSessionConfigurationCompletionsRequest,
+	value: unknown,
+): IAgentHostSessionConfigurationCompletionsResult {
+	const result = requireRecord(value, 'completeSessionConfiguration.result');
+	requireExactKeys(
+		result,
+		['agent', 'runtimeRegistration', 'schema', 'completions'],
+		[],
+		'completeSessionConfiguration.result',
+	);
+	const agent = createAgentId(requireString(result.agent, 'completeSessionConfiguration.result.agent'));
+	if (agent !== request.resolvedSchema.agent) {
+		invalidProtocol('completeSessionConfiguration.result.agent', agent);
+	}
+	const runtimeRegistration = createAgentRuntimeRegistrationRevision(requireString(
+		result.runtimeRegistration,
+		'completeSessionConfiguration.result.runtimeRegistration',
+	));
+	const schema = createAgentConfigurationSchemaRevision(requireString(
+		result.schema,
+		'completeSessionConfiguration.result.schema',
+	));
+	if (schema !== request.resolvedSchema.revision) {
+		invalidProtocol('completeSessionConfiguration.result.schema', schema);
+	}
+	if (!Array.isArray(result.completions)) {
+		invalidProtocol('completeSessionConfiguration.result.completions', result.completions);
+	}
+	const completions = validateAndFreezeAgentConfigurationCompletions(
+		request.resolvedSchema,
+		request.property,
+		result.completions,
+	);
+	return Object.freeze({ agent, runtimeRegistration, schema, completions });
+}
+
+function validatePrepareResult(value: unknown): AgentHostPrepareSubmissionResult {
+	const result = requireRecord(value, 'prepareSubmission.result');
+	const kind = requireString(result.kind, 'prepareSubmission.result.kind');
+	if (kind === 'rejected') {
+		requireExactKeys(result, ['kind', 'failure'], [], 'prepareSubmission.result');
+		const failure = requireRecord(result.failure, 'prepareSubmission.result.failure');
+		requireExactKeys(
+			failure,
+			['code', 'message', 'reconciliation'],
+			['data'],
+			'prepareSubmission.result.failure',
+		);
+		requireString(failure.code, 'prepareSubmission.result.failure.code');
+		requireString(failure.message, 'prepareSubmission.result.failure.message', true);
+		requireString(failure.reconciliation, 'prepareSubmission.result.failure.reconciliation');
+		return value as AgentHostPrepareSubmissionResult;
+	}
+	if (kind !== 'prepared') {
+		invalidProtocol('prepareSubmission.result.kind', kind);
+	}
+	requireExactKeys(result, ['kind', 'submission'], [], 'prepareSubmission.result');
+	const submission = requireRecord(result.submission, 'prepareSubmission.result.submission');
+	if (!Object.hasOwn(submission, 'sessionConfiguration')) {
+		invalidProtocol('prepareSubmission.result.submission.sessionConfiguration', 'missing');
+	}
+	validateSessionConfigurationState(
+		submission.sessionConfiguration,
+		'prepareSubmission.result.submission.sessionConfiguration',
+	);
+	return value as AgentHostPrepareSubmissionResult;
 }
 
 function requireIdentity(value: unknown): {
@@ -171,9 +388,16 @@ export class LocalAgentHostConnection extends Disposable implements IAgentHostCo
 		);
 	}
 
-	initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {
+	async initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {
 		assertConnectionRequest(request.connection, this.connection, 'initialize.connection');
-		return this.call('initialize', request);
+		if (request.protocolVersions.length !== 1 || request.protocolVersions[0] !== localAgentHostProtocolVersion) {
+			invalidProtocol('initialize.protocolVersions', request.protocolVersions.length);
+		}
+		const result = await this.call<IAgentHostInitializeResult>('initialize', request);
+		if (result.protocolVersion !== localAgentHostProtocolVersion) {
+			invalidProtocol('initialize.result.protocolVersion', result.protocolVersion);
+		}
+		return result;
 	}
 
 	async reconnect(request: IAgentHostReconnectRequest): Promise<AgentHostReconnectResult> {
@@ -189,9 +413,23 @@ export class LocalAgentHostConnection extends Disposable implements IAgentHostCo
 		return result;
 	}
 
+	async resolveSessionConfiguration(
+		request: IAgentHostResolveSessionConfigurationRequest,
+	): Promise<IAgentHostResolveSessionConfigurationResult> {
+		const exactRequest = validateResolveRequest(request);
+		return validateResolveResult(await this.call('resolveSessionConfiguration', exactRequest));
+	}
+
+	async completeSessionConfiguration(
+		request: IAgentHostSessionConfigurationCompletionsRequest,
+	): Promise<IAgentHostSessionConfigurationCompletionsResult> {
+		const exactRequest = validateCompletionRequest(request);
+		return validateCompletionResult(exactRequest, await this.call('completeSessionConfiguration', exactRequest));
+	}
+
 	async prepareSubmission(request: IAgentHostPrepareSubmissionRequest): Promise<AgentHostPrepareSubmissionResult> {
 		await this.clientTools.synchronize();
-		return this.call('prepareSubmission', request);
+		return validatePrepareResult(await this.call('prepareSubmission', request));
 	}
 
 	mutate(request: IAgentHostMutationRequest): Promise<AgentHostMutationOutcome> {
