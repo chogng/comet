@@ -61,6 +61,8 @@ See [Comet Agent architecture](COMET_AGENT.md).
 Installation is scoped to the addressed Host authority and authenticated user
 scope. Installing Claude on a local Host does not install it on a remote Host,
 and a client never infers remote installation from its local files.
+Remote package placement and server ownership are defined in
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md).
 
 ## Identities and catalogs
 

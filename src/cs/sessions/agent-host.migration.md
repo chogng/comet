@@ -7,7 +7,10 @@ provider and main-agent command path by the architecture defined in
 [AGENT_HOST.md](AGENT_HOST.md), [AGENT_PACKAGES.md](AGENT_PACKAGES.md),
 [COMET_AGENT.md](COMET_AGENT.md), [ATTACHMENTS.md](ATTACHMENTS.md),
 [TOOLS.md](TOOLS.md), and
-[INTERACTION_TARGETS.md](INTERACTION_TARGETS.md).
+[INTERACTION_TARGETS.md](INTERACTION_TARGETS.md). It also covers the Remote
+foundation defined in [REMOTE.md](../platform/remote/REMOTE.md) and the remote
+Host composition defined in
+[REMOTE_AGENT_HOST.md](REMOTE_AGENT_HOST.md).
 
 The migration establishes the language-neutral Agent Runtime Protocol and a
 connected-runtime conformance implementation. Shipping the production Rust
@@ -21,6 +24,12 @@ default installed set contains only the bundled `comet` package. Optional
 Copilot, Claude, Codex, and other packages remain absent until an explicit user
 install operation commits for the addressed Host, and every user-installed
 package executes through a connected runtime outside the Host process.
+
+The migration establishes the Remote Tunnel foundation defined in
+[REMOTE_TUNNEL.md](../platform/tunnel/REMOTE_TUNNEL.md), including hosted
+endpoint publication, discovery, relay connections, authentication, and
+transport recovery. Remote Agent Host uses that foundation as a first-class
+direct Agent Host Protocol route alongside the Remote Server channel route.
 
 The scoped files and final locations are:
 
@@ -44,6 +53,13 @@ The scoped files and final locations are:
 - `src/cs/workbench/contrib/draftEditor/**` where Editor context migrates to
   the common composer-attachment API;
 - `src/cs/platform/agentHost/**`;
+- `src/cs/platform/tunnel/**` where the Remote Tunnel lifecycle, provider,
+  relay, hosting, and port-forwarding boundaries are established;
+- `src/cs/platform/remote/**` and `src/cs/workbench/services/remote/**` where
+  the project-owned Remote authority, persistent management connection,
+  channel, environment, URI, and resource foundation is established;
+- `src/cs/server/**` where the Remote Server and remote Agent Host are
+  composed;
 - `src/cs/platform/secrets/**` where provider credentials move to encrypted
   persistent ownership;
 - `src/cs/agent/**`;
@@ -61,15 +77,19 @@ The scoped files and final locations are:
 - `src/cs/sessions/sessions.desktop.main.ts`;
 - `src/cs/sessions/sessions.web.main.ts`;
 - `src/cs/sessions/AGENT_HOST.md`, `src/cs/sessions/AGENT_PACKAGES.md`,
+  `src/cs/sessions/REMOTE_AGENT_HOST.md`,
   `src/cs/sessions/COMET_AGENT.md`, `src/cs/sessions/ATTACHMENTS.md`,
   `src/cs/sessions/TOOLS.md`, `src/cs/sessions/INTERACTION_TARGETS.md`,
   `src/cs/sessions/README.md`,
   `src/cs/sessions/SESSIONS.md`, `src/cs/sessions/LAYOUT.md`, and
   `src/cs/sessions/LAYERS.md`;
+- `src/cs/platform/tunnel/REMOTE_TUNNEL.md` and
+  `src/cs/platform/remote/REMOTE.md`;
 - `.github/instructions/agent-host.instructions.md`,
   `.github/instructions/chat.instructions.md`,
   `.github/instructions/browserView.instructions.md`,
   `.github/instructions/sessions.instructions.md`,
+  `.github/instructions/remote.instructions.md`,
   `.github/instructions/source-code-organization.instructions.md`, and
   `.github/instructions/article.instructions.md`;
 - tests under the scoped provider, Agent execution, Agent Host, connection,
@@ -133,6 +153,19 @@ contract. The target does not copy create-on-use or send-on-use download:
 optional packages become executable only after a separate explicit install and
 activation transaction, while Comet is the sole bundled package.
 
+The repository currently has no project-owned Remote authority, persistent
+management connection, Remote Server, remote resource, or bidirectional
+channel foundation under `src/cs`. Its tunnel layer contains only proxy
+connection metadata and has no hosted Remote Tunnel identity, discovery,
+relay, endpoint, authentication, or reconnection lifecycle. The upstream
+Remote layers demonstrate authority resolution, one persistent management
+connection, bidirectional channels, URI transformation, and Remote Server
+composition. Its Agent Host tunnel paths additionally demonstrate direct
+Agent Host publication and discovery through a relay. The target keeps both
+durable routes, moves the shared tunnel mechanics into the project-owned
+Remote Tunnel foundation, and carries the common Agent Host Protocol over each
+route without introducing a second Agent API.
+
 ## Final project-owned boundary
 
 - The `CometAgent` integration, with stable Agent ID `comet`, owns the built-in
@@ -175,6 +208,22 @@ activation transaction, while Comet is the sole bundled package.
 - Agent Host owns the common Agent registry, Session and Chat catalogs,
   lifecycle, protocol state, routing, and persistence boundaries.
 - Local and remote connections implement the same `IAgentHostConnection`.
+- Remote Agent Host has two explicit connection routes: an Agent Host channel
+  on one project-owned persistent Remote Server connection, and a direct Agent
+  Host Protocol endpoint on one selected Remote Tunnel. Both use the common
+  Agent Host connection protocol and shared Sessions provider. Neither route
+  falls back to or silently replaces the other.
+- Remote owns authority resolution, management transport, channel
+  multiplexing, URI transformation, and Remote Server lifecycle. Remote
+  Tunnel owns tunnel identity, hosting, discovery, relay authentication,
+  endpoint streams, and transport generations. Agent Host owns protocol
+  negotiation, Host identity, semantic recovery, and content and Tool endpoint
+  binding.
+- The Remote Server composes one `AgentHostAuthority` and binds the advertised
+  Agent Host channel directly to it. A Remote Tunnel host binds the common
+  Agent Host Protocol endpoint directly to its `AgentHostAuthority`. Neither
+  path translates through a second Agent API, unavailable placeholder, or
+  local-Host fallback.
 - One shared `AgentHostSessionsProvider` implementation maps each Host
   connection into the provider-independent Sessions domain.
 - `IChatService` owns addressed Chat presentation models, generic pending
@@ -319,7 +368,24 @@ names. No target registration imports or dispatches through the legacy path.
    non-terminal.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
-7. Implement the shared `AgentHostSessionsProvider`, its provider-owned
+7. Implement the project-owned Remote and Remote Tunnel foundations under
+   `src/cs/platform/remote`, `src/cs/workbench/services/remote`, and
+   `src/cs/server`, and under `src/cs/platform/tunnel`. Add exact authority
+   resolution, one authenticated
+   persistent management connection, bidirectional typed channels, Remote
+   environment and URI transformation, remote resource ownership, transport
+   reconnection, and Remote Server lifecycle. Add typed Remote Tunnel identity,
+   endpoint publication, discovery, scoped authentication, relay connections,
+   hosting leases, explicit disconnect, and transport recovery. Compose one
+   `AgentHostAuthority` in the Remote Server, bind its channel directly, and
+   implement the Remote Server transport for `RemoteAgentHostConnection` over
+   that supplied channel. Bind a Remote Tunnel Agent Host endpoint directly to
+   the same protocol and implement its tunnel transport. Register the common
+   provider only after the selected transport and Agent Host negotiation
+   succeed. Do not switch between the Remote Server and Remote Tunnel routes,
+   add a second Agent API, publish an unavailable placeholder, or fall back to
+   a local Host.
+8. Implement the shared `AgentHostSessionsProvider`, its provider-owned
    `ISession` and `IChat` models, draft replacement, capability mapping, and
    authoritative collection transitions. Remove `ISession.mainChat` and update
    every call site directly to use the addressed Chat or optional view-owned
@@ -330,7 +396,7 @@ names. No target registration imports or dispatches through the legacy path.
    Distinguish runtime release from durable delete, reconcile every catalog
    mutation by operation ID, and address cancellation and steering by exact
    Turn ID.
-8. Move Chat model creation and Host turn application into the shared Agent
+9. Move Chat model creation and Host turn application into the shared Agent
    Host Sessions integration. Add one addressed composer-attachment model, one
    public attachment API, one separate addressed interaction-target model,
    current-version producer codecs, and registries for Feature-owned
@@ -341,7 +407,7 @@ names. No target registration imports or dispatches through the legacy path.
    Sessions management and provider send contracts to route only the addressed
    Session and Chat; the shared provider begins the immutable request snapshot
    through `IChatService`. Update every call site directly.
-9. Add the preparing-submission transaction and normalized Host attachment
+10. Add the preparing-submission transaction and normalized Host attachment
    and content-resource protocols. Resolve every captured attachment, bind
    immutable source versions, resolve the requested Tool policy into one exact
    prepared Tool-set revision bound to the exact Agent runtime registration,
@@ -357,7 +423,7 @@ names. No target registration imports or dispatches through the legacy path.
    identities, and atomically commit the Session, Chat, and initial user Turn.
    Pre-commit failure publishes none of them; the created Chat receives no
    permanent role.
-10. Register Article, Browser, PDF, File, Directory, Editor, Chat-selection,
+11. Register Article, Browser, PDF, File, Directory, Editor, Chat-selection,
     text, and image producers directly through the common attachment path. File
     resolves one immutable `blob`; Directory resolves one immutable bounded
     `tree` manifest with normalized relative entries, explicit enumeration and
@@ -372,7 +438,7 @@ names. No target registration imports or dispatches through the legacy path.
     version-addressed, bounded content publication before enabling Article
     full-content attachment resolution; `ArticleDetail` is never used as a
     full-text fallback.
-11. Move legacy default-provider Session and Chat persistence to the Host
+12. Move legacy default-provider Session and Chat persistence to the Host
     catalog and Comet Agent resume boundary. Perform one explicit, versioned,
     atomic data migration of `sessions.providers.default` at the new storage
     owner and delete the old key after the new state commits. Runtime routing
@@ -382,13 +448,16 @@ names. No target registration imports or dispatches through the legacy path.
     from current checkbox state, the active Editor, Article lists, workspace
     folders, or other present-time Feature state when the old turn did not
     persist that association.
-12. Replace the desktop entry-point import of the legacy default provider with
+13. Replace the desktop entry-point import of the legacy default provider with
     local Agent Host registration and activation of the bundled `comet`
-    package. Register remote Host discovery only in targets that provide a real
-    remote connection implementation. Do not register optional SDK-backed
+    package. Remote-capable targets initialize the common Remote foundation,
+    negotiate the Remote Server environment, and register the remote Host only
+    from its advertised live channel. Do not register optional SDK-backed
     Agents from product configuration or entry-point side effects.
-13. Update all tests to exercise the Agent contract, Host runtime, local and
-    remote connections, shared Sessions provider, composer restoration,
+14. Update all tests to exercise the Agent contract, Host runtime, local and
+    remote connections, Remote authority resolution, management connection,
+    bidirectional channels, URI transformation, two-layer reconnection,
+    Remote Server composition, shared Sessions provider, composer restoration,
     preparation failure, Host acceptance, acknowledgement reconciliation,
     retry versioning, `blob` and `tree` limits, manifest path and link policy,
     local and remote content lifetimes, version negotiation, revision gaps,
@@ -421,7 +490,7 @@ names. No target registration imports or dispatches through the legacy path.
     reconciliation. Cover typed Article item identity and
     Chat-origin Browser target binding without DOM-order inference, including
     document-epoch changes and snapshot content digests.
-14. Delete `src/cs/sessions/contrib/providers/default/**`, the
+15. Delete `src/cs/sessions/contrib/providers/default/**`, the
    `run_main_agent_turn` command and payload contracts, default-provider
    storage, every `default`-prefixed implementation symbol and file, the
    parallel `src/cs/agent/**` layer, and all obsolete tests in the same
@@ -459,11 +528,19 @@ The migration is complete only when:
 1. The `CometAgent` integration is registered through Agent Host under Agent ID
    `comet`, is activated by the bundled `comet` package, and handles the
    built-in Agent end to end through one exact runtime endpoint.
-2. Local and remote Host connections use the same protocol and shared Sessions
-   provider implementation.
+2. Local, Remote Server, and Remote Tunnel Host connections use the same Agent
+   Host protocol and shared Sessions provider implementation. The Remote
+   Server route obtains its channel from the project-owned Remote foundation;
+   the Remote Tunnel route obtains one exact relay endpoint from the
+   project-owned tunnel foundation. Each route binds directly to one
+   `AgentHostAuthority` without a second Agent API, unavailable placeholder,
+   route substitution, or local fallback.
 3. Initialization negotiates one explicit version, channel state applies from
    snapshots and contiguous revisions, and reconnection uses complete replay or
-   fresh snapshots without guessing missing state.
+   fresh snapshots without guessing missing state. The selected Remote Server
+   or Remote Tunnel transport restores its own logical connection first;
+   Agent Host then performs semantic recovery under its own connection
+   identity. Recovery never changes route.
 4. Session creation, Chat creation, and Turn acceptance use the common Host
    contracts. A product draft commits its Session, one ordinary Chat, and
    initial user Turn in one operation after prepared content binds to reserved
@@ -489,6 +566,8 @@ The migration is complete only when:
    model-provider conversion. One Host Tool Execution Port carries canonical
    calls and results for every executor kind.
 8. No Platform Agent Host file imports Editor, Workbench, Sessions, or Code.
+   No Platform Remote or Platform Tunnel file imports Workbench, Sessions,
+   Agent Host, or Code.
 9. No Sessions service or non-provider contribution imports an Agent runtime
    implementation.
 10. Every Feature attachment enters through the common addressed Chat
@@ -524,16 +603,20 @@ The migration is complete only when:
 17. The parallel `src/cs/agent/**` layer no longer exists.
 18. No old symbol is retained through an alias, wrapper, re-export, or
     compatibility module.
-19. Agent Host, Agent Runtime Protocol, bundled embedded and connected runtime
-    conformance, common execution-profile resolution, package-wide quiescing,
+19. Remote authority, transport, management connection, bidirectional channel,
+    URI, Remote Server, Remote Tunnel identity, hosting, discovery, relay,
+    Remote Agent Host, Agent Host, Agent Runtime Protocol,
+    bundled embedded and connected runtime conformance, common
+    execution-profile resolution, package-wide quiescing,
     resume-schema validation and migration, data-deletion and retained-record
     purge, Tool Execution Port, Agent projection, Comet orchestration,
     schema-profile, Sessions provider, Chat integration, entry-point, layer,
     and lifecycle tests pass.
-20. Durable documentation describes only the final Agent Host, Agent package,
-    Comet Agent, Attachment, Tool, and interaction-target architectures and
-    keeps package installation, Agent runtime packaging, Tool projection,
-    executor routing, and Host placement separate.
+20. Durable documentation describes only the final Remote foundation, Remote
+    Tunnel, Remote Agent Host, Agent Host, Agent package, Comet Agent,
+    Attachment, Tool, and interaction-target architectures and keeps Remote
+    Server transport, tunnel transport, Host placement, package installation,
+    Agent runtime packaging, Tool projection, and executor routing separate.
 21. The authoritative initial installed-package set contains only `comet`.
     Installable, installed, activated, authenticated, and materialized states
     are distinct; optional Agents require an explicit per-Host user install;

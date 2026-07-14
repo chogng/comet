@@ -7,6 +7,11 @@ applyTo: "{src/cs/platform/agentHost/**,src/cs/sessions/contrib/providers/agentH
 
 Read `src/cs/sessions/AGENT_HOST.md` before changing Agent Host contracts,
 Agents, connections, or Sessions integration. Read
+`src/cs/sessions/REMOTE_AGENT_HOST.md` and
+`src/cs/platform/remote/REMOTE.md` before changing remote Host placement or
+Remote Server composition. Read `src/cs/platform/tunnel/REMOTE_TUNNEL.md`
+before changing tunnel-hosted Agent Host publication, discovery, relay,
+connection registration, remote resources, or recovery. Read
 `src/cs/sessions/AGENT_PACKAGES.md` before changing package discovery,
 installation, verification, activation, update, uninstall, SDK loading, or
 runtime registration. Read `src/cs/sessions/COMET_AGENT.md` before changing
@@ -60,6 +65,14 @@ binding, target-backed Tools, or lazy Feature operations.
   configuration, files, environment variables, credentials, or Agent display
   data.
 - Local and remote identify Host placement and transport, not Agent identity.
+- Remote Agent Host uses one explicitly selected route: a channel on the
+  common persistent Remote Server connection, or an `agentHost` endpoint on
+  one exact Remote Tunnel connection. Both carry the common Agent Host
+  Protocol and create the shared provider only after initialization.
+- Remote Server and Remote Tunnel routes never replace one another after
+  failure. The selected lower transport restores its logical connection first;
+  Agent Host then reconciles subscriptions, actions, operations, content
+  leases, and Tool calls by their exact identities.
 - `cs/platform/agentHost` owns the protocol, runtime, connection contract,
   Agent registry, Host-side `IAgent` contract, and language-neutral Agent
   Runtime Protocol. It never imports Workbench or Sessions.

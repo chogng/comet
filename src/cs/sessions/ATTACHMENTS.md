@@ -205,6 +205,9 @@ If an Agent runtime's execution engine requires filesystem paths, the runtime
 asks the Host content service to materialize the referenced blob or tree
 version inside Host-owned storage. The materialized path is scoped to that Host
 and lease and does not become a new source identity.
+The Remote Server and Remote Tunnel placement routes and reverse
+client-resource direction are defined in
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md).
 
 ### Content-resource protocol
 

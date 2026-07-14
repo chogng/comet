@@ -77,12 +77,23 @@ embedded Comet implementation live in the lower
 `src/cs/platform/agentHost/` subsystem. Sessions consumes them only through an
 Agent Host connection and the shared provider contribution.
 
+Remote product composition uses the lower
+`src/cs/platform/remote/` foundation and `cs/workbench/services/remote` to
+reach one Comet Remote Server. Remote Tunnel composition uses
+`src/cs/platform/tunnel/` to publish, discover, and connect typed relay
+endpoints. Remote Agent Host consumes either the shared Remote Server channel
+or one exact Remote Tunnel `agentHost` endpoint; neither route replaces the
+other after failure.
+
 ## Documentation
 
 | Document | Purpose |
 |---|---|
 | [SESSIONS.md](SESSIONS.md) | Domain model, services, providers, lifecycle, persistence, and Chat integration |
 | [AGENT_HOST.md](AGENT_HOST.md) | Agent Runtime Port, Agent configuration, common execution profiles, embedded and connected runtimes, Host connections, and Sessions integration |
+| [REMOTE_AGENT_HOST.md](REMOTE_AGENT_HOST.md) | Remote Agent Host placement over Remote Server and Remote Tunnel routes, connection recovery, resources, and Sessions registration |
+| [Remote foundation](../platform/remote/REMOTE.md) | Remote authorities, persistent management connections, channels, Remote Server ownership, and remote resources |
+| [Remote Tunnel](../platform/tunnel/REMOTE_TUNNEL.md) | Tunnel identity, endpoint publication, discovery, hosting, relay connections, authentication, and recovery |
 | [AGENT_PACKAGES.md](AGENT_PACKAGES.md) | Bundled and user-installed Agent packages, catalogs, verification, activation, update, deletion, and retained data |
 | [COMET_AGENT.md](COMET_AGENT.md) | Comet execution profiles, Host Turn binding, model-and-Tool orchestration, Rust runtime slot, workers, and resumption |
 | [ATTACHMENTS.md](ATTACHMENTS.md) | Composer attachments, producers, content-resource transport, submission, and source-specific rules |
@@ -106,10 +117,18 @@ Agent Host connection and the shared provider contribution.
    a connected runtime through the common Agent Runtime Protocol and
    `IAgentRuntimeConnection`. Keep Comet orchestration behind the same port in
    either bundled form.
-7. Put shared Host-to-Sessions integration in `contrib/providers/agentHost/`
-   together with local and remote connection registration.
-8. Keep reusable single-conversation and editor infrastructure in
+7. Put Remote authority, persistent connection, channel, and Remote Server
+   infrastructure in the owners defined by the
+   [Remote foundation](../platform/remote/REMOTE.md). Put tunnel discovery,
+   hosting, relay, forwarding, and proxy infrastructure in
+   [Remote Tunnel](../platform/tunnel/REMOTE_TUNNEL.md).
+8. Put shared Host-to-Sessions integration in `contrib/providers/agentHost/`.
+   Remote Server and Remote Tunnel contributions use their exact lower
+   transports as defined by
+   [Remote Agent Host architecture](REMOTE_AGENT_HOST.md); neither route
+   replaces the other or defines another Agent Host Protocol.
+9. Keep reusable single-conversation and editor infrastructure in
    `cs/workbench` and integrate it from the higher Sessions layer.
-9. Register contributions only from Sessions entry points.
-10. Update the owning architecture, layout, and layer documents with every
+10. Register contributions only from Sessions entry points.
+11. Update the owning architecture, layout, and layer documents with every
    durable boundary change.

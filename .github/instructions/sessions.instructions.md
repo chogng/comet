@@ -10,6 +10,9 @@ Read these documents before changing Sessions code:
 - `src/cs/sessions/README.md`
 - `src/cs/sessions/SESSIONS.md`
 - `src/cs/sessions/AGENT_HOST.md`
+- `src/cs/sessions/REMOTE_AGENT_HOST.md`
+- `src/cs/platform/remote/REMOTE.md`
+- `src/cs/platform/tunnel/REMOTE_TUNNEL.md`
 - `src/cs/sessions/AGENT_PACKAGES.md`
 - `src/cs/sessions/COMET_AGENT.md`
 - `src/cs/sessions/ATTACHMENTS.md`
@@ -64,6 +67,11 @@ code / server
 - One shared Agent Host Sessions provider maps each Host connection into the
   provider-independent Sessions domain. Local and remote contributions do not
   duplicate Session or Chat models.
+- Remote Agent Host explicitly selects either the Agent Host channel on one
+  Remote Server connection or one compatible `agentHost` endpoint on a Remote
+  Tunnel. Both routes use the common protocol and shared provider; Sessions
+  never changes route after failure or treats a discovered tunnel as an
+  initialized provider.
 - The shared provider family is named `agentHost`, the built-in Agent is named
   `comet`, and Host placement is `local` or `remote`. Do not use `default` as
   an implementation prefix or identity, and do not define a `mainChat` or

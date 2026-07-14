@@ -2,6 +2,8 @@
 
 For application ownership and layout, see [README.md](README.md),
 [SESSIONS.md](SESSIONS.md), [AGENT_HOST.md](AGENT_HOST.md),
+[REMOTE_AGENT_HOST.md](REMOTE_AGENT_HOST.md), the
+[Remote foundation](../platform/remote/REMOTE.md),
 [AGENT_PACKAGES.md](AGENT_PACKAGES.md), [COMET_AGENT.md](COMET_AGENT.md),
 [ATTACHMENTS.md](ATTACHMENTS.md), [TOOLS.md](TOOLS.md),
 [INTERACTION_TARGETS.md](INTERACTION_TARGETS.md), and [LAYOUT.md](LAYOUT.md).
@@ -46,6 +48,35 @@ All Sessions layers
 public Workbench APIs
 ```
 
+### Remote foundation
+
+**Locations:**
+
+```text
+src/cs/platform/remote/**
+src/cs/platform/tunnel/**
+src/cs/workbench/services/remote/**
+src/cs/server/**
+```
+
+Platform Remote owns authority resolution, authenticated management transport,
+persistent logical connection, channel multiplexing, URI transformation, and
+Remote protocol contracts. Platform Tunnel owns tunnel discovery, endpoint
+publication, hosting, relay connections, port forwarding, proxy contracts, and
+transport recovery. They import neither Workbench, Sessions, Agent Host, nor
+Code. Workbench Remote services bind the Remote connection to the selected
+application authority and resource services. Server owns Remote Server
+bootstrap, channel registration, filesystem, process, storage, and lifecycle
+composition.
+
+Higher Remote Server subsystems consume the one `IRemoteServerConnection`;
+they do not open private management sockets or implement another authority
+resolver. A Remote Agent Host may instead consume one exact Remote Tunnel
+`agentHost` endpoint. The lower foundation restores transport continuity,
+while each stateful subsystem owns semantic recovery. See
+[Remote foundation architecture](../platform/remote/REMOTE.md) and
+[Remote Tunnel architecture](../platform/tunnel/REMOTE_TUNNEL.md).
+
 ### Platform Agent Host
 
 **Location:** `src/cs/platform/agentHost/**`
@@ -74,6 +105,12 @@ registered until an explicit user install operation commits for the addressed
 Host, and they always execute as connected runtimes outside the Host process.
 Sessions and provider contributions never import package management or SDK
 implementations.
+
+Remote Agent Host receives a typed Remote channel from the higher composition;
+Platform Agent Host never imports Workbench Remote. Remote Server composition
+under `cs/server/node/agentHost` creates the shared Node Host authority and
+binds its channel directly. See
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md).
 
 ### Sessions common
 
@@ -157,7 +194,10 @@ verify, install, update, uninstall, or load Agent packages.
 
 Local and remote contributions in the same provider family supply connections
 to the shared provider implementation. Agent runtimes do not register direct
-Sessions providers.
+Sessions providers. Remote Server and Remote Tunnel contributions obtain exact
+lower transports from their owning services; they do not implement Remote
+authority resolution, tunnel provider or relay mechanics, or Remote Server
+lifecycle inside the provider.
 
 Providers do not import core Part implementations, shell layout, or another
 provider's internals. They never import `ChatWidget`, a concrete Chat view, or
@@ -262,6 +302,14 @@ Sessions or provider implementation → Agent package manager or SDK internals
 Agent runtime → Workbench or Sessions
 Agent runtime → Agent package manager
 Platform Agent Host → Workbench or Sessions
+Platform Remote → Workbench, Sessions, Agent Host, or Code
+Remote consumer → private authority resolver or management connection
+Remote Server Agent Host connection → private socket, SSH, WSL, or tunnel
+transport outside `IRemoteServerConnection`
+Remote Tunnel Agent Host connection → provider SDK or relay path outside
+`IRemoteTunnelConnection`
+Remote Agent Host recovery → switch between Remote Server and Remote Tunnel
+routes
 local or remote Agent Host connection → Agent runtime internals
 Agent runtime connection → Sessions provider or Workbench Feature internals
 one Part → sibling Part implementation or DOM

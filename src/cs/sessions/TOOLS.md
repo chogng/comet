@@ -134,6 +134,8 @@ substitutes a newly connected client for an accepted executor.
 Local and remote Host connections use the same connected-executor protocol. A
 local connection may carry it in process and a remote connection may serialize
 it over transport, but neither calls the Feature through another route.
+Remote transport and exact client endpoint ownership are defined in
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md).
 
 ## Comet Tool Schema Profile
 

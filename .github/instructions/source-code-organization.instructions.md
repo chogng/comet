@@ -63,11 +63,53 @@ content-resource providers remain with their Feature producers and do not enter
 the Tool registry merely because a remote Host reads them through the
 originating client.
 
+## Remote Organization
+
+- `cs/platform/remote/common` — Remote authorities, resolver and connection
+  contracts, management protocol, channel context, URI transformation,
+  versions, limits, and errors
+- `cs/platform/remote/browser` — Browser transport and authority-resolution
+  support
+- `cs/platform/remote/electron-browser` — Desktop Remote management transport
+  support
+- `cs/platform/remote/node` — Shared Remote Server transport primitives
+- `cs/platform/tunnel/common` — Remote Tunnel providers, descriptors,
+  endpoints, hosting, relay connections, port forwarding, proxy values,
+  identities, limits, and errors
+- `cs/platform/tunnel/browser` — Browser-provided tunnel discovery and relay
+  connections
+- `cs/platform/tunnel/electron-browser` — Renderer-facing tunnel composition
+  and IPC clients
+- `cs/platform/tunnel/electron-utility` — Desktop provider SDK and relay
+  ownership
+- `cs/platform/tunnel/node` — Shared relay, hosting, and port-forwarding
+  primitives
+- `cs/workbench/services/remote` — Selected Remote Server connection,
+  environment, application lifecycle, and remote-resource wiring
+- `cs/server/node` — Remote Server bootstrap, handshake, channel registry,
+  filesystem, process, storage, and lifecycle composition
+
+Platform Remote and Platform Tunnel never import Workbench, Sessions, Agent
+Host, or Code. One application instance consumes one persistent
+`IRemoteServerConnection` for its selected Remote authority. Higher Remote
+subsystems obtain typed channels from that connection; they never resolve the
+authority again, open a private management socket, or own another Remote
+Server lifecycle.
+
+The Remote and Remote Tunnel foundations restore only their own transport
+continuity. Each stateful subsystem owns semantic recovery after reconnection.
+Remote Agent Host follows `src/cs/sessions/REMOTE_AGENT_HOST.md`: it consumes
+either the Agent Host channel on one Remote Server connection or one direct
+Remote Tunnel `agentHost` endpoint. Those routes are explicit peers and never
+replace one another after failure.
+
 ## Agent Host Organization
 
 - `cs/platform/agentHost/common` — environment-neutral Host protocol, Agent
   Runtime Protocol, connection contracts, and Host-side Agent contracts
-- `cs/platform/agentHost/browser` — remote-capable connection support
+- `cs/platform/agentHost/browser` — common browser connection support and the
+  Remote Agent Host protocol over supplied Remote Server channel or Remote
+  Tunnel endpoint transports
 - `cs/platform/agentHost/electron-browser` — desktop local Host connection
 - `cs/platform/agentHost/node` — Host runtime and runtime endpoint support
 - `cs/platform/agentHost/node/packages` — Agent package discovery, staging,
@@ -84,6 +126,15 @@ the addressed Host; Session creation and Turn execution never install or
 download it. Optional packages always execute as connected runtimes outside
 the Host process. Package ID, Agent ID, runtime registration, authentication,
 and materialization remain separate.
+
+Remote Server Agent Host composition lives under
+`cs/server/node/agentHost`. It constructs the shared Platform Node Host
+authority and binds the Remote channel directly. Platform Agent Host never
+imports the Workbench Remote service or the Server layer.
+
+Remote Tunnel Agent Host hosting binds an `agentHost` endpoint directly to the
+shared Platform Node Host authority. Tunnel provider and relay mechanics remain
+in `cs/platform/tunnel`; Sessions owns discovery UX and provider registration.
 
 `IAgent` is the single Host-facing semantic port. The product-bundled embedded
 Comet runtime implements it under `cs/platform/agentHost/node/agents/comet`.
@@ -109,7 +160,9 @@ manager or an SDK implementation.
 - `cs/sessions/services` — provider-agnostic application and session services
 - `cs/sessions/contrib` — Sessions-specific feature integrations
 - `cs/sessions/contrib/providers/agentHost` — shared Agent Host Sessions
-  provider plus local and remote Host connection registration
+  provider plus local, Remote Server, and Remote Tunnel Host connection
+  registration; remote contributions obtain exact lower transports from
+  `IRemoteServerService` or the Remote Tunnel service
 - `cs/sessions/sessions.*.main.ts` — Sessions contribution entry points
 
 `agentHost` is the only built-in provider family name. Agent IDs such as
@@ -154,6 +207,11 @@ Only code referenced from entry point files is loaded:
 Sessions entry points load the corresponding Workbench foundation entry point
 before Sessions contributions. Code and server bootstrap the Sessions
 application, not the Workbench shell.
+
+Remote-capable targets initialize Remote transport and `IRemoteServerService`,
+negotiate the Remote Server environment, and only then load the Remote Agent
+Host provider contribution. The Remote Server advertises the Agent Host
+channel only after its owning Host composition is live.
 
 ## Dependency Injection
 

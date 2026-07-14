@@ -103,6 +103,8 @@ model-provider calls, event conversion, truthful capabilities, and opaque
 resume data and never imports Sessions or Workbench Chat. Runtime packaging
 does not create another Sessions provider. See
 [Agent Host architecture](AGENT_HOST.md),
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md),
+[Remote foundation architecture](../platform/remote/REMOTE.md),
 [Agent package architecture](AGENT_PACKAGES.md), and
 [Comet Agent architecture](COMET_AGENT.md).
 
@@ -719,10 +721,17 @@ composition and its embedded or Rust connected runtime follows
 activation, update, uninstall, and retained-state rules are defined in
 [Agent package architecture](AGENT_PACKAGES.md).
 
-Add a new Host placement or transport by implementing `IAgentHostConnection`.
-Register one shared `AgentHostSessionsProvider` for each stable connection.
-Connection code owns transport, authentication, reconnection, and resource
-mapping; it does not duplicate Session or Chat models or branch on Agent IDs.
+Add a non-remote Host placement by implementing `IAgentHostConnection` and
+registering one shared `AgentHostSessionsProvider` for each stable connection.
+A remote Host uses one exact Remote Server or Remote Tunnel route and the
+composition in [Remote Agent Host architecture](REMOTE_AGENT_HOST.md). Remote
+authority and management concerns remain in
+[Remote foundation](../platform/remote/REMOTE.md); tunnel discovery, hosting,
+relay, and transport recovery remain in
+[Remote Tunnel](../platform/tunnel/REMOTE_TUNNEL.md). The remote Host
+connection owns Agent Host protocol negotiation, semantic recovery, and
+resource/executor binding. No route fallback, Host placement, or Agent ID
+duplicates Session or Chat models.
 
 The complete contracts and verification requirements are defined in
 [AGENT_HOST.md](AGENT_HOST.md). Composer and submitted context contracts are
@@ -736,6 +745,9 @@ operations are defined in
 
 - [Sessions application overview](README.md)
 - [Agent Host architecture](AGENT_HOST.md)
+- [Remote Agent Host architecture](REMOTE_AGENT_HOST.md)
+- [Remote foundation architecture](../platform/remote/REMOTE.md)
+- [Remote Tunnel architecture](../platform/tunnel/REMOTE_TUNNEL.md)
 - [Agent package architecture](AGENT_PACKAGES.md)
 - [Comet Agent architecture](COMET_AGENT.md)
 - [Attachment architecture](ATTACHMENTS.md)

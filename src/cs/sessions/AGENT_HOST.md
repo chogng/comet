@@ -25,6 +25,14 @@ Local and remote describe Host placement and transport. `comet`, `copilot`,
 how that behavior is bound to the Host. None of these dimensions is inferred
 from another.
 
+Remote Agent Host uses one explicit Comet reachability route: a bidirectional
+Agent Host channel on the shared Remote Server management connection, or a
+direct Agent Host Protocol endpoint on one selected Remote Tunnel. Its
+placement and composition are defined in
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md),
+[Remote foundation](../platform/remote/REMOTE.md), and
+[Remote Tunnel architecture](../platform/tunnel/REMOTE_TUNNEL.md).
+
 Agent packages add a separate installation dimension. Comet is the only
 bundled and default-installed package. Every other Agent is absent until the
 user explicitly installs its package for the addressed Host and authenticated
@@ -174,9 +182,14 @@ This connection joins a product client to an Agent Host. It is distinct from
 Neither connection substitutes for or tunnels through the other implicitly.
 
 The local connection owns local process lifecycle and IPC. A remote connection
-owns transport establishment, endpoint authentication, protocol negotiation,
-reconnection, and remote resource mapping. Connection implementations do not
-reimplement Agent, Session, Chat, Turn, or catalog behavior.
+uses either a typed channel from the initialized Remote Server connection or a
+direct `agentHost` endpoint stream from the selected Remote Tunnel connection.
+The lower foundation owns authority or tunnel selection, endpoint
+authentication, and transport reconnection; the Agent Host connection owns
+Agent Host negotiation, semantic reconnection, and exact client content and
+Tool endpoint binding. Connection implementations do not reimplement Agent,
+Session, Chat, Turn, or catalog behavior. See
+[Remote Agent Host architecture](REMOTE_AGENT_HOST.md).
 
 ### Agent Host Sessions provider
 
@@ -941,6 +954,13 @@ src/cs/platform/agentHost/
     └── agents/comet/
         └── embedded bundled Comet runtime, when selected by composition
 
+src/cs/platform/remote/              Remote authority, transport, persistent
+                                     connection, channel, and URI foundation
+src/cs/workbench/services/remote/    selected Remote Server connection and
+                                     application resource wiring
+src/cs/server/node/agentHost/        remote Host composition and direct Remote
+                                     channel binding to AgentHostAuthority
+
 src/cs/sessions/contrib/providers/agentHost/
 ├── browser/
 │   ├── shared provider and Host-backed Session and Chat models
@@ -986,12 +1006,17 @@ Protocol to Agent Host.
 
 ## Adding a Host connection
 
-1. Implement `IAgentHostConnection` for the transport and lifecycle.
+1. Implement `IAgentHostConnection` for the Host placement and lifecycle. A
+   remote implementation consumes one exact Remote Server channel or Remote
+   Tunnel `agentHost` endpoint transport and follows
+   [Remote Agent Host architecture](REMOTE_AGENT_HOST.md).
 2. Preserve the same protocol negotiation, identities, operations, ordering,
    limits, errors, snapshots, and replay behavior.
 3. Register one `AgentHostSessionsProvider` for each stable Host authority.
-4. Keep endpoint authentication, reconnection, and resource mapping in the
-   connection contribution.
+4. Keep placement-specific connection ownership explicit. Remote authority
+   management or Remote Tunnel discovery, relay, and reconnection remain in
+   their lower foundations; Agent Host semantic reconnection and exact
+   content/executor binding remain in the remote Host connection.
 5. Add tests for incompatible versions, action gaps, replay, snapshot recovery,
    lost acknowledgements, duplicate operation IDs, and missing resources.
 6. Do not add Agent-specific routing or duplicate Session and Chat models.
@@ -1008,6 +1033,10 @@ Protocol to Agent Host.
 - User-installed Agents always use connected runtimes. Embedded execution is
   reserved for a product-bundled Comet composition.
 - Local and remote are Host placements, not Agent identities.
+- Remote Agent Host selects one shared Remote Server channel or one direct
+  Remote Tunnel endpoint; neither route is fallback for the other.
+- The selected Remote or Remote Tunnel transport recovery and Agent Host
+  semantic recovery are separate and occur in that order.
 - Embedded and connected are runtime bindings, not Agent identities.
 - One Host authority produces one Sessions provider instance.
 - One Host authority has at most one active runtime registration for an Agent
