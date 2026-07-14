@@ -20,7 +20,10 @@ export const unitTestSourceRoots = Object.freeze([
 
 export const unitRuntimeSourceRoots = Object.freeze({
 	node: Object.freeze(unitTestSourceRoots),
-	browser: Object.freeze(['test/unit/browser']),
+	browser: Object.freeze([
+		'test/unit/browser',
+		'src/cs/base/test/browser',
+	]),
 	electron: Object.freeze(['test/unit/electron']),
 });
 

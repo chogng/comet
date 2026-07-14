@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Comet Electron unit tests</title></head>
+<body>
+<script>
+globalThis.__cometUnitDone = result => globalThis.__cometUnitBridge.report(result);
+window.addEventListener('error', event => globalThis.__cometUnitBridge.reportError({ message: event.message, stack: event.error?.stack }));
+window.addEventListener('unhandledrejection', event => globalThis.__cometUnitBridge.reportError({ message: String(event.reason?.message ?? event.reason), stack: event.reason?.stack }));
+</script>
+<script src="./tests.cjs"></script>
+</body>
+</html>

@@ -17,6 +17,7 @@ import {
 	discoverProjectTestFiles,
 	selectTestFiles,
 	spawnExitCode,
+	unitRuntimeSourceRoots,
 	validateSupportedTestFiles,
 	validateTestProjectOwnership,
 } from './test-discovery.mjs';
@@ -115,16 +116,38 @@ suite('test discovery', { concurrency: false }, () => {
 		const testFiles = await discoverProjectTestFiles(repositoryRoot);
 		assert.ok(testFiles.length > 0);
 		assert.ok(testFiles.includes('test/unit/test-infrastructure.test.ts'));
+		assert.equal(testFiles.some(file => file.startsWith('test/unit/browser/')), false);
+		assert.equal(testFiles.some(file => file.startsWith('test/unit/electron/')), false);
+		assert.equal(testFiles.includes('src/cs/base/test/browser/ui/contextview/contextview.test.ts'), false);
 		await validateTestProjectOwnership(testFiles, repositoryRoot);
+	});
+
+	test('real host runtimes discover their own test sources', async () => {
+		const browserTests = await discoverProjectTestFiles(repositoryRoot, 'browser');
+		const electronTests = await discoverProjectTestFiles(repositoryRoot, 'electron');
+		assert.deepStrictEqual(unitRuntimeSourceRoots.browser, [
+			'test/unit/browser',
+			'src/cs/base/test/browser',
+		]);
+		assert.deepStrictEqual(unitRuntimeSourceRoots.electron, ['test/unit/electron']);
+		assert.deepStrictEqual(browserTests, [
+			'src/cs/base/test/browser/actionbar.test.ts',
+			'src/cs/base/test/browser/ui/contextview/contextview.test.ts',
+			'test/unit/browser/runtime.test.ts',
+		]);
+		assert.deepStrictEqual(electronTests, ['test/unit/electron/runtime.test.ts']);
 	});
 });
 
-suite('Node unit runtime', { concurrency: false }, () => {
-	test('one public command and one runtime entry point replace domain runners and aggregation tests', () => {
+suite('unit runtime commands', { concurrency: false }, () => {
+	test('one public command owns the real runtime entry points', () => {
 		const packageJson = JSON.parse(
 			readFileSync(path.resolve(repositoryRoot, 'package.json'), 'utf8'),
 		) as { readonly scripts: Readonly<Record<string, string>> };
-		assert.equal(packageJson.scripts['test:unit'], `node ${nodeUnitTestRunner}`);
+		assert.equal(packageJson.scripts['test:unit'], 'node test/unit/index.mjs');
+		assert.equal(packageJson.scripts['test:unit:node'], `node ${nodeUnitTestRunner}`);
+		assert.equal(packageJson.scripts['test:unit:browser'], 'node test/unit/browser/index.mjs');
+		assert.equal(packageJson.scripts['test:unit:electron'], 'node test/unit/electron/index.mjs');
 		for (const retiredCommand of [
 			'test:valid-layers-check',
 			'test:base-common',
@@ -170,8 +193,34 @@ suite('Node unit runtime', { concurrency: false }, () => {
 
 	test('runtime directories represent processes that really exist', () => {
 		assert.equal(existsSync(path.resolve(repositoryRoot, nodeUnitTestRunner)), true);
-		assert.equal(existsSync(path.resolve(repositoryRoot, 'test/unit/browser/index.mjs')), false);
-		assert.equal(existsSync(path.resolve(repositoryRoot, 'test/unit/electron/index.mjs')), false);
+		assert.equal(existsSync(path.resolve(repositoryRoot, 'test/unit/browser/index.mjs')), true);
+		assert.equal(existsSync(path.resolve(repositoryRoot, 'test/unit/electron/index.mjs')), true);
+		assert.equal(existsSync(path.resolve(repositoryRoot, 'test/unit/electron/main.mjs')), true);
+	});
+
+	test('Browser runtime launches a real Chromium page', () => {
+		const runnerSource = readFileSync(path.resolve(repositoryRoot, 'test/unit/browser/index.mjs'), 'utf8');
+		assert.match(runnerSource, /chromium\.launch/);
+		assert.match(runnerSource, /renderer\.html/);
+		assert.match(
+			readFileSync(path.resolve(repositoryRoot, 'test/unit/browser/renderer.html'), 'utf8'),
+			/tests\.js/,
+		);
+	});
+
+	test('Electron runtime owns a real BrowserWindow and renderer IPC report', () => {
+		assert.match(
+			readFileSync(path.resolve(repositoryRoot, 'test/unit/electron/main.mjs'), 'utf8'),
+			/BrowserWindow/,
+		);
+		assert.match(
+			readFileSync(path.resolve(repositoryRoot, 'test/unit/electron/renderer.html'), 'utf8'),
+			/__cometUnitBridge/,
+		);
+		assert.match(
+			readFileSync(path.resolve(repositoryRoot, 'test/unit/electron/preload.cjs'), 'utf8'),
+			/contextBridge\.exposeInMainWorld/,
+		);
 	});
 
 	test('the entry point exposes file and glob selection and rejects unknown grouping options', () => {

@@ -16,6 +16,7 @@ export interface TestTypeScriptProject {
 
 export const supportedTestSuffixes: readonly string[];
 export const unitTestSourceRoots: readonly string[];
+export const unitRuntimeSourceRoots: Readonly<Record<string, readonly string[]>>;
 export const unitTypeScriptProjects: readonly TestTypeScriptProject[];
 export function validateSupportedTestFiles(files: readonly string[]): string[];
 export function selectTestFiles(
@@ -23,7 +24,7 @@ export function selectTestFiles(
 	selection?: TestSelection,
 	rootDir?: string,
 ): string[];
-export function discoverProjectTestFiles(rootDir?: string): Promise<string[]>;
+export function discoverProjectTestFiles(rootDir?: string, runtime?: string): Promise<string[]>;
 export function compiledTestPath(sourceFile: string, outputDirectory: string, rootDir?: string): string;
 export function spawnExitCode(result: TestSpawnResult): number;
 export function validateTestProjectOwnership(

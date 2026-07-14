@@ -306,7 +306,9 @@ test('local Agent package discard rejects a symlinked receipt without changing i
 			artifacts.discard(staged, operation),
 			/receipt directory is invalid/,
 		);
-		assert.equal((await stat(externalTarget)).mode & 0o777, 0o500);
+		if (process.platform !== 'win32') {
+			assert.equal((await stat(externalTarget)).mode & 0o777, 0o500);
+		}
 		assert.equal(await readFile(path.join(externalTarget, 'marker'), 'utf8'), 'unchanged');
 	} finally {
 		await removeTestRoot(root);

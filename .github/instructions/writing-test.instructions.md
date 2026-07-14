@@ -5,9 +5,10 @@ applyTo: "{src/cs/**/test/**,src/cs/**/*.test.ts,src/cs/**/*.integrationTest.ts,
 
 # Writing tests
 
-Comet tests use Node's built-in test runner and strict assertions. Keep each
-test focused, but keep the owning suite complete for every applicable risk in
-the changed public contract.
+Comet tests use the Node test API and strict assertions. Each host supplies the
+same test API, while the host process is explicit. Keep each test focused, but
+keep the owning suite complete for every applicable risk in the changed public
+contract.
 
 ## Test types
 
@@ -16,48 +17,40 @@ the changed public contract.
 | Unit | `*.test.ts` | `src/cs/**/test/` | Browser, Electron, or Node.js (depends on layer) |
 | Integration | `*.integrationTest.ts` | `src/cs/**/test/` | Real external APIs |
 
-Platform Agent Host contract and runtime tests and their support modules live under
-`src/cs/platform/agentHost/test/{common,browser,electron-browser,node}/`,
-partitioned by the runtime they exercise. They do not live under Agent Host
-production runtime or component directories.
-
-Product composition, concrete Electron process launchers, and product-owned
-Agent runtime implementations keep their tests in the owning Code subtree's
-sibling `test/` directory. Platform Agent Host tests never import `cs/code/**`
-to exercise a product mock or product runtime.
-
 Integration tests use deterministic local infrastructure, temporary
 directories, and local servers. A test that requires public network access,
 credentials, or a mutable third-party service belongs to an explicit opt-in
-lane and never gates the normal hermetic suite.
+command and never gates the normal hermetic suite.
 
-Every test source belongs to exactly one declared test lane. Repository
-verification fails for an unassigned test, a test assigned to several lanes,
-or an empty required lane. Support modules do not use a test-file suffix.
-Importing a test indirectly from a hand-maintained index is not test
-discovery.
+Every test source belongs to exactly one runtime. Node discovers source tests
+under `src` and `scripts`; Browser and Electron host tests live under their
+matching `test/unit/<runtime>` directory. Support modules do not use a
+test-file suffix. Importing a test indirectly from a hand-maintained index is
+not test discovery.
 
 ## Running tests
 
-`test/unit/node/index.mjs` discovers every `*.test.ts` and
-`*.integrationTest.ts` under `src`, `scripts`, and `test/unit`, bundles the
-selected sources with one Node runtime policy, and executes them serially. A
-new matching test requires no runner edit; never add a domain runner, source
-manifest, or import-only aggregation test.
+`test/unit/index.mjs` runs the real Node, Browser, and Electron hosts. The Node
+host discovers source `*.test.ts` and `*.integrationTest.ts` files under `src`
+and `scripts`; Browser and Electron hosts discover tests from explicit runtime
+roots. A source-layer directory alone does not change the host. A new matching
+test requires no domain runner, source manifest, or import-only aggregation
+test.
 
-Runtime directories under `test/unit` identify the process that actually
-executes the tests. JSDOM remains a Node bootstrap; an Electron-layer source
-tested with doubles remains a Node test. Do not add a browser or Electron entry
-point unless it starts that runtime.
+Runtime directories identify the process that actually executes the tests.
+JSDOM is a Node bootstrap, not a Browser host. An Electron-layer source tested
+with doubles remains a Node test. Add a Browser or Electron test only when its
+entry point starts that real process.
 
 Run one source or a repository-relative glob while iterating:
 
 ```text
-npm run test:unit -- --run src/cs/example/test/example.test.ts
-npm run test:unit -- --glob "src/cs/example/**/*.test.ts"
+npm run test:unit -- --runtime node --run src/cs/example/test/example.test.ts
+npm run test:unit -- --runtime browser --glob "test/unit/browser/**/*.test.ts"
+npm run test:unit -- --runtime electron --glob "test/unit/electron/**/*.test.ts"
 ```
 
-Then run the complete Node unit runtime:
+Then run all unit runtimes:
 
 ```text
 npm run test:unit
@@ -130,7 +123,9 @@ or failure injection with a percentage target.
 - Run a suite serially when it uses a process-wide disposable tracker,
   application singleton, shared port, or shared user-data directory.
 - A platform-specific test calls `TestContext.skip(reason)` and returns. The
-  addressed platform must have a runtime that executes the test.
+  addressed platform must have a runtime that executes the test. Browser tests
+  must exercise a real browser page, and Electron tests must cross the real
+  main, renderer, preload, or IPC boundary they claim to cover.
 
 ## Clean teardown
 

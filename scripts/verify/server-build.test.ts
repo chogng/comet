@@ -11,14 +11,16 @@ import test from 'node:test';
 import * as esbuild from 'esbuild';
 
 import { createServerBuildOptions } from '../../build/lib/serverBuild.ts';
-import { resolveProjectPath } from '../../build/lib/util.ts';
+
+const repositoryRoot = process.cwd();
+const resolveProjectPath = (...segments: string[]) => path.join(repositoryRoot, ...segments);
 
 test('Server composition build bundles the exact Agent Host modules for Node ESM', async () => {
 	const expectedEntryPoints = [
 		resolveProjectPath('src', 'cs', 'server', 'node', 'agentHost', 'remoteAgentHostMain.ts'),
 		resolveProjectPath('src', 'cs', 'server', 'node', 'agentHost', 'remoteTunnelAgentHostMain.ts'),
 	];
-	const options = await createServerBuildOptions();
+	const options = await createServerBuildOptions(repositoryRoot);
 
 	assert.deepStrictEqual(options.entryPoints, expectedEntryPoints);
 	assert.deepStrictEqual(options.alias, {
@@ -57,7 +59,7 @@ test('Server composition build bundles the exact Agent Host modules for Node ESM
 
 	assert.ok(result.outputFiles);
 	const outputPaths = result.outputFiles
-		.map(output => path.relative(resolveProjectPath(), output.path))
+		.map(output => path.relative(resolveProjectPath(), output.path).replaceAll('\\', '/'))
 		.sort();
 	assert.deepStrictEqual(outputPaths, [
 		'dist-server/remoteAgentHostMain.js',

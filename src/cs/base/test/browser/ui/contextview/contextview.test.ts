@@ -31,6 +31,7 @@ test('context view renders at its anchor', async () => {
 				return null;
 			},
 		});
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
 		assert.equal(document.body.querySelector('.context-view')?.textContent, 'Context view');
 	} finally {
