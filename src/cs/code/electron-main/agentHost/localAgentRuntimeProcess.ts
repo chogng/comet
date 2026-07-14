@@ -8,10 +8,10 @@ import { MessageChannelMain, type UtilityProcess as ElectronUtilityProcess } fro
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { MessagePortChannel } from 'cs/base/parts/ipc/common/messagePortIpc';
 import {
-	mockAgentRuntimeConnectMessage,
-	mockAgentRuntimeProcessPrivilege,
-	mockAgentRuntimeReadyMessage,
-} from 'cs/code/common/agentHost/mockAgentPackages';
+	localAgentRuntimeConnectMessage,
+	localAgentRuntimeProcessPrivilege,
+	localAgentRuntimeReadyMessage,
+} from 'cs/code/common/agentHost/localAgentRuntimeProtocol';
 import {
 	agentRuntimeConnectionChannelName,
 	AgentRuntimeConnectionChannelClient,
@@ -36,27 +36,22 @@ import type {
 } from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
 import type { IAgentRuntimeSandboxProcessPort } from 'cs/platform/agentHost/electron-main/agentRuntimeSandboxProcess';
 
-/** Launches every installed mock package in its own Electron utility process. */
-export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFactory {
+/** Launches each installed connected package in its own product-authorized utility process. */
+export class LocalAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFactory {
 	private nextConnection = 1;
 
-	constructor(
-		private readonly sandboxProcessPort: IAgentRuntimeSandboxProcessPort,
-	) {}
+	constructor(private readonly sandboxProcessPort: IAgentRuntimeSandboxProcessPort) {}
 
 	async create(
 		installedPackage: IInstalledAgentPackage,
 		_context: AgentRuntimeConnectionLaunchContext,
 	): Promise<IAgentRuntimeConnection> {
 		const processPrivileges = installedPackage.grantedPrivileges.filter(privilege => privilege.kind === 'process');
-		if (
-			processPrivileges.length !== 1
-			|| processPrivileges[0].value !== mockAgentRuntimeProcessPrivilege
-		) {
-			throw new Error(`Mock Agent package "${installedPackage.packageId}" has no exact utility-process grant.`);
+		if (processPrivileges.length !== 1 || processPrivileges[0].value !== localAgentRuntimeProcessPrivilege) {
+			throw new Error(`Agent package "${installedPackage.packageId}" has no exact utility-process grant.`);
 		}
 		const connection = createAgentRuntimeConnectionId(
-			`mock-process:${installedPackage.packageId}:${this.nextConnection++}`,
+			`local-process:${installedPackage.packageId}:${this.nextConnection++}`,
 		);
 		return ManagedAgentRuntimeConnection.create({
 			connection,
@@ -81,7 +76,7 @@ export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFa
 		try {
 			const expectedAuthority = createAgentRuntimeSandboxAuthority(
 				installedPackage,
-				mockAgentRuntimeProcessPrivilege,
+				localAgentRuntimeProcessPrivilege,
 			);
 			const processOwner = lifetime.add(await this.sandboxProcessPort.launch({
 				installedPackage,
@@ -92,11 +87,10 @@ export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFa
 			if (
 				processOwner.connection !== connection
 				|| processOwner.generation !== generation
-				|| encodeAgentHostProtocolValue(processOwner.installedPackage)
-					!== encodeAgentHostProtocolValue(installedPackage)
+				|| encodeAgentHostProtocolValue(processOwner.installedPackage) !== encodeAgentHostProtocolValue(installedPackage)
 				|| !isEqualAgentRuntimeSandboxAuthority(processOwner.authority, expectedAuthority)
 			) {
-				throw new Error(`Mock Agent package "${installedPackage.packageId}" sandbox process identity changed.`);
+				throw new Error(`Agent package "${installedPackage.packageId}" sandbox process identity changed.`);
 			}
 			const child = processOwner.child;
 			await this.waitUntilReady(child, lifetime, error => {
@@ -109,7 +103,7 @@ export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFa
 			}
 
 			const messageChannel = new MessageChannelMain();
-			channel = lifetime.add(new MessagePortChannel(messageChannel.port1, 'mock-agent-runtime-host'));
+			channel = lifetime.add(new MessagePortChannel(messageChannel.port1, 'local-agent-runtime-host'));
 			client = new AgentRuntimeConnectionChannelClient(
 				channel.getChannel(agentRuntimeConnectionChannelName),
 				connection,
@@ -121,7 +115,7 @@ export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFa
 				throw exitError;
 			}
 			processOwner.postMessage({
-				type: mockAgentRuntimeConnectMessage,
+				type: localAgentRuntimeConnectMessage,
 				packageId: installedPackage.packageId,
 				packageRevision: installedPackage.revision,
 				connection,
@@ -148,9 +142,9 @@ export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFa
 					|| typeof message !== 'object'
 					|| Array.isArray(message)
 					|| Object.keys(message).length !== 1
-					|| (message as { readonly type?: unknown }).type !== mockAgentRuntimeReadyMessage
+					|| (message as { readonly type?: unknown }).type !== localAgentRuntimeReadyMessage
 				) {
-					reject(new Error('Mock Agent Runtime emitted an invalid readiness message.'));
+					reject(new Error('Agent Runtime emitted an invalid readiness message.'));
 					return;
 				}
 				ready = true;
@@ -159,7 +153,7 @@ export class MockAgentRuntimeProcessFactory implements IAgentRuntimeConnectionFa
 			};
 			const onExit = (code: number): void => {
 				child.off('message', onMessage);
-				const error = new Error(`Mock Agent Runtime exited with code ${code}.`);
+				const error = new Error(`Agent Runtime exited with code ${code}.`);
 				if (ready) {
 					onExitAfterReady(error);
 				} else {

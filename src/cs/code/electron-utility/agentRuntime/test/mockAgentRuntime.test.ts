@@ -52,6 +52,18 @@ const testRuntimeArtifact = Object.freeze({
 	contentDigest: createAgentPackageContentDigest(`sha256:${'a'.repeat(64)}`),
 });
 
+const codexSessionConfigurationValues = Object.freeze({
+	'codex.approvalPolicy': 'on-request',
+	'codex.sandboxMode': 'workspace-write',
+	'codex.webSearchMode': 'disabled',
+	'codex.personality': 'none',
+});
+
+const codexPlanSessionConfigurationValues = Object.freeze({
+	...codexSessionConfigurationValues,
+	'codex.approvalPolicy': 'never',
+});
+
 async function createInitializedMockRuntime(
 	maximumRetainedOperations: number,
 	maximumRetainedTerminalTurns: number,
@@ -65,7 +77,7 @@ async function createInitializedMockRuntime(
 		{ operatingSystem: 'test', architecture: 'x64' },
 		testRuntimeArtifact,
 	)[1];
-	const definition = getMockAgentPackageDefinition(createAgentPackageId('claude'));
+	const definition = getMockAgentPackageDefinition(createAgentPackageId('codex'));
 	const connection = createAgentRuntimeConnectionId('mock-retention-test');
 	const generation = createAgentRuntimeConnectionGeneration(1);
 	const runtime = new MockAgentRuntime({
@@ -130,12 +142,6 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 				distribution: 'user',
 				runtimeForm: 'connected',
 				properties: ['copilot.mode', 'copilot.autoApprove', 'copilot.isolation'],
-			},
-			{
-				packageId: 'claude',
-				distribution: 'user',
-				runtimeForm: 'connected',
-				properties: ['claude.permissionMode', 'claude.thinkingLevel'],
 			},
 			{
 				packageId: 'codex',
@@ -204,7 +210,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 			{ operatingSystem: 'test', architecture: 'x64' },
 			testRuntimeArtifact,
 		)[1];
-		const definition = getMockAgentPackageDefinition(createAgentPackageId('claude'));
+		const definition = getMockAgentPackageDefinition(createAgentPackageId('codex'));
 		const connection = createAgentRuntimeConnectionId('mock-delete-test');
 		const generation = createAgentRuntimeConnectionGeneration(1);
 		const runtime = new MockAgentRuntime({
@@ -273,7 +279,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 		const configuration = Object.freeze({
 			schema: context.definition.sessionConfigurationSchema,
 			revision: createAgentConfigurationStateRevision('retention-configuration-1'),
-			values: Object.freeze({ 'claude.permissionMode': 'default' }),
+			values: codexSessionConfigurationValues,
 		});
 		const createRequest: IAgentCreateSessionOptions = {
 			operation: createAgentHostOperationId('retention-create-session'),
@@ -294,7 +300,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 			candidate: Object.freeze({
 				...configuration,
 				revision: createAgentConfigurationStateRevision('retention-configuration-2'),
-				values: Object.freeze({ 'claude.permissionMode': 'plan' }),
+				values: codexPlanSessionConfigurationValues,
 			}),
 		};
 		await context.runtime.prepareSessionConfigurationUpdate(
@@ -348,12 +354,12 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 		const current = Object.freeze({
 			schema: context.definition.sessionConfigurationSchema,
 			revision: createAgentConfigurationStateRevision('rollback-current-configuration'),
-			values: Object.freeze({ 'claude.permissionMode': 'default' }),
+			values: codexSessionConfigurationValues,
 		});
 		const candidate = Object.freeze({
 			...current,
 			revision: createAgentConfigurationStateRevision('rollback-candidate-configuration'),
-			values: Object.freeze({ 'claude.permissionMode': 'plan' }),
+			values: codexPlanSessionConfigurationValues,
 		});
 		const createRequest: IAgentCreateSessionOptions = {
 			operation: createAgentHostOperationId('rollback-create-session'),
@@ -403,7 +409,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 		const configuration = Object.freeze({
 			schema: context.definition.sessionConfigurationSchema,
 			revision: createAgentConfigurationStateRevision('terminal-retention-configuration'),
-			values: Object.freeze({ 'claude.permissionMode': 'default' }),
+			values: codexSessionConfigurationValues,
 		});
 		let operationSequence = 0;
 		const operationContext = (name: string) => {

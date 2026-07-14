@@ -17,6 +17,13 @@ const distElectronDir = resolveProjectPath('dist-electron');
 const languageRoot = resolveProjectPath('build', 'lib');
 const srcRoot = resolveProjectPath('src', 'cs');
 const csRoot = srcRoot;
+const claudeAgentRuntimeEntryPoint = path.join(
+  srcRoot,
+  'code',
+  'electron-utility',
+  'agentRuntime',
+  'claudeAgentRuntimeMain.ts',
+);
 const entryPoints = [
   path.join(srcRoot, 'code', 'electron-main', 'launch.ts'),
   path.join(srcRoot, 'code', 'electron-main', 'main.ts'),
@@ -105,46 +112,64 @@ async function createElectronBuildOptions(plugins: esbuild.Plugin[] = []) {
   } satisfies esbuild.BuildOptions;
 }
 
+async function createClaudeAgentRuntimeBuildOptions(plugins: esbuild.Plugin[] = []) {
+  const options = await createElectronBuildOptions(plugins);
+  const builtinExternals = builtinModules.flatMap(moduleName => [moduleName, `node:${moduleName}`]);
+  return {
+    ...options,
+    entryPoints: [claudeAgentRuntimeEntryPoint],
+    external: [...builtinExternals, 'electron'],
+    packages: undefined,
+  } satisfies esbuild.BuildOptions;
+}
+
 export async function buildElectron() {
   await fsPromises.rm(distElectronDir, { force: true, recursive: true });
-  await esbuild.build(await createElectronBuildOptions());
+  await Promise.all([
+    esbuild.build(await createElectronBuildOptions()),
+    esbuild.build(await createClaudeAgentRuntimeBuildOptions()),
+  ]);
 }
 
 export async function watchElectronBuild(onBuildSuccess: () => void) {
   await fsPromises.rm(distElectronDir, { force: true, recursive: true });
 
-  let initialBuildComplete = false;
+  const initialBuilds = new Set<number>();
   let resolveInitialBuild!: () => void;
   const initialBuild = new Promise<void>(resolve => {
     resolveInitialBuild = resolve;
   });
 
-  const context = await esbuild.context(
-    await createElectronBuildOptions([
-      {
-        name: 'desktop-dev-electron-watch',
-        setup(build) {
-          build.onEnd(result => {
-            if (result.errors.length > 0) {
-              return;
-            }
+  const watchPlugin = (buildIndex: number): esbuild.Plugin => ({
+    name: 'desktop-dev-electron-watch',
+    setup(build) {
+      build.onEnd(result => {
+        if (result.errors.length > 0) {
+          return;
+        }
+        if (!initialBuilds.has(buildIndex)) {
+          initialBuilds.add(buildIndex);
+          if (initialBuilds.size === 2) {
+            resolveInitialBuild();
+          }
+          return;
+        }
+        onBuildSuccess();
+      });
+    },
+  });
+  const contexts = await Promise.all([
+    esbuild.context(await createElectronBuildOptions([watchPlugin(0)])),
+    esbuild.context(await createClaudeAgentRuntimeBuildOptions([watchPlugin(1)])),
+  ]);
 
-            if (!initialBuildComplete) {
-              initialBuildComplete = true;
-              resolveInitialBuild();
-              return;
-            }
-
-            onBuildSuccess();
-          });
-        },
-      },
-    ]),
-  );
-
-  await context.watch();
+  await Promise.all(contexts.map(context => context.watch()));
   console.log('[dev:desktop] watching electron main and preload');
   await initialBuild;
 
-  return context;
+  return {
+    dispose: async () => {
+      await Promise.all(contexts.map(context => context.dispose()));
+    },
+  };
 }

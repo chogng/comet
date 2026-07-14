@@ -25,6 +25,7 @@ export type AppEnvironmentPaths = {
   ragCacheDir: string;
   agentHostContentDir: string;
   agentHostPackagesDir: string;
+  agentHostRuntimeStateDir: string;
 };
 
 function resolvePortableExecutableDir() {
@@ -75,6 +76,7 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
     ragCacheDir: path.join(cacheDir, 'rag'),
     agentHostContentDir: path.join(cacheDir, 'agent-host', 'content'),
     agentHostPackagesDir: path.join(dataDir, 'agent-host', 'packages'),
+    agentHostRuntimeStateDir: path.join(dataDir, 'agent-host', 'runtime-state'),
   };
 }
 
@@ -197,6 +199,7 @@ export async function prepareEnvironmentMain(paths: AppEnvironmentPaths) {
     fs.mkdir(paths.ragCacheDir, { recursive: true }),
     fs.mkdir(paths.agentHostContentDir, { recursive: true }),
     fs.mkdir(paths.agentHostPackagesDir, { recursive: true }),
+    fs.mkdir(paths.agentHostRuntimeStateDir, { recursive: true }),
   ]);
 
   await cleanupLegacyStorageFiles(paths);

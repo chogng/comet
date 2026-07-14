@@ -44,9 +44,8 @@ import {
 	type AgentHostProtocolValue,
 } from 'cs/platform/agentHost/common/protocolValues';
 import { COMET_TOOL_SCHEMA_PROFILE } from 'cs/platform/agentHost/common/tools';
-
-export const mockAgentRuntimeReadyMessage = 'mockAgentRuntime.ready';
-export const mockAgentRuntimeConnectMessage = 'mockAgentRuntime.connect';
+import type { ILocalAgentPackageProduct } from './agentPackageProducts.js';
+import { localAgentRuntimeProcessPrivilege } from './localAgentRuntimeProtocol.js';
 
 /** Stable runtime and presentation definition for one explicit mock Agent package. */
 export interface IMockAgentPackageDefinition {
@@ -69,7 +68,7 @@ interface IConfigurationAxis {
 }
 
 interface IMockAgentDefinitionSpec {
-	readonly id: 'copilot' | 'claude' | 'codex';
+	readonly id: 'copilot' | 'codex';
 	readonly displayName: string;
 	readonly description: string;
 	readonly modelDisplayName: string;
@@ -83,14 +82,13 @@ export interface IMockAgentRuntimeArtifact {
 }
 
 /** One exact product-authorized mock package and its connected runtime definition. */
-export interface IMockAgentPackageProduct {
+export interface IMockAgentPackageProduct extends ILocalAgentPackageProduct {
 	readonly definition: IMockAgentPackageDefinition;
 	readonly offering: IAgentPackageOffering;
 	readonly verifiedPackage: IVerifiedAgentPackage;
 }
 
 export const mockAgentRuntimeEntryPoint = 'electron-utility/agentRuntime/mockAgentRuntimeMain.js';
-export const mockAgentRuntimeProcessPrivilege = 'electron.utilityProcess';
 
 function axis(
 	id: string,
@@ -122,18 +120,6 @@ const definitionSpecs: readonly IMockAgentDefinitionSpec[] = Object.freeze([
 			axis('copilot.isolation', localize('mockAgent.copilot.isolation', 'Isolation'), ['folder', 'worktree'], 'folder', ['hostDefault', 'session'], true),
 		]),
 		modelAxes: Object.freeze([]),
-	}),
-	Object.freeze({
-		id: 'claude' as const,
-		displayName: localize('mockAgent.claude.displayName', 'Claude'),
-		description: localize('mockAgent.claude.description', 'Explicit connected mock for the Claude Agent package'),
-		modelDisplayName: localize('mockAgent.claude.model', 'Claude Mock Model'),
-		sessionAxes: Object.freeze([
-			axis('claude.permissionMode', localize('mockAgent.claude.permissionMode', 'Permission Mode'), ['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto'], 'default', ['hostDefault', 'session'], true),
-		]),
-		modelAxes: Object.freeze([
-			axis('claude.thinkingLevel', localize('mockAgent.claude.thinkingLevel', 'Thinking Level'), ['none', 'low', 'medium', 'high'], 'medium', ['model'], false),
-		]),
 	}),
 	Object.freeze({
 		id: 'codex' as const,
@@ -313,7 +299,7 @@ export function createMockAgentPackageProducts(
 		const source = artifact.source;
 		const privileges = Object.freeze([Object.freeze({
 			kind: 'process' as const,
-			value: mockAgentRuntimeProcessPrivilege,
+			value: localAgentRuntimeProcessPrivilege,
 		})]);
 		const dependency = Object.freeze({
 			id: `${spec.id}.mock-runtime`,

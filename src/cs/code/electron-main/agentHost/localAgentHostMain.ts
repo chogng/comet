@@ -111,7 +111,11 @@ import {
 	AgentPackageRuntimeRegistry,
 	type IAgentRuntimeConnectionFactory,
 } from 'cs/platform/agentHost/node/packages/agentPackageRuntimeRegistry';
-import type { IMockAgentPackageProduct } from 'cs/code/common/agentHost/mockAgentPackages';
+import type { ILocalAgentPackageProduct } from 'cs/code/common/agentHost/agentPackageProducts';
+import {
+	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+	CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+} from 'cs/code/common/agentHost/claudeAgentPackage';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
 const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
@@ -153,7 +157,7 @@ export interface ILocalAgentHostMainOptions {
 	readonly providerApiKeySecretStorage: IProviderApiKeySecretStorage;
 	readonly contentMaterializationRoot: string;
 	readonly bundledArtifactPath: string;
-	readonly mockAgentPackageProducts: readonly IMockAgentPackageProduct[];
+	readonly agentPackageProducts: readonly ILocalAgentPackageProduct[];
 	readonly packageArtifactPort: IAgentPackageArtifactPort;
 	readonly channelServer: ILocalAgentHostChannelServer;
 	readonly fetch: (url: string, init: RequestInit) => Promise<Response>;
@@ -309,18 +313,20 @@ class LocalAgentToolTimers implements IAgentToolTimerPort {
 
 const productionCredentialReferences = new Set(['glm', 'kimi', 'deepseek', 'openai']);
 
-class LocalCometCredentialSecretSource implements IAgentCredentialSecretSource {
+class LocalAgentCredentialSecretSource implements IAgentCredentialSecretSource {
 	constructor(private readonly secrets: IProviderApiKeySecretStorage) {}
 
 	requiredPrivilege(credential: IAgentCredentialReference): string {
-		if (
-			credential.provider !== COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER
-			|| credential.scope !== 'llm'
-			|| !productionCredentialReferences.has(credential.reference)
-		) {
+		const cometCredential = credential.provider === COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER
+			&& credential.scope === 'llm'
+			&& productionCredentialReferences.has(credential.reference);
+		const claudeCredential = credential.provider === CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER
+			&& credential.scope === 'llm'
+			&& credential.reference === CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE;
+		if (!cometCredential && !claudeCredential) {
 			throw new AgentHostError(
 				AgentHostErrorCode.CredentialUnauthorized,
-				'Comet credential reference is not supported',
+				'Local Agent credential reference is not supported',
 				{ provider: credential.provider, scope: credential.scope },
 			);
 		}
@@ -374,7 +380,7 @@ export class LocalAgentHostMain extends Disposable {
 		const bundledPackage = await createCurrentBundledCometPackage(this.options.bundledArtifactPath);
 		const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
 		const credentials = new AgentCredentialService(
-			new LocalCometCredentialSecretSource(this.options.providerApiKeySecretStorage),
+			new LocalAgentCredentialSecretSource(this.options.providerApiKeySecretStorage),
 		);
 		const modelCatalog = this.createModelCatalog(credentials);
 		const contentResources = this._register(new AgentContentResourceService(
@@ -413,7 +419,7 @@ export class LocalAgentHostMain extends Disposable {
 			toolExecution,
 			contentResources,
 		});
-		const mockPackages = this.options.mockAgentPackageProducts;
+		const agentPackages = this.options.agentPackageProducts;
 		const packageStateStore = new ApplicationStorageAgentPackageStateStore(this.options.storage, {
 			registrations: Object.freeze([Object.freeze({
 				source: Object.freeze({
@@ -460,7 +466,7 @@ export class LocalAgentHostMain extends Disposable {
 		});
 		const packageLifecycle = await AgentPackageLifecycle.create({
 			hostTarget: bundledPackage.target,
-			installablePackages: Object.freeze(mockPackages.map(product => product.offering)),
+			installablePackages: Object.freeze(agentPackages.map(product => product.offering)),
 			bundledComet: Object.freeze({
 				verifiedPackage: bundledPackage.verifiedPackage,
 				registrations: Object.freeze([cometAgent.registration]),
@@ -474,7 +480,7 @@ export class LocalAgentHostMain extends Disposable {
 				registration: cometAgent.registration,
 				resolve: (descriptor: IAgentDescriptor) => this.createCometSessionType(descriptor, modelCatalog),
 			}),
-			...mockPackages.map(product => Object.freeze({
+			...agentPackages.map(product => Object.freeze({
 				registration: product.definition.registration,
 				resolve: (_descriptor: IAgentDescriptor) => product.definition.sessionType,
 			})),

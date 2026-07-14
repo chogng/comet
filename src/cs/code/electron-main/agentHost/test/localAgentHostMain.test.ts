@@ -232,7 +232,7 @@ async function createHost(
 		providerApiKeySecretStorage: new TestProviderApiKeySecretStorage(),
 		contentMaterializationRoot: contentRoot,
 		bundledArtifactPath: artifactPath,
-		mockAgentPackageProducts,
+		agentPackageProducts: mockAgentPackageProducts,
 		packageArtifactPort,
 		channelServer,
 		fetch: () => Promise.reject(new Error('An empty Session must not execute a model request.')),
@@ -542,7 +542,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		}
 		assert.deepEqual(
 			initialRoot.state.packages.installablePackages.map(offering => offering.packageId),
-			['copilot', 'claude', 'codex'],
+			['copilot', 'codex'],
 		);
 
 		let packageRevision = initialRoot.state.packages.revision;
@@ -575,46 +575,46 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		if (installedRoot?.kind !== 'root') {
 			throw new Error('Installed Agent Host root snapshot is missing.');
 		}
-		assert.deepEqual(installedRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'claude', 'codex']);
-		assert.deepEqual(installedRoot.state.sessionTypes.map(type => type.id), ['comet', 'copilot', 'claude', 'codex']);
+		assert.deepEqual(installedRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'codex']);
+		assert.deepEqual(installedRoot.state.sessionTypes.map(type => type.id), ['comet', 'copilot', 'codex']);
 		assert.deepEqual(
 			installedRoot.state.agentDefaults.map(defaults => defaults.schema.agent),
-			['comet', 'copilot', 'claude', 'codex'],
+			['comet', 'copilot', 'codex'],
 		);
-		const claudeRegistration = installedRoot.state.agentRegistrations.find(registration => registration.agentId === 'claude');
-		if (claudeRegistration === undefined) {
-			throw new Error('Claude connected registration is missing.');
+		const codexRegistration = installedRoot.state.agentRegistrations.find(registration => registration.agentId === 'codex');
+		if (codexRegistration === undefined) {
+			throw new Error('Codex connected registration is missing.');
 		}
-		const claudeSessionType = installedRoot.state.sessionTypes.find(type => type.agentId === 'claude');
-		if (claudeSessionType === undefined) {
-			throw new Error('Claude connected Session type is missing.');
+		const codexSessionType = installedRoot.state.sessionTypes.find(type => type.agentId === 'codex');
+		if (codexSessionType === undefined) {
+			throw new Error('Codex connected Session type is missing.');
 		}
 		const createPayload: AgentHostMutationPayload = Object.freeze({
 			kind: 'createSession',
-			sessionType: claudeSessionType.id,
+			sessionType: codexSessionType.id,
 			configuration: Object.freeze({
-				schema: claudeRegistration.initialSessionConfigurationSchema,
+				schema: codexRegistration.initialSessionConfigurationSchema,
 				values: Object.freeze({}),
 			}),
 			chats: Object.freeze([]),
 		});
 		const created = await firstChannel.call<AgentHostMutationOutcome>(firstContext, 'mutate', {
-			operation: createAgentHostOperationId('create-connected-claude-session'),
+			operation: createAgentHostOperationId('create-connected-codex-session'),
 			digest: await computeAgentHostMutationDigest(createPayload),
 			payload: createPayload,
 		});
 		assert.equal(created.kind, 'succeeded');
 		if (created.kind !== 'succeeded' || created.result.kind !== 'createSession') {
-			throw new Error('Claude connected Session creation failed.');
+			throw new Error('Codex connected Session creation failed.');
 		}
 		const retainedSession = created.result.session;
 		const firstPackageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
-		const firstClaudePackage = firstPackageState?.installedPackages.find(candidate => candidate.packageId === 'claude');
-		if (firstClaudePackage === undefined) {
-			throw new Error('Installed Claude package receipt is missing.');
+		const firstCodexPackage = firstPackageState?.installedPackages.find(candidate => candidate.packageId === 'codex');
+		if (firstCodexPackage === undefined) {
+			throw new Error('Installed Codex package receipt is missing.');
 		}
-		const firstClaudeEntryPoint = fileURLToPath(firstClaudePackage.dependencyClosure[0].source);
-		const firstClaudeDigest = firstClaudePackage.contentDigest;
+		const firstCodexEntryPoint = fileURLToPath(firstCodexPackage.dependencyClosure[0].source);
+		const firstCodexDigest = firstCodexPackage.contentDigest;
 
 		await firstHost.shutdown();
 		firstHost = undefined;
@@ -647,22 +647,22 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		if (restoredRoot?.kind !== 'root' || restoredSession?.kind !== 'session') {
 			throw new Error('Cold-restored connected Agent snapshots are missing.');
 		}
-		assert.deepEqual(restoredRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'claude', 'codex']);
+		assert.deepEqual(restoredRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'codex']);
 		assert.equal(restoredSession.state.lifecycle, 'available');
 		const restoredPackageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
-		const restoredClaudePackage = restoredPackageState?.installedPackages.find(candidate => candidate.packageId === 'claude');
-		if (restoredClaudePackage === undefined) {
-			throw new Error('Cold-restored Claude installed record is missing.');
+		const restoredCodexPackage = restoredPackageState?.installedPackages.find(candidate => candidate.packageId === 'codex');
+		if (restoredCodexPackage === undefined) {
+			throw new Error('Cold-restored Codex installed record is missing.');
 		}
-		assert.equal(restoredClaudePackage.contentDigest, firstClaudeDigest);
-		assert.equal(fileURLToPath(restoredClaudePackage.dependencyClosure[0].source), firstClaudeEntryPoint);
+		assert.equal(restoredCodexPackage.contentDigest, firstCodexDigest);
+		assert.equal(fileURLToPath(restoredCodexPackage.dependencyClosure[0].source), firstCodexEntryPoint);
 
-		const claudeOffering = restoredRoot.state.packages.installablePackages.find(offering => offering.packageId === 'claude');
-		if (claudeOffering === undefined) {
-			throw new Error('Claude installable offering is missing after cold restore.');
+		const codexOffering = restoredRoot.state.packages.installablePackages.find(offering => offering.packageId === 'codex');
+		if (codexOffering === undefined) {
+			throw new Error('Codex installable offering is missing after cold restore.');
 		}
-		const uninstallPayload: AgentPackageOperationPayload = Object.freeze({ kind: 'uninstall', packageId: claudeOffering.packageId });
-		let operation = createAgentPackageOperationId('uninstall-cold-restored-claude');
+		const uninstallPayload: AgentPackageOperationPayload = Object.freeze({ kind: 'uninstall', packageId: codexOffering.packageId });
+		let operation = createAgentPackageOperationId('uninstall-cold-restored-codex');
 		let requestDigest = await computeAgentPackageOperationDigest(restoredRoot.state.packages.revision, uninstallPayload);
 		let packageOutcome = await secondChannel.call<AgentPackageOperationOutcome>(secondContext, 'executePackageOperation', {
 			operation,
@@ -671,7 +671,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 			payload: uninstallPayload,
 		});
 		assert.equal(packageOutcome.kind, 'succeeded');
-		await assert.rejects(readFile(firstClaudeEntryPoint));
+		await assert.rejects(readFile(firstCodexEntryPoint));
 
 		snapshots = await secondChannel.call<IAgentHostSetSubscriptionsResult>(secondContext, 'setSubscriptions', {
 			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
@@ -681,15 +681,15 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		if (unavailableRoot?.kind !== 'root' || unavailableSession?.kind !== 'session') {
 			throw new Error('Uninstalled connected Agent snapshots are missing.');
 		}
-		assert.equal(unavailableRoot.state.agents.some(agent => agent.id === 'claude'), false);
+		assert.equal(unavailableRoot.state.agents.some(agent => agent.id === 'codex'), false);
 		assert.equal(unavailableSession.state.lifecycle, 'unavailable');
 
 		const reinstallPayload: AgentPackageOperationPayload = Object.freeze({
 			kind: 'install',
-			packageId: claudeOffering.packageId,
-			offering: claudeOffering,
+			packageId: codexOffering.packageId,
+			offering: codexOffering,
 		});
-		operation = createAgentPackageOperationId('reinstall-cold-restored-claude');
+		operation = createAgentPackageOperationId('reinstall-cold-restored-codex');
 		requestDigest = await computeAgentPackageOperationDigest(unavailableRoot.state.packages.revision, reinstallPayload);
 		packageOutcome = await secondChannel.call<AgentPackageOperationOutcome>(secondContext, 'executePackageOperation', {
 			operation,
@@ -710,7 +710,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 
 		const deletePayload: AgentHostMutationPayload = Object.freeze({ kind: 'deleteSession', session: retainedSession });
 		const deleted = await secondChannel.call<AgentHostMutationOutcome>(secondContext, 'mutate', {
-			operation: createAgentHostOperationId('delete-cold-restored-claude-session'),
+			operation: createAgentHostOperationId('delete-cold-restored-codex-session'),
 			digest: await computeAgentHostMutationDigest(deletePayload),
 			payload: deletePayload,
 		});
@@ -739,13 +739,17 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.ok(closeHostIndex < closeStorageIndex);
 	assert.match(mainSource, /bundledArtifactPath: fileURLToPath\(import\.meta\.url\)/);
 	assert.match(mainSource, /const mockAgentRuntimeArtifact = await createLocalAgentPackageArtifactFile\(fileURLToPath\(new URL\(/);
-	assert.match(mainSource, /mockAgentPackageProducts,/);
+	assert.match(mainSource, /const claudeRuntimeArtifact = await createLocalAgentPackageArtifactFile\(fileURLToPath\(new URL\(/);
+	assert.match(mainSource, /const claudeExecutableArtifact = await createLocalAgentPackageArtifactFile\(resolveClaudeAgentSdkExecutable\(\)\)/);
+	assert.match(mainSource, /const claudeAgentPackageProduct = createClaudeAgentPackageProduct\(target,/);
+	assert.match(mainSource, /agentPackageProducts,/);
 	assert.match(mainSource, /contentMaterializationRoot: environmentMainPaths\.agentHostContentDir/);
 	assert.match(mainSource, /storageRoot: environmentMainPaths\.agentHostPackagesDir/);
 	assert.match(mainSource, /packageArtifactPort,/);
 	assert.match(mainSource, /providerApiKeySecretStorage: storage\.providerApiKeySecretStorage/);
-	assert.match(mainSource, /const mockAgentRuntimeSandboxProcessPort = new MockAgentRuntimeSandboxProcessPort\(packageArtifactPort\)/);
-	assert.match(mainSource, /agentRuntimeConnectionFactory: new MockAgentRuntimeProcessFactory\(mockAgentRuntimeSandboxProcessPort\)/);
+	assert.match(mainSource, /const agentRuntimeSandboxProcessPort = new LocalAgentRuntimeSandboxProcessPort\(\{/);
+	assert.match(mainSource, /stateRoot: environmentMainPaths\.agentHostRuntimeStateDir/);
+	assert.match(mainSource, /agentRuntimeConnectionFactory: new LocalAgentRuntimeProcessFactory\(agentRuntimeSandboxProcessPort\)/);
 	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService\)/);
 	const saveSettingsIndex = ipcSource.indexOf('const saved = await storage.saveSettings');
 	const updateThemeIndex = ipcSource.indexOf('themeMainService.updateSettings(saved)', saveSettingsIndex);

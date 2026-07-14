@@ -65,6 +65,11 @@ export interface ILocalAgentPackageArtifactFile {
 	readonly contentDigest: AgentPackageContentDigest;
 }
 
+export interface ILocalAgentPackageContentArtifact {
+	readonly target: string;
+	readonly contentDigest: AgentPackageContentDigest;
+}
+
 export interface ILocalAgentPackageArtifactPortOptions {
 	readonly storageRoot: string;
 	readonly packages: readonly IVerifiedAgentPackage[];
@@ -153,6 +158,20 @@ export async function createLocalAgentPackageArtifactFile(
 		source: pathToFileURL(artifact.path).toString(),
 		contentDigest: digest(artifact.bytes),
 	});
+}
+
+/** Computes one package root digest from its ordered target-to-content closure. */
+export function createLocalAgentPackageContentDigest(
+	artifacts: readonly ILocalAgentPackageContentArtifact[],
+): AgentPackageContentDigest {
+	if (artifacts.length === 0 || new Set(artifacts.map(artifact => artifact.target)).size !== artifacts.length) {
+		throw new Error('Local Agent package content closure must contain unique targets.');
+	}
+	const encoded = encodeAgentHostProtocolValue(Object.freeze(artifacts.map(artifact => Object.freeze({
+		target: artifact.target,
+		contentDigest: artifact.contentDigest,
+	}))));
+	return createAgentPackageContentDigest(`sha256:${createHash('sha256').update(encoded).digest('hex')}`);
 }
 
 async function verifyDependency(

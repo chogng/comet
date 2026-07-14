@@ -8,9 +8,9 @@ import type { MessageEvent } from 'electron';
 import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import { MessagePortChannel } from 'cs/base/parts/ipc/common/messagePortIpc';
 import {
-	mockAgentRuntimeConnectMessage,
-	mockAgentRuntimeReadyMessage,
-} from 'cs/code/common/agentHost/mockAgentPackages';
+	localAgentRuntimeConnectMessage,
+	localAgentRuntimeReadyMessage,
+} from 'cs/code/common/agentHost/localAgentRuntimeProtocol';
 import {
 	agentRuntimeConnectionChannelName,
 	AgentRuntimeConnectionChannel,
@@ -46,7 +46,7 @@ let connected = false;
 
 const onMessage = (event: MessageEvent): void => {
 	const message = asConnectMessage(event.data);
-	if (message.type !== mockAgentRuntimeConnectMessage || connected) {
+	if (message.type !== localAgentRuntimeConnectMessage || connected) {
 		throw new Error('Mock Agent Runtime accepts exactly one connection message.');
 	}
 	const port = event.ports[0];
@@ -81,4 +81,4 @@ const onMessage = (event: MessageEvent): void => {
 
 process.parentPort.on('message', onMessage);
 lifetime.add(toDisposable(() => process.parentPort.off('message', onMessage)));
-process.parentPort.postMessage({ type: mockAgentRuntimeReadyMessage });
+process.parentPort.postMessage({ type: localAgentRuntimeReadyMessage });
