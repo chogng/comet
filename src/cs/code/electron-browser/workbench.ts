@@ -35,10 +35,21 @@ function isSmokeTestDriverEnabled() {
 async function main() {
 	assertDesktopIpcBridge();
 	await import('cs/sessions/sessions.desktop.main');
-	const { initializeLocalAgentHostWorkbench } = await import(
-		'cs/code/electron-browser/agentHost'
+	const { initializeLocalAgentHostSessionsContribution } = await import(
+		'cs/sessions/contrib/providers/agentHost/electron-browser/localAgentHost'
 	);
-	await initializeLocalAgentHostWorkbench();
+	const {
+		localAgentClientContentResourceLimits,
+		localAgentClientToolCallRecords,
+	} = await import('cs/code/electron-browser/agentHostConfiguration');
+	await initializeLocalAgentHostSessionsContribution(Object.freeze({
+		maximumClientToolCallRecords: localAgentClientToolCallRecords,
+		contentResourceLimits: localAgentClientContentResourceLimits,
+		implementation: Object.freeze({
+			name: 'comet.desktop.renderer',
+			build: 'agent-host.v2',
+		}),
+	}));
 
 	const { startSessionsWorkbench } = await import('cs/sessions/browser/sessionsWorkbench');
 	await startSessionsWorkbench();

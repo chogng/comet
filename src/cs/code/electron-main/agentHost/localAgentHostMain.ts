@@ -15,7 +15,7 @@ import { Disposable, type IDisposable, toDisposable } from 'cs/base/common/lifec
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import type { ElectronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
 import type { IStorage } from 'cs/base/parts/storage/common/storage';
-import { localAgentHostContentResourceLimits } from 'cs/code/common/agentHostConfiguration';
+import { localAgentHostContentResourceLimits } from './localAgentHostConfiguration.js';
 import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/common/connectionChannel';
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import type {

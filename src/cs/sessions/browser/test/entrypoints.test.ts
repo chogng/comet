@@ -50,14 +50,18 @@ test('browser and desktop bootstrap the Sessions application exactly once', () =
 		assert.doesNotMatch(source, /renderWorkbench\(\)/);
 		assert.doesNotMatch(source, /nativeOverlay|isNativeWorkbenchAuxiliaryWindow/);
 		if (target === 'electron-browser') {
-			assert.match(source, /initializeLocalAgentHostWorkbench/);
+			assert.match(source, /initializeLocalAgentHostSessionsContribution/);
+			assert.match(
+				source,
+				/sessions\/contrib\/providers\/agentHost\/electron-browser\/localAgentHost/,
+			);
 			assert.ok(
 				source.indexOf("await import('cs/sessions/sessions.desktop.main')")
-					< source.indexOf('await initializeLocalAgentHostWorkbench()'),
+					< source.indexOf('await initializeLocalAgentHostSessionsContribution('),
 				'Agent Host provider composition must follow desktop contribution registration',
 			);
 			assert.ok(
-				source.indexOf('await initializeLocalAgentHostWorkbench()')
+				source.indexOf('await initializeLocalAgentHostSessionsContribution(')
 					< source.indexOf('await startSessionsWorkbench()'),
 				'Agent Host provider composition must finish before Sessions starts',
 			);
@@ -169,6 +173,22 @@ test('Sessions target mains load their matching Workbench foundation before cont
 	assert.doesNotMatch(workbenchCommon, /services\/layout|actions\/layoutActions/);
 	assert.doesNotMatch(workbenchDesktop, /browserEditorChatFeatures|cs\/sessions/);
 	assert.doesNotMatch(workbenchDesktop, /contrib\/splash\/browser\/partsSplash/);
+	assert.equal(existsSync(path.join(Root, 'src/cs/code/electron-browser/agentHost.ts')), false);
+	const localAgentHostContribution = readSource(
+		'src/cs/sessions/contrib/providers/agentHost/electron-browser/localAgentHost.ts',
+	);
+	assert.match(localAgentHostContribution, /class LocalAgentHostSessionsContribution extends Disposable/);
+	assert.match(localAgentHostContribution, /@IMainProcessService private readonly mainProcessService/);
+	assert.match(localAgentHostContribution, /@IChatService private readonly chatService/);
+	assert.match(localAgentHostContribution, /@ISessionsProvidersService private readonly sessionsProvidersService/);
+	assert.doesNotMatch(localAgentHostContribution, /invokeFunction|accessor\.get/);
+	assert.equal(existsSync(path.join(Root, 'src/cs/code/common/agentHostConfiguration.ts')), false);
+	const clientAgentHostConfiguration = readSource('src/cs/code/electron-browser/agentHostConfiguration.ts');
+	const hostAgentHostConfiguration = readSource(
+		'src/cs/code/electron-main/agentHost/localAgentHostConfiguration.ts',
+	);
+	assert.doesNotMatch(clientAgentHostConfiguration, /agentHost\/node/);
+	assert.doesNotMatch(hostAgentHostConfiguration, /agentHost\/browser/);
 });
 
 test('Lower source layers do not import Sessions and Workbench has no product host entry', () => {
