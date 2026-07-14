@@ -314,8 +314,15 @@ names. No target registration imports or dispatches through the legacy path.
    immutable executable-dependency resolution, storage, activation,
    package-wide quiescing, resume migration, update, uninstall, Agent-backed
    deletion, retained Host-record purge, and retained-data ownership under
-   `node/packages/`. Keep Agent Host client connections and Agent runtime
-   connections as distinct protocols.
+   `node/packages/`. Migrate the historical `agentHost.packages.v3` source once
+   into `agentHost.packages.v4`: convert exact `runtimeForm` and
+   `runtimeEntryPoint` manifests to `execution`, persist exact dependency
+   executable authority, convert operation transitions to activation
+   transitions, validate the complete migrated package state, commit v4, and
+   only then delete v3. A committed v4 state is authoritative after interrupted
+   cleanup; ordinary reads and writes never choose between both formats. Keep
+   Agent Host client connections and Agent runtime connections as distinct
+   protocols.
 2. Move canonical Agent and Tool protocol values shared by Host integrations
    from `src/cs/agent/` into Platform Agent Host common contracts. Move the
    current model-and-Tool loop and provider implementations into one direct

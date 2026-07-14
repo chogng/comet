@@ -106,7 +106,10 @@ const productModels = Object.freeze([
 	}),
 ]);
 const automaticModelOption = productModels[0].id;
-const packageStateStorageKey = 'agentHost.packages.v3';
+const packageStateStorageKey = 'agentHost.packages.v4';
+const packageStateStoreOptions = Object.freeze({
+	hostTarget: Object.freeze({ operatingSystem: process.platform, architecture: process.arch }),
+});
 const sessionConfigurationCandidate = Object.freeze({
 	schema: COMET_SESSION_CONFIGURATION_SCHEMA.revision,
 	values: Object.freeze({}),
@@ -275,7 +278,7 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		assert.equal(channelServer.registeredName, localAgentHostConnectionChannelName);
 		assert.notEqual(channelServer.registeredChannel, undefined);
 
-		const packageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const packageState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
 		if (packageState === undefined) {
 			throw new Error('Production Agent package state was not persisted.');
 		}
@@ -473,7 +476,7 @@ test('product startup updates the verified bundled Comet revision before registe
 			path.join(temporaryRoot, 'first-content'),
 			new RecordingChannelServer(() => firstRegistrationDigests.push(installedDigestAtRegistration(storage))),
 		);
-		const firstState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const firstState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
 		assert.deepEqual(firstRegistrationDigests, [digest(firstArtifact)]);
 		await firstHost.shutdown();
 		firstHost = undefined;
@@ -487,7 +490,7 @@ test('product startup updates the verified bundled Comet revision before registe
 			path.join(temporaryRoot, 'second-content'),
 			new RecordingChannelServer(() => secondRegistrationDigests.push(installedDigestAtRegistration(storage))),
 		);
-		const secondState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const secondState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
 		if (firstState === undefined || secondState === undefined) {
 			throw new Error('Agent package state was not persisted across product startup.');
 		}
@@ -608,7 +611,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 			throw new Error('Codex connected Session creation failed.');
 		}
 		const retainedSession = created.result.session;
-		const firstPackageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const firstPackageState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
 		const firstCodexPackage = firstPackageState?.installedPackages.find(candidate => candidate.packageId === 'codex');
 		if (firstCodexPackage === undefined) {
 			throw new Error('Installed Codex package receipt is missing.');
@@ -649,7 +652,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		}
 		assert.deepEqual(restoredRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'codex']);
 		assert.equal(restoredSession.state.lifecycle, 'available');
-		const restoredPackageState = await new ApplicationStorageAgentPackageStateStore(storage).read();
+		const restoredPackageState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
 		const restoredCodexPackage = restoredPackageState?.installedPackages.find(candidate => candidate.packageId === 'codex');
 		if (restoredCodexPackage === undefined) {
 			throw new Error('Cold-restored Codex installed record is missing.');
@@ -742,6 +745,8 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.doesNotMatch(mainSource, /ClaudeAgent|claudeAgent|AgentRuntimeProcessFactory/);
 	assert.match(mainSource, /const agentPackages = await createProductAgentPackageCatalog\(\{/);
 	assert.match(mainSource, /sdkArtifactRoot: app\.isPackaged/);
+	assert.match(mainSource, /fileURLToPath\(new URL\('\.\.\/\.\.\/\.\.\/dist-agent-sdk\/', import\.meta\.url\)\)/);
+	assert.doesNotMatch(mainSource, /app\.getAppPath\(\)/);
 	assert.match(mainSource, /agentPackageProducts: agentPackages\.products/);
 	assert.match(mainSource, /contentMaterializationRoot: environmentMainPaths\.agentHostContentDir/);
 	assert.match(mainSource, /packageStorageRoot: environmentMainPaths\.agentHostPackagesDir/);
@@ -749,6 +754,8 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.match(mainSource, /providerApiKeySecretStorage: storage\.providerApiKeySecretStorage/);
 	assert.match(mainSource, /agentStateRoot: environmentMainPaths\.agentHostAgentStateDir/);
 	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService\)/);
+	assert.match(mainSource, /void startApplication\(\)\.catch\(error => \{/);
+	assert.match(mainSource, /app\.exit\(1\)/);
 	const saveSettingsIndex = ipcSource.indexOf('const saved = await storage.saveSettings');
 	const updateThemeIndex = ipcSource.indexOf('themeMainService.updateSettings(saved)', saveSettingsIndex);
 	assert.ok(saveSettingsIndex >= 0);

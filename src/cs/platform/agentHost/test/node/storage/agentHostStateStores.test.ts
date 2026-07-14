@@ -24,7 +24,10 @@ import {
 	createAgentHostPayloadDigest,
 	createAgentHostSequence,
 	createAgentId,
+	createAgentPackageContentDigest,
 	createAgentPackageId,
+	createAgentPackageOperationId,
+	createAgentPackageRevision,
 	createAgentResumeSchemaId,
 	createAgentRuntimeRegistrationRevision,
 	createAgentSessionId,
@@ -47,7 +50,11 @@ const agentHostCatalogStorageKeyV2 = 'agentHost.catalog.v2';
 const agentHostCatalogStorageKey = 'agentHost.catalog.v3';
 const agentPackageStateStorageKeyV1 = 'agentHost.packages.v1';
 const agentPackageStateStorageKeyV2 = 'agentHost.packages.v2';
-const agentPackageStateStorageKey = 'agentHost.packages.v3';
+const agentPackageStateStorageKeyV3 = 'agentHost.packages.v3';
+const agentPackageStateStorageKey = 'agentHost.packages.v4';
+const packageStateStoreOptions = Object.freeze({
+	hostTarget: Object.freeze({ operatingSystem: 'test', architecture: 'test' }),
+});
 const configuredAgentId = createAgentId('test.configured-agent');
 const configuredProperty = createAgentConfigurationPropertyId('test.configured-agent.mode');
 
@@ -141,6 +148,53 @@ function createLegacyPackageState(revision: number) {
 		activeRegistrations: [],
 		retainedBackingRecords: [],
 		materializedBackings: [],
+	};
+}
+
+function createV3InstalledPackage() {
+	const packageId = registrationV3.packageId;
+	const revision = createAgentPackageRevision('test.configured-package.v3');
+	const contentDigest = createAgentPackageContentDigest(`sha256:${'a'.repeat(64)}`);
+	const runtimeDigest = createAgentPackageContentDigest(`sha256:${'b'.repeat(64)}`);
+	const executableDigest = createAgentPackageContentDigest(`sha256:${'c'.repeat(64)}`);
+	const dependencies = [{
+		id: 'test.runtime',
+		source: 'file:///tmp/test-runtime.js',
+		target: 'runtime/test-runtime.js',
+		digest: runtimeDigest,
+		license: 'MIT',
+	}, {
+		id: 'test.executable',
+		source: 'file:///tmp/test-executable',
+		target: 'vendor/test-executable',
+		digest: executableDigest,
+		license: 'MIT',
+	}];
+	return {
+		packageId,
+		revision,
+		contentDigest,
+		source: 'file:///tmp/test-runtime.js',
+		distribution: 'user' as const,
+		manifest: {
+			schema: 1,
+			packageId,
+			revision,
+			contentDigest,
+			publisher: 'Comet',
+			target: { operatingSystem: 'test', architecture: 'test' },
+			runtimeForm: 'connected' as const,
+			runtimeEntryPoint: 'runtime/test-runtime.js',
+			agentIds: [registrationV3.agentId],
+			dependencies,
+			privileges: [],
+		},
+		dependencyClosure: dependencies.map(dependency => ({
+			...dependency,
+			verifiedDigest: dependency.digest,
+			immutable: true as const,
+		})),
+		grantedPrivileges: [],
 	};
 }
 
@@ -472,7 +526,7 @@ suite('Agent Host application storage', () => {
 	test('concurrent package commits have one exact winner', async () => {
 		const storage = await createStorage();
 		try {
-			const store = new ApplicationStorageAgentPackageStateStore(storage);
+			const store = new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions);
 			await store.commit(undefined, createPackageState(0));
 			const results = await Promise.allSettled([
 				store.commit(0, createPackageState(1)),
@@ -485,12 +539,12 @@ suite('Agent Host application storage', () => {
 		}
 	});
 
-	test('migrates the exact v1 package state to v3 before continuing its CAS revision', async () => {
+	test('migrates the exact v1 package state to v4 before continuing its CAS revision', async () => {
 		const storage = await createStorage();
 		try {
 			const legacyState = createLegacyPackageState(4);
 			await storage.set(agentPackageStateStorageKeyV1, JSON.stringify(legacyState));
-			const store = new ApplicationStorageAgentPackageStateStore(storage);
+			const store = new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions);
 			const expected = {
 				...legacyState,
 				catalogRevision: 4,
@@ -517,9 +571,69 @@ suite('Agent Host application storage', () => {
 			};
 			await storage.set(agentPackageStateStorageKeyV2, JSON.stringify(state));
 
-			assert.deepEqual(await new ApplicationStorageAgentPackageStateStore(storage).read(), state);
+			assert.deepEqual(await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(), state);
 			assert.equal(storage.get(agentPackageStateStorageKeyV2), undefined);
 			assert.deepEqual(JSON.parse(storage.get(agentPackageStateStorageKey)!), state);
+		} finally {
+			storage.dispose();
+		}
+	});
+
+	test('migrates exact v3 package manifests, executable authority, and operation transitions to v4', async () => {
+		const storage = await createStorage();
+		try {
+			const installedPackage = createV3InstalledPackage();
+			const operation = {
+				operation: createAgentPackageOperationId('test-v3-operation'),
+				digest: createAgentHostPayloadDigest(`sha256:${'d'.repeat(64)}`),
+				kind: 'uninstall',
+				packageId: installedPackage.packageId,
+				affectedRecords: null,
+				status: 'pending',
+				phase: 'runtimePrepared',
+				runtimeTransition: {
+					previous: {
+						installedPackage,
+						registrations: [registrationV3],
+					},
+					next: null,
+				},
+			};
+			const v3 = {
+				...createPackageState(11),
+				catalogRevision: 8,
+				operations: [operation],
+				installedPackages: [installedPackage],
+				activeRegistrations: [registrationV3],
+			};
+			await storage.set(agentPackageStateStorageKeyV3, JSON.stringify(v3));
+
+			const migrated = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
+			assert.equal(storage.get(agentPackageStateStorageKeyV3), undefined);
+			assert.deepEqual(migrated?.installedPackages[0].manifest.execution, {
+				kind: 'connected',
+				entryPoint: installedPackage.manifest.runtimeEntryPoint,
+			});
+			assert.deepEqual(
+				migrated?.installedPackages[0].manifest.dependencies.map(dependency => dependency.executable),
+				[false, true],
+			);
+			assert.deepEqual(
+				migrated?.installedPackages[0].dependencyClosure.map(dependency => dependency.executable),
+				[false, true],
+			);
+			const migratedOperation = migrated?.operations[0];
+			assert.equal(migratedOperation?.status, 'pending');
+			if (migratedOperation?.status !== 'pending' || migratedOperation.phase === 'recorded') {
+				assert.fail('Expected a migrated activation transition');
+			}
+			assert.equal(migratedOperation.phase, 'activationPrepared');
+			assert.equal(Object.hasOwn(migratedOperation, 'runtimeTransition'), false);
+			assert.deepEqual(
+				migratedOperation.activationTransition.previous?.installedPackage,
+				migrated?.installedPackages[0],
+			);
+			assert.deepEqual(JSON.parse(storage.get(agentPackageStateStorageKey)!), migrated);
 		} finally {
 			storage.dispose();
 		}
@@ -534,7 +648,7 @@ suite('Agent Host application storage', () => {
 			};
 			await storage.set(agentPackageStateStorageKeyV1, JSON.stringify(state));
 
-			assert.deepEqual(await new ApplicationStorageAgentPackageStateStore(storage).read(), state);
+			assert.deepEqual(await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(), state);
 			assert.equal(storage.get(agentPackageStateStorageKeyV1), undefined);
 			assert.deepEqual(JSON.parse(storage.get(agentPackageStateStorageKey)!), state);
 		} finally {
@@ -545,12 +659,18 @@ suite('Agent Host application storage', () => {
 	test('migrates every v2 registration in active state and operation transitions', async () => {
 		const storage = await createStorage();
 		try {
+			const installedPackage = createV3InstalledPackage();
 			const operation = {
+				operation: createAgentPackageOperationId('test-v2-operation'),
+				digest: createAgentHostPayloadDigest(`sha256:${'e'.repeat(64)}`),
+				kind: 'uninstall',
+				packageId: installedPackage.packageId,
+				affectedRecords: null,
 				status: 'pending',
 				phase: 'activationPrepared',
 				activationTransition: {
 					previous: {
-						installedPackage: { packageId: registrationV2.packageId },
+						installedPackage,
 						registrations: [registrationV2],
 					},
 					next: null,
@@ -559,10 +679,14 @@ suite('Agent Host application storage', () => {
 			const v2 = {
 				...createPackageState(7),
 				operations: [operation],
+				installedPackages: [installedPackage],
 				activeRegistrations: [registrationV2],
 			};
 			await storage.set(agentPackageStateStorageKeyV2, JSON.stringify(v2));
-			const migrated = await new ApplicationStorageAgentPackageStateStore(storage, packageMigration).read();
+			const migrated = await new ApplicationStorageAgentPackageStateStore(storage, {
+				...packageStateStoreOptions,
+				registrationMigration: packageMigration,
+			}).read();
 			assert.deepEqual(migrated?.activeRegistrations, [registrationV3]);
 			assert.deepEqual(
 				(migrated?.operations[0] as unknown as typeof operation).activationTransition.previous?.registrations,
@@ -580,7 +704,7 @@ suite('Agent Host application storage', () => {
 			const v2 = { ...createPackageState(2), activeRegistrations: [registrationV2] };
 			await storage.set(agentPackageStateStorageKeyV2, JSON.stringify(v2));
 			await assert.rejects(
-				new ApplicationStorageAgentPackageStateStore(storage).read(),
+				new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(),
 				/not declared/,
 			);
 			assert.equal(storage.get(agentPackageStateStorageKeyV2), JSON.stringify(v2));
@@ -590,7 +714,7 @@ suite('Agent Host application storage', () => {
 		}
 	});
 
-	test('keeps v3 authoritative and removes stale v2 and v1 sources after interrupted cleanup', async () => {
+	test('keeps v4 authoritative and removes stale v3, v2, and v1 sources after interrupted cleanup', async () => {
 		const storage = await createStorage();
 		try {
 			const stale = createLegacyPackageState(3);
@@ -600,18 +724,20 @@ suite('Agent Host application storage', () => {
 			};
 			await storage.set(agentPackageStateStorageKeyV1, JSON.stringify(stale));
 			await storage.set(agentPackageStateStorageKeyV2, JSON.stringify(createPackageState(4)));
+			await storage.set(agentPackageStateStorageKeyV3, JSON.stringify(createPackageState(6)));
 			await storage.set(agentPackageStateStorageKey, JSON.stringify(current));
 
-			assert.deepEqual(await new ApplicationStorageAgentPackageStateStore(storage).read(), current);
+			assert.deepEqual(await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(), current);
 			assert.equal(storage.get(agentPackageStateStorageKeyV1), undefined);
 			assert.equal(storage.get(agentPackageStateStorageKeyV2), undefined);
+			assert.equal(storage.get(agentPackageStateStorageKeyV3), undefined);
 			assert.deepEqual(JSON.parse(storage.get(agentPackageStateStorageKey)!), current);
 		} finally {
 			storage.dispose();
 		}
 	});
 
-	test('rejects a malformed v1 source without writing v3 or deleting the source', async () => {
+	test('rejects a malformed v1 source without writing v4 or deleting the source', async () => {
 		const storage = await createStorage();
 		try {
 			const invalid = {
@@ -621,10 +747,73 @@ suite('Agent Host application storage', () => {
 			await storage.set(agentPackageStateStorageKeyV1, JSON.stringify(invalid));
 
 			await assert.rejects(
-				new ApplicationStorageAgentPackageStateStore(storage).read(),
+				new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(),
 				/Invalid Agent package persisted state fields/,
 			);
 			assert.equal(storage.get(agentPackageStateStorageKeyV1), JSON.stringify(invalid));
+			assert.equal(storage.get(agentPackageStateStorageKey), undefined);
+		} finally {
+			storage.dispose();
+		}
+	});
+
+	test('rejects a malformed v3 package without writing v4 or deleting the source', async () => {
+		const storage = await createStorage();
+		try {
+			const installedPackage = createV3InstalledPackage();
+			const invalid = {
+				...createPackageState(2),
+				installedPackages: [{
+					...installedPackage,
+					manifest: {
+						...installedPackage.manifest,
+						runtimeEntryPoint: 'runtime/missing.js',
+					},
+				}],
+			};
+			await storage.set(agentPackageStateStorageKeyV3, JSON.stringify(invalid));
+
+			await assert.rejects(
+				new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(),
+				/Invalid v3 Agent package runtime entry point/,
+			);
+			assert.equal(storage.get(agentPackageStateStorageKeyV3), JSON.stringify(invalid));
+			assert.equal(storage.get(agentPackageStateStorageKey), undefined);
+		} finally {
+			storage.dispose();
+		}
+	});
+
+	test('validates the complete migrated v3 operation before writing v4 or deleting the source', async () => {
+		const storage = await createStorage();
+		try {
+			const installedPackage = createV3InstalledPackage();
+			const invalid = {
+				...createPackageState(3),
+				operations: [{
+					operation: createAgentPackageOperationId('invalid-v3-operation'),
+					digest: createAgentHostPayloadDigest(`sha256:${'f'.repeat(64)}`),
+					kind: 'uninstall',
+					packageId: installedPackage.packageId,
+					affectedRecords: null,
+					status: 'pending',
+					phase: 'runtimePrepared',
+					runtimeTransition: {
+						previous: { installedPackage, registrations: [registrationV3] },
+						next: null,
+					},
+					unexpected: true,
+				}],
+				installedPackages: [installedPackage],
+				activeRegistrations: [registrationV3],
+			};
+			await storage.set(agentPackageStateStorageKeyV3, JSON.stringify(invalid));
+
+			await assert.rejects(
+				new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(),
+				/Invalid Agent package persisted state/,
+			);
+			assert.equal(storage.get(agentPackageStateStorageKeyV3), JSON.stringify(invalid));
 			assert.equal(storage.get(agentPackageStateStorageKey), undefined);
 		} finally {
 			storage.dispose();
@@ -656,7 +845,7 @@ suite('Agent Host application storage', () => {
 				revision: -1,
 			}));
 			await assert.rejects(
-				new ApplicationStorageAgentPackageStateStore(storage).read(),
+				new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read(),
 				/Invalid revision/,
 			);
 		} finally {

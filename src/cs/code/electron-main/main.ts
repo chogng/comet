@@ -29,7 +29,8 @@ configureDevelopmentEnvironmentMain();
 configureEnvironmentMainPaths(environmentMainPaths);
 registerWindowOpenPolicy(app);
 
-app.whenReady().then(async () => {
+async function startApplication() {
+  await app.whenReady();
   await prepareEnvironmentMain(environmentMainPaths);
 
   const storage = createStorageService(
@@ -56,7 +57,7 @@ app.whenReady().then(async () => {
     target,
     sdkArtifactRoot: app.isPackaged
       ? join(process.resourcesPath, 'agent-sdk')
-      : join(app.getAppPath(), 'dist-agent-sdk'),
+      : fileURLToPath(new URL('../../../dist-agent-sdk/', import.meta.url)),
     packageStorageRoot: environmentMainPaths.agentHostPackagesDir,
     agentStateRoot: environmentMainPaths.agentHostAgentStateDir,
   });
@@ -114,4 +115,9 @@ app.whenReady().then(async () => {
   registerAppIpc(storage, nativeHostMainService, themeMainService);
   await windowsMainService.openMainWindow(settings);
   setMenuBarIconEnabled(settings.menuBarIconEnabled);
+}
+
+void startApplication().catch(error => {
+  console.error('[main] failed to start:', error);
+  app.exit(1);
 });

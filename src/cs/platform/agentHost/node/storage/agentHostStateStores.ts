@@ -31,6 +31,8 @@ import type {
 	AgentPackagePersistedOperation,
 	IAgentPackagePersistedState,
 	IAgentPackageActivationTransitionSide,
+	IAgentPackageTarget,
+	IInstalledAgentPackage,
 } from 'cs/platform/agentHost/common/packages';
 import type { IAgentHostSessionState } from 'cs/platform/agentHost/common/protocol';
 import {
@@ -40,16 +42,19 @@ import {
 	type IAgentHostPersistedCatalog,
 	type IAgentHostPersistedSessionRecord,
 } from 'cs/platform/agentHost/node/host/agentHostCatalog.js';
-import type {
-	IAgentPackageStateStore,
+import {
+	type IAgentPackageStateStore,
+	validateAndFreezeAgentPackagePersistedState,
 } from 'cs/platform/agentHost/node/packages/agentPackageLifecycle.js';
+import { validateAndFreezeInstalledAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageValidation.js';
 
 const agentHostCatalogStorageKeyV1 = 'agentHost.catalog.v1';
 const agentHostCatalogStorageKeyV2 = 'agentHost.catalog.v2';
 const agentHostCatalogStorageKey = 'agentHost.catalog.v3';
 const agentPackageStateStorageKeyV1 = 'agentHost.packages.v1';
 const agentPackageStateStorageKeyV2 = 'agentHost.packages.v2';
-const agentPackageStateStorageKey = 'agentHost.packages.v3';
+const agentPackageStateStorageKeyV3 = 'agentHost.packages.v3';
+const agentPackageStateStorageKey = 'agentHost.packages.v4';
 const legacySessionsStorageKey = 'sessions.providers.default';
 
 const agentHostCatalogFields = [
@@ -101,6 +106,58 @@ const legacyAgentPackageStateFields = [
 	'activeRegistrations',
 	'retainedBackingRecords',
 	'materializedBackings',
+] as const;
+
+const installedAgentPackageFields = [
+	'packageId',
+	'revision',
+	'contentDigest',
+	'source',
+	'distribution',
+	'manifest',
+	'dependencyClosure',
+	'grantedPrivileges',
+] as const;
+
+const agentPackageManifestV3Fields = [
+	'schema',
+	'packageId',
+	'revision',
+	'contentDigest',
+	'publisher',
+	'target',
+	'runtimeForm',
+	'runtimeEntryPoint',
+	'agentIds',
+	'dependencies',
+	'privileges',
+] as const;
+
+const agentPackageManifestFields = [
+	'schema',
+	'packageId',
+	'revision',
+	'contentDigest',
+	'publisher',
+	'target',
+	'execution',
+	'agentIds',
+	'dependencies',
+	'privileges',
+] as const;
+
+const agentPackageDependencyV3Fields = [
+	'id',
+	'source',
+	'target',
+	'digest',
+	'license',
+] as const;
+
+const verifiedAgentPackageDependencyV3Fields = [
+	...agentPackageDependencyV3Fields,
+	'verifiedDigest',
+	'immutable',
 ] as const;
 
 const agentRuntimeRegistrationV2Fields = [
@@ -184,6 +241,11 @@ export interface IAgentPackageV2RegistrationMigration {
 
 export interface IAgentPackageV2StorageMigration {
 	readonly registrations: readonly IAgentPackageV2RegistrationMigration[];
+}
+
+export interface IApplicationStorageAgentPackageStateStoreOptions {
+	readonly hostTarget: IAgentPackageTarget;
+	readonly registrationMigration?: IAgentPackageV2StorageMigration;
 }
 
 type IAgentPackageStateV1 = Omit<
@@ -342,10 +404,107 @@ function assertCurrentAgentRuntimeRegistration(
 	assertResumeMigrationEdges(value.resumeMigrationEdges, key);
 }
 
-function visitRuntimeTransitionRegistrations(
+function validateCurrentInstalledAgentPackage(
+	value: unknown,
+	key: string,
+	hostTarget: IAgentPackageTarget,
+): IInstalledAgentPackage {
+	try {
+		return validateAndFreezeInstalledAgentPackage(value, hostTarget);
+	} catch (error) {
+		throw new Error(`Invalid installed Agent package in storage key '${key}'`, { cause: error });
+	}
+}
+
+function migrateInstalledAgentPackageV3(
+	value: unknown,
+	key: string,
+	hostTarget: IAgentPackageTarget,
+): IInstalledAgentPackage {
+	if (
+		!hasExactFields(value, installedAgentPackageFields)
+		|| !Array.isArray(value.dependencyClosure)
+		|| !Array.isArray(value.grantedPrivileges)
+	) {
+		throw new Error(`Invalid installed Agent package fields in storage key '${key}'`);
+	}
+	if (hasExactFields(value.manifest, agentPackageManifestFields)) {
+		return validateCurrentInstalledAgentPackage(value, key, hostTarget);
+	}
+	if (!hasExactFields(value.manifest, agentPackageManifestV3Fields)) {
+		throw new Error(`Invalid v3 Agent package manifest fields in storage key '${key}'`);
+	}
+	const manifest = value.manifest;
+	if (
+		!Array.isArray(manifest.agentIds)
+		|| !Array.isArray(manifest.dependencies)
+		|| !Array.isArray(manifest.privileges)
+		|| (manifest.runtimeForm !== 'embedded' && manifest.runtimeForm !== 'connected')
+		|| typeof manifest.runtimeEntryPoint !== 'string'
+		|| manifest.runtimeEntryPoint.length === 0
+		|| manifest.runtimeEntryPoint.length > 2_048
+		|| (manifest.runtimeForm === 'embedded' && value.distribution !== 'bundled')
+	) {
+		throw new Error(`Invalid v3 Agent package manifest in storage key '${key}'`);
+	}
+	const runtimeEntryPoint = manifest.runtimeEntryPoint;
+	const dependencyTargets = manifest.dependencies.map(dependency => {
+		if (
+			!hasExactFields(dependency, agentPackageDependencyV3Fields)
+			|| typeof dependency.target !== 'string'
+		) {
+			throw new Error(`Invalid v3 Agent package dependency in storage key '${key}'`);
+		}
+		return dependency.target;
+	});
+	if (dependencyTargets.filter(target => target === runtimeEntryPoint).length !== 1) {
+		throw new Error(`Invalid v3 Agent package runtime entry point in storage key '${key}'`);
+	}
+	const executable = (target: unknown): boolean => (
+		manifest.runtimeForm === 'connected' && target !== runtimeEntryPoint
+	);
+	const dependencies = manifest.dependencies.map(dependency => Object.freeze({
+		...dependency,
+		executable: executable(dependency.target),
+	}));
+	const dependencyClosure = value.dependencyClosure.map(dependency => {
+		if (
+			!hasExactFields(dependency, verifiedAgentPackageDependencyV3Fields)
+			|| typeof dependency.target !== 'string'
+		) {
+			throw new Error(`Invalid v3 verified Agent package dependency in storage key '${key}'`);
+		}
+		return Object.freeze({
+			...dependency,
+			executable: executable(dependency.target),
+		});
+	});
+	const migrated = {
+		...value,
+		manifest: {
+			schema: manifest.schema,
+			packageId: manifest.packageId,
+			revision: manifest.revision,
+			contentDigest: manifest.contentDigest,
+			publisher: manifest.publisher,
+			target: manifest.target,
+			execution: manifest.runtimeForm === 'embedded'
+				? { kind: 'host' as const }
+				: { kind: 'connected' as const, entryPoint: runtimeEntryPoint },
+			agentIds: manifest.agentIds,
+			dependencies,
+			privileges: manifest.privileges,
+		},
+		dependencyClosure,
+	};
+	return validateCurrentInstalledAgentPackage(migrated, key, hostTarget);
+}
+
+function visitActivationTransitionRegistrations(
 	operation: unknown,
 	key: string,
 	visit: (registration: unknown) => IAgentRuntimeRegistration,
+	visitInstalledPackage: (installedPackage: unknown) => IInstalledAgentPackage,
 ): AgentPackagePersistedOperation {
 	if (operation === null || typeof operation !== 'object' || Array.isArray(operation)) {
 		throw new Error(`Invalid Agent package operation in storage key '${key}'`);
@@ -365,7 +524,7 @@ function visitRuntimeTransitionRegistrations(
 			throw new Error(`Invalid Agent package activation transition side in storage key '${key}'`);
 		}
 		return {
-			installedPackage: value.installedPackage as IAgentPackageActivationTransitionSide['installedPackage'],
+			installedPackage: visitInstalledPackage(value.installedPackage),
 			registrations: value.registrations.map(visit),
 		};
 	};
@@ -378,32 +537,73 @@ function visitRuntimeTransitionRegistrations(
 	} as AgentPackagePersistedOperation;
 }
 
+function migrateAgentPackageOperationV3(
+	operation: unknown,
+	key: string,
+	visitRegistration: (registration: unknown) => IAgentRuntimeRegistration,
+	hostTarget: IAgentPackageTarget,
+): AgentPackagePersistedOperation {
+	if (operation === null || typeof operation !== 'object' || Array.isArray(operation)) {
+		throw new Error(`Invalid Agent package operation in storage key '${key}'`);
+	}
+	if (!Object.hasOwn(operation, 'runtimeTransition')) {
+		return visitActivationTransitionRegistrations(
+			operation,
+			key,
+			visitRegistration,
+			installedPackage => migrateInstalledAgentPackageV3(installedPackage, key, hostTarget),
+		);
+	}
+	if (Object.hasOwn(operation, 'activationTransition')) {
+		throw new Error(`Mixed Agent package transition fields in storage key '${key}'`);
+	}
+	const transition = (operation as { readonly runtimeTransition?: unknown }).runtimeTransition;
+	if (!hasExactFields(transition, ['previous', 'next'])) {
+		throw new Error(`Invalid v3 Agent package runtime transition in storage key '${key}'`);
+	}
+	const migrateSide = (value: unknown): IAgentPackageActivationTransitionSide | null => {
+		if (value === null) {
+			return null;
+		}
+		if (!hasExactFields(value, ['installedPackage', 'registrations']) || !Array.isArray(value.registrations)) {
+			throw new Error(`Invalid v3 Agent package runtime transition side in storage key '${key}'`);
+		}
+		return {
+			installedPackage: migrateInstalledAgentPackageV3(value.installedPackage, key, hostTarget),
+			registrations: value.registrations.map(visitRegistration),
+		};
+	};
+	const phase = (() => {
+		switch ((operation as { readonly phase?: unknown }).phase) {
+			case 'runtimePrepared': return 'activationPrepared' as const;
+			case 'runtimeCommitted': return 'activationCommitted' as const;
+			case 'catalogCommitted': return 'catalogCommitted' as const;
+			default: throw new Error(`Invalid v3 Agent package runtime transition phase in storage key '${key}'`);
+		}
+	})();
+	const operationFields = Object.fromEntries(Object.entries(operation).filter(([field]) => (
+		field !== 'runtimeTransition' && field !== 'phase'
+	)));
+	return {
+		...operationFields,
+		phase,
+		activationTransition: {
+			previous: migrateSide(transition.previous),
+			next: migrateSide(transition.next),
+		},
+	} as AgentPackagePersistedOperation;
+}
+
 function assertCurrentAgentPackageState(
 	value: unknown,
 	key: string,
+	hostTarget: IAgentPackageTarget,
 ): asserts value is IAgentPackagePersistedState {
 	assertRevisionedState(value, key);
-	if (
-		!hasExactFields(value, agentPackageStateFields)
-		|| !hasArrayFields(value, [
-			'operations',
-			'installedPackages',
-			'activeRegistrations',
-			'retainedBackingRecords',
-			'materializedBackings',
-		])
-	) {
-		throw new Error(`Invalid Agent package persisted state fields in storage key '${key}'`);
-	}
-	const state = value as unknown as IAgentPackagePersistedState;
-	for (const registration of state.activeRegistrations) {
-		assertCurrentAgentRuntimeRegistration(registration, key);
-	}
-	for (const operation of state.operations) {
-		visitRuntimeTransitionRegistrations(operation, key, registration => {
-			assertCurrentAgentRuntimeRegistration(registration, key);
-			return registration;
-		});
+	try {
+		validateAndFreezeAgentPackagePersistedState(value as IAgentPackagePersistedState, hostTarget);
+	} catch (error) {
+		throw new Error(`Invalid Agent package persisted state in storage key '${key}'`, { cause: error });
 	}
 }
 
@@ -652,6 +852,7 @@ function migrateAgentHostCatalogV2(
 function migrateAgentPackageStateV1(
 	value: unknown,
 	migration: IAgentPackageV2StorageMigration | undefined,
+	hostTarget: IAgentPackageTarget,
 ): IAgentPackagePersistedState {
 	assertRevisionedState(value, agentPackageStateStorageKeyV1);
 	const migrateRegistration = createRegistrationMigration(migration);
@@ -670,14 +871,16 @@ function migrateAgentPackageStateV1(
 			revision: source.revision,
 			catalogRevision: source.catalogRevision,
 			operations: Object.freeze(source.operations.map(operation => (
-				visitRuntimeTransitionRegistrations(operation, agentPackageStateStorageKeyV1, migrateRegistration)
+				migrateAgentPackageOperationV3(operation, agentPackageStateStorageKeyV1, migrateRegistration, hostTarget)
 			))),
-			installedPackages: source.installedPackages,
+			installedPackages: Object.freeze(source.installedPackages.map(installedPackage => (
+				migrateInstalledAgentPackageV3(installedPackage, agentPackageStateStorageKeyV1, hostTarget)
+			))),
 			activeRegistrations: Object.freeze(source.activeRegistrations.map(migrateRegistration)),
 			retainedBackingRecords: source.retainedBackingRecords,
 			materializedBackings: source.materializedBackings,
 		};
-		assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey);
+		assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey, hostTarget);
 		return migrated;
 	}
 	if (hasExactFields(value, legacyAgentPackageStateFields)) {
@@ -694,12 +897,14 @@ function migrateAgentPackageStateV1(
 			revision: source.revision,
 			catalogRevision: source.revision,
 			operations: Object.freeze([]),
-			installedPackages: source.installedPackages,
+			installedPackages: Object.freeze(source.installedPackages.map(installedPackage => (
+				migrateInstalledAgentPackageV3(installedPackage, agentPackageStateStorageKeyV1, hostTarget)
+			))),
 			activeRegistrations: Object.freeze(source.activeRegistrations.map(migrateRegistration)),
 			retainedBackingRecords: source.retainedBackingRecords,
 			materializedBackings: source.materializedBackings,
 		};
-		assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey);
+		assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey, hostTarget);
 		return migrated;
 	}
 	throw new Error(`Invalid Agent package persisted state fields in storage key '${agentPackageStateStorageKeyV1}'`);
@@ -708,6 +913,7 @@ function migrateAgentPackageStateV1(
 function migrateAgentPackageStateV2(
 	value: unknown,
 	migration: IAgentPackageV2StorageMigration | undefined,
+	hostTarget: IAgentPackageTarget,
 ): IAgentPackagePersistedState {
 	assertRevisionedState(value, agentPackageStateStorageKeyV2);
 	if (
@@ -728,14 +934,55 @@ function migrateAgentPackageStateV2(
 		revision: source.revision,
 		catalogRevision: source.catalogRevision,
 		operations: Object.freeze(source.operations.map(operation => (
-			visitRuntimeTransitionRegistrations(operation, agentPackageStateStorageKeyV2, migrateRegistration)
+			migrateAgentPackageOperationV3(operation, agentPackageStateStorageKeyV2, migrateRegistration, hostTarget)
 		))),
-		installedPackages: source.installedPackages,
+		installedPackages: Object.freeze(source.installedPackages.map(installedPackage => (
+			migrateInstalledAgentPackageV3(installedPackage, agentPackageStateStorageKeyV2, hostTarget)
+		))),
 		activeRegistrations: Object.freeze(source.activeRegistrations.map(migrateRegistration)),
 		retainedBackingRecords: source.retainedBackingRecords,
 		materializedBackings: source.materializedBackings,
 	};
-	assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey);
+	assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey, hostTarget);
+	return migrated;
+}
+
+function migrateAgentPackageStateV3(
+	value: unknown,
+	hostTarget: IAgentPackageTarget,
+): IAgentPackagePersistedState {
+	assertRevisionedState(value, agentPackageStateStorageKeyV3);
+	if (
+		!hasExactFields(value, agentPackageStateFields)
+		|| !hasArrayFields(value, [
+			'operations',
+			'installedPackages',
+			'activeRegistrations',
+			'retainedBackingRecords',
+			'materializedBackings',
+		])
+	) {
+		throw new Error(`Invalid Agent package persisted state fields in storage key '${agentPackageStateStorageKeyV3}'`);
+	}
+	const source = value as unknown as IAgentPackagePersistedState;
+	const validateRegistration = (registration: unknown): IAgentRuntimeRegistration => {
+		assertCurrentAgentRuntimeRegistration(registration, agentPackageStateStorageKeyV3);
+		return registration;
+	};
+	const migrated: IAgentPackagePersistedState = {
+		revision: source.revision,
+		catalogRevision: source.catalogRevision,
+		operations: Object.freeze(source.operations.map(operation => (
+			migrateAgentPackageOperationV3(operation, agentPackageStateStorageKeyV3, validateRegistration, hostTarget)
+		))),
+		installedPackages: Object.freeze(source.installedPackages.map(installedPackage => (
+			migrateInstalledAgentPackageV3(installedPackage, agentPackageStateStorageKeyV3, hostTarget)
+		))),
+		activeRegistrations: Object.freeze(source.activeRegistrations.map(validateRegistration)),
+		retainedBackingRecords: source.retainedBackingRecords,
+		materializedBackings: source.materializedBackings,
+	};
+	assertCurrentAgentPackageState(migrated, agentPackageStateStorageKey, hostTarget);
 	return migrated;
 }
 
@@ -781,14 +1028,29 @@ async function migrateAgentHostCatalog(
 
 async function migrateAgentPackageState(
 	storage: IStorage,
-	migration: IAgentPackageV2StorageMigration | undefined,
+	options: IApplicationStorageAgentPackageStateStoreOptions,
 ): Promise<void> {
 	const currentSerialized = storage.get(agentPackageStateStorageKey);
 	if (currentSerialized !== undefined) {
 		assertCurrentAgentPackageState(
 			parseStoredState(currentSerialized, agentPackageStateStorageKey),
 			agentPackageStateStorageKey,
+			options.hostTarget,
 		);
+		await storage.delete(agentPackageStateStorageKeyV3);
+		await storage.delete(agentPackageStateStorageKeyV2);
+		await storage.delete(agentPackageStateStorageKeyV1);
+		return;
+	}
+
+	const v3Serialized = storage.get(agentPackageStateStorageKeyV3);
+	if (v3Serialized !== undefined) {
+		const migrated = migrateAgentPackageStateV3(
+			parseStoredState(v3Serialized, agentPackageStateStorageKeyV3),
+			options.hostTarget,
+		);
+		await storage.set(agentPackageStateStorageKey, migrated);
+		await storage.delete(agentPackageStateStorageKeyV3);
 		await storage.delete(agentPackageStateStorageKeyV2);
 		await storage.delete(agentPackageStateStorageKeyV1);
 		return;
@@ -798,9 +1060,11 @@ async function migrateAgentPackageState(
 	if (v2Serialized !== undefined) {
 		const migrated = migrateAgentPackageStateV2(
 			parseStoredState(v2Serialized, agentPackageStateStorageKeyV2),
-			migration,
+			options.registrationMigration,
+			options.hostTarget,
 		);
 		await storage.set(agentPackageStateStorageKey, migrated);
+		await storage.delete(agentPackageStateStorageKeyV3);
 		await storage.delete(agentPackageStateStorageKeyV2);
 		await storage.delete(agentPackageStateStorageKeyV1);
 		return;
@@ -812,9 +1076,11 @@ async function migrateAgentPackageState(
 	}
 	const migrated = migrateAgentPackageStateV1(
 		parseStoredState(v1Serialized, agentPackageStateStorageKeyV1),
-		migration,
+		options.registrationMigration,
+		options.hostTarget,
 	);
 	await storage.set(agentPackageStateStorageKey, migrated);
+	await storage.delete(agentPackageStateStorageKeyV3);
 	await storage.delete(agentPackageStateStorageKeyV1);
 }
 
@@ -912,13 +1178,13 @@ export class ApplicationStorageAgentPackageStateStore
 
 	constructor(
 		private readonly packageStorage: IStorage,
-		private readonly registrationMigration?: IAgentPackageV2StorageMigration,
+		private readonly options: IApplicationStorageAgentPackageStateStoreOptions,
 	) {
 		super(packageStorage, agentPackageStateStorageKey);
 	}
 
 	private ensureMigrated(): Promise<void> {
-		this.migration ??= migrateAgentPackageState(this.packageStorage, this.registrationMigration);
+		this.migration ??= migrateAgentPackageState(this.packageStorage, this.options);
 		return this.migration;
 	}
 
@@ -936,7 +1202,7 @@ export class ApplicationStorageAgentPackageStateStore
 	}
 
 	protected validate(value: unknown): void {
-		assertCurrentAgentPackageState(value, agentPackageStateStorageKey);
+		assertCurrentAgentPackageState(value, agentPackageStateStorageKey, this.options.hostTarget);
 	}
 }
 

@@ -568,7 +568,7 @@ function assertNoCrossPackageAgentClaims(
 	}
 }
 
-function validatePersistedState(
+export function validateAndFreezeAgentPackagePersistedState(
 	state: IAgentPackagePersistedState,
 	hostTarget: IAgentPackageTarget,
 ): IAgentPackagePersistedState {
@@ -603,7 +603,6 @@ function validatePersistedState(
 
 	const packagesById = new Map<AgentPackageId, IInstalledAgentPackage>();
 	const installedPackages: IInstalledAgentPackage[] = [];
-	let bundledPackageCount = 0;
 	for (const installedPackage of state.installedPackages) {
 		if (packagesById.has(installedPackage.packageId)) {
 			throw new AgentPackageError(
@@ -614,18 +613,8 @@ function validatePersistedState(
 		}
 
 		const validatedPackage = validateAndFreezeInstalledAgentPackage(installedPackage, hostTarget);
-		if (validatedPackage.distribution === 'bundled') {
-			bundledPackageCount += 1;
-		}
 		packagesById.set(validatedPackage.packageId, validatedPackage);
 		installedPackages.push(validatedPackage);
-	}
-
-	if (bundledPackageCount !== 1 || !packagesById.has('comet' as AgentPackageId)) {
-		throw new AgentPackageError(
-			AgentPackageErrorCode.InvalidPackage,
-			'Installed state must contain exactly one bundled Comet package',
-		);
 	}
 
 	const registrationsByPackage = new Map<AgentPackageId, IAgentRuntimeRegistration[]>();
@@ -1060,7 +1049,7 @@ function prepareColdBundledUpdateState(
 		phase: 'catalogCommitted',
 		activationTransition: transition,
 	});
-	const candidate = validatePersistedState({
+	const candidate = validateAndFreezeAgentPackagePersistedState({
 		...state,
 		revision: state.revision + 1,
 		catalogRevision: state.catalogRevision + 1,
@@ -1160,7 +1149,16 @@ export class AgentPackageLifecycle {
 		let state: IAgentPackagePersistedState;
 		let coldBundledUpdate: IColdBundledUpdateState | undefined;
 		if (persistedState) {
-			const authoritativeState = validatePersistedState(persistedState, options.hostTarget);
+			const authoritativeState = validateAndFreezeAgentPackagePersistedState(persistedState, options.hostTarget);
+			if (!authoritativeState.installedPackages.some(installedPackage => (
+				installedPackage.packageId === bundledPackage.packageId
+				&& installedPackage.distribution === 'bundled'
+			))) {
+				throw new AgentPackageError(
+					AgentPackageErrorCode.InvalidPackage,
+					'Installed state must contain the bundled Comet package',
+				);
+			}
 			coldBundledUpdate = prepareColdBundledUpdateState(
 				authoritativeState,
 				bundledPackage,
@@ -1256,7 +1254,7 @@ export class AgentPackageLifecycle {
 			operation.operation,
 		);
 		if (encodeAgentHostProtocolValue(migratedRecords) !== encodeAgentHostProtocolValue(this.state.retainedBackingRecords)) {
-			const migratedState = validatePersistedState({
+			const migratedState = validateAndFreezeAgentPackagePersistedState({
 				...this.state,
 				retainedBackingRecords: migratedRecords,
 			}, this.hostTarget);
@@ -1324,7 +1322,7 @@ export class AgentPackageLifecycle {
 			status: 'succeeded',
 			result,
 		});
-		const completedState = validatePersistedState({
+		const completedState = validateAndFreezeAgentPackagePersistedState({
 			...this.state,
 			operations: this.replaceOperation(this.state.operations, completedOperation),
 		}, this.hostTarget);
@@ -1477,7 +1475,7 @@ export class AgentPackageLifecycle {
 					{ expected: request.expectedStateRevision, actual: previous.revision },
 				);
 			}
-			const next = validatePersistedState({
+			const next = validateAndFreezeAgentPackagePersistedState({
 				...previous,
 				revision: previous.revision + 1,
 				catalogRevision: previous.catalogRevision + 1,
@@ -1500,7 +1498,7 @@ export class AgentPackageLifecycle {
 					if (settled) {
 						throw new AgentPackageError(AgentPackageErrorCode.StateConflict, 'Host backing transaction is already settled');
 					}
-					const restored = validatePersistedState({
+					const restored = validateAndFreezeAgentPackagePersistedState({
 						...previous,
 						revision: this.state.revision + 1,
 						catalogRevision: previous.catalogRevision,
@@ -1545,7 +1543,7 @@ export class AgentPackageLifecycle {
 					state.retainedBackingRecords,
 					operation.operation,
 				);
-				const candidate = validatePersistedState({
+				const candidate = validateAndFreezeAgentPackagePersistedState({
 					...this.state,
 					retainedBackingRecords,
 					materializedBackings: state.materializedBackings,
@@ -1553,7 +1551,7 @@ export class AgentPackageLifecycle {
 				this.acceptState(candidate);
 				return;
 			}
-			const next = validatePersistedState({
+			const next = validateAndFreezeAgentPackagePersistedState({
 				...this.state,
 				revision: this.state.revision + 1,
 				catalogRevision: this.state.catalogRevision + 1,
@@ -1774,7 +1772,7 @@ export class AgentPackageLifecycle {
 				this.maximumPersistedOperations,
 				nextRecord.operation,
 			);
-			const next = validatePersistedState({
+			const next = validateAndFreezeAgentPackagePersistedState({
 				...previous,
 				revision: previous.revision + 1,
 				operations: boundedOperations,
@@ -2133,7 +2131,7 @@ export class AgentPackageLifecycle {
 					phase: 'catalogCommitted' as const,
 					activationTransition: transition,
 				});
-				const nextState = validatePersistedState({
+				const nextState = validateAndFreezeAgentPackagePersistedState({
 					revision: previousState.revision + 1,
 					catalogRevision: previousState.catalogRevision + 1,
 					operations: this.replaceOperation(previousState.operations, catalogRecord),
@@ -2163,7 +2161,7 @@ export class AgentPackageLifecycle {
 				try {
 					await mutation.complete();
 				} catch (activationError) {
-					const restored = validatePersistedState({
+					const restored = validateAndFreezeAgentPackagePersistedState({
 						...previousState,
 						revision: nextState.revision + 1,
 						catalogRevision: previousState.catalogRevision,
@@ -2294,7 +2292,7 @@ export class AgentPackageLifecycle {
 					phase: 'catalogCommitted' as const,
 					activationTransition: transition,
 				});
-				const nextState = validatePersistedState({
+				const nextState = validateAndFreezeAgentPackagePersistedState({
 					revision: previousState.revision + 1,
 					catalogRevision: previousState.catalogRevision + 1,
 					operations: this.replaceOperation(previousState.operations, catalogRecord),
@@ -2318,7 +2316,7 @@ export class AgentPackageLifecycle {
 				try {
 					await mutation.complete();
 				} catch (activationError) {
-					const restored = validatePersistedState({
+					const restored = validateAndFreezeAgentPackagePersistedState({
 						...previousState,
 						revision: nextState.revision + 1,
 						catalogRevision: previousState.catalogRevision,
@@ -2559,7 +2557,7 @@ export class AgentPackageLifecycle {
 		const release = await this.acquireStateLock();
 		const previous = this.state;
 		try {
-			const next = validatePersistedState({
+			const next = validateAndFreezeAgentPackagePersistedState({
 				...previous,
 				revision: previous.revision + 1,
 				catalogRevision: previous.catalogRevision + 1,
@@ -2575,7 +2573,7 @@ export class AgentPackageLifecycle {
 			try {
 				await commitHost();
 			} catch (error) {
-				const restored = validatePersistedState({
+				const restored = validateAndFreezeAgentPackagePersistedState({
 					...previous,
 					revision: next.revision + 1,
 					catalogRevision: previous.catalogRevision,

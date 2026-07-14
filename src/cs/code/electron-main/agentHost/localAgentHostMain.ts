@@ -443,19 +443,22 @@ export class LocalAgentHostMain extends Disposable {
 			contentResources,
 		});
 		const packageStateStore = new ApplicationStorageAgentPackageStateStore(this.options.storage, {
-			registrations: Object.freeze([Object.freeze({
-				source: Object.freeze({
-					packageId: COMET_AGENT_PACKAGE_ID,
-					agentId: COMET_AGENT_ID,
-					revision: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
-					descriptorRevision: createAgentDescriptorRevision('comet.descriptor.v1'),
-					capabilityRevision: COMET_AGENT_CAPABILITY_REVISION,
-					supportedToolSchemaProfiles: cometAgent.registration.supportedToolSchemaProfiles,
-					supportedResumeSchemas: cometAgent.registration.supportedResumeSchemas,
-					resumeMigrationEdges: cometAgent.registration.resumeMigrationEdges,
-				}),
-				target: cometAgent.registration,
-			})]),
+			hostTarget: bundledPackage.target,
+			registrationMigration: {
+				registrations: Object.freeze([Object.freeze({
+					source: Object.freeze({
+						packageId: COMET_AGENT_PACKAGE_ID,
+						agentId: COMET_AGENT_ID,
+						revision: createAgentRuntimeRegistrationRevision('comet.embedded.v1'),
+						descriptorRevision: createAgentDescriptorRevision('comet.descriptor.v1'),
+						capabilityRevision: COMET_AGENT_CAPABILITY_REVISION,
+						supportedToolSchemaProfiles: cometAgent.registration.supportedToolSchemaProfiles,
+						supportedResumeSchemas: cometAgent.registration.supportedResumeSchemas,
+						resumeMigrationEdges: cometAgent.registration.resumeMigrationEdges,
+					}),
+					target: cometAgent.registration,
+				})]),
+			},
 		});
 		const activationRegistry = this._register(new AgentPackageActivationRegistry({
 			bundledAgents: Object.freeze([Object.freeze({
