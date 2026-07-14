@@ -12,8 +12,8 @@ bounded failure artifacts:
 - package scripts needed to run that reporter;
 - `.github/workflows/ci.yml` only for failure-artifact upload and retention;
   and
-- the application-smoke reliability section of
-  `.github/instructions/writing-test.instructions.md`.
+- the fixture, wait, cleanup, and diagnostic rules in
+  `test/smoke/README.md`.
 
 It depends on the declaration cutover in
 [Smoke test runner](test-runner.migration.md), but does not own Mocha removal or
