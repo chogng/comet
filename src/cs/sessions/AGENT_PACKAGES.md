@@ -73,11 +73,15 @@ lockfile produce target artifacts; a common package offering identifies those
 immutable bytes. Application startup consumes that product catalog and does not
 construct an offering from root `node_modules`.
 
-For example, Claude build ownership is explicit:
+For example, product SDK build ownership is explicit:
 
 ```text
 build/agent-sdk/agents/claude/
 ├── entry.ts
+├── package.json
+└── package-lock.json
+
+build/agent-sdk/agents/codex/
 ├── package.json
 └── package-lock.json
 ```
@@ -217,12 +221,30 @@ obtains native model facts from its installed SDK and publishes canonical
 descriptors through its registration.
 
 ```text
-installed Claude SDK query.supportedModels()
-    → validate non-empty unique native snapshot
+installed SDK native model operation
+    ├── Claude query.supportedModels()
+    └── Codex model/list with exact pagination
+    → validate non-empty unique native snapshot and model capabilities
     → map native IDs and capabilities
     → content-derived Agent/model descriptor revisions
     → Host snapshot
     → Sessions model picker + Settings model rows
+```
+
+For Codex, `model/list` supplies the exact default and supported reasoning
+efforts used to build each model configuration schema. Product code does not
+copy model names or reasoning capabilities into a second catalog:
+
+```typescript
+do {
+	const page = await appServer.request('model/list', {
+		cursor,
+		limit: 100,
+		includeHidden: false,
+	});
+	models.push(...page.data);
+	cursor = page.nextCursor;
+} while (cursor !== null);
 ```
 
 Configuration is also active Agent state. The package manifest grants required

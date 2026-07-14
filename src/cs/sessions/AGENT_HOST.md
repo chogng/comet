@@ -346,10 +346,11 @@ Agent maps these values to its private SDK or CLI representation.
 | Codex | `codex.sandboxMode` | Host default and Session | `read-only`, `workspace-write`, `danger-full-access` | `workspace-write` |
 | Codex | `codex.webSearchMode` | Host default and Session | `disabled`, `cached`, `live` | `disabled` |
 | Codex | `codex.personality` | Host default and Session | `none`, `friendly`, `pragmatic` | `none` |
-| Codex | `codex.modelReasoningEffort` | Model | `none`, `minimal`, `low`, `medium`, `high`, `xhigh` | `medium` |
+| Codex | `codex.modelReasoningEffort` | Model | Exact SDK model-declared reasoning efforts | SDK model default |
 | Codex | `codex.reasoningSummary` | Model | `none`, `auto`, `concise`, `detailed` | `auto` |
+| Codex | `codex.model.credential` | Model | `codex.provider-api-key` / `llm` / `openai` credential reference | OpenAI API-key reference |
 
-Runtime resolution may narrow an enum or choose a different declared default
+Execution-profile resolution may narrow an enum or choose a different declared default
 when the exact workspace or model descriptor requires it. That result is a new
 validated schema revision; the Host does not coerce an existing value, invent
 an SDK default, or interpret one Agent's property on behalf of another.

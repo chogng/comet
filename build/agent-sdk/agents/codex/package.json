@@ -1,0 +1,8 @@
+{
+  "name": "comet-agent-sdk-codex",
+  "private": true,
+  "description": "Pinned dependency graph used to produce the Codex SDK product artifact.",
+  "dependencies": {
+    "@openai/codex": "0.142.0"
+  }
+}

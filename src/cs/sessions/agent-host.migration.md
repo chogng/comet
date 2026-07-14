@@ -164,10 +164,10 @@ contract. The target does not copy create-on-use or send-on-use download:
 optional packages become executable only after a separate explicit install and
 activation transaction, while Comet is the sole bundled package.
 
-The Claude package and direct `IAgent` now live under
-`src/cs/platform/agentHost/node/agents/claude`, and its exact module and
-executable artifacts come from `build/agent-sdk/agents/claude`. The remaining
-migration preserves that boundary for Codex and later product-maintained SDKs:
+The Claude and Codex packages and direct `IAgent` implementations now live
+under `src/cs/platform/agentHost/node/agents/<agent>`. Their exact module and/or
+executable artifacts come from `build/agent-sdk/agents/<agent>`. The remaining
+migration preserves that boundary for later product-maintained SDKs:
 `src/cs/code` contains application startup only, with no forwarding module,
 provider runtime entry, or root-`node_modules` package construction.
 

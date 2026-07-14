@@ -12,6 +12,11 @@ import {
 	CLAUDE_AGENT_SDK_MODULE_TARGET,
 	createClaudeAgentPackageProduct,
 } from 'cs/platform/agentHost/node/agents/claude/claudeAgentPackage';
+import {
+	codexAgentSdkExecutableTarget,
+	CODEX_AGENT_SDK_VERSION,
+	createCodexAgentPackageProduct,
+} from 'cs/platform/agentHost/node/agents/codex/codexAgentPackage';
 import type { IAgentPackageTarget } from 'cs/platform/agentHost/common/packages';
 import type { ILocalAgentPackageProduct } from './agentPackageProducts.js';
 import {
@@ -76,7 +81,33 @@ export async function createProductAgentPackageCatalog(
 		module: moduleArtifact,
 		executable: executableArtifact,
 	}), options.agentStateRoot);
-	const products = Object.freeze([claude]);
+	const codexTargetRoot = join(options.sdkArtifactRoot, 'codex', sdkTarget);
+	const codexExecutableName = options.target.operatingSystem === 'win32' ? 'codex.exe' : 'codex';
+	const codexExecutableArtifact = await createLocalAgentPackageArtifactFile(join(
+		codexTargetRoot,
+		codexExecutableName,
+	));
+	const codexArtifact = JSON.parse(await readFile(join(codexTargetRoot, 'artifact.json'), 'utf8')) as unknown;
+	if (
+		codexArtifact === null
+		|| typeof codexArtifact !== 'object'
+		|| Array.isArray(codexArtifact)
+		|| Object.keys(codexArtifact).length !== 4
+		|| (codexArtifact as { readonly name?: unknown }).name !== '@openai/codex'
+		|| (codexArtifact as { readonly version?: unknown }).version !== CODEX_AGENT_SDK_VERSION
+		|| (codexArtifact as { readonly target?: unknown }).target !== sdkTarget
+		|| codexExecutableArtifact.contentDigest !== `sha256:${(codexArtifact as { readonly executableSha256?: unknown }).executableSha256}`
+	) {
+		throw new Error('Codex SDK build artifact does not match the product package definition.');
+	}
+	const codex = createCodexAgentPackageProduct(options.target, Object.freeze({
+		contentDigest: createLocalAgentPackageContentDigest(Object.freeze([Object.freeze({
+			target: codexAgentSdkExecutableTarget(options.target),
+			contentDigest: codexExecutableArtifact.contentDigest,
+		})])),
+		executable: codexExecutableArtifact,
+	}), options.agentStateRoot);
+	const products = Object.freeze([claude, codex]);
 	return Object.freeze({
 		products,
 		artifacts: new LocalAgentPackageArtifactPort({
