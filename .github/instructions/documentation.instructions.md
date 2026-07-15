@@ -5,6 +5,8 @@ applyTo: "**/*.md"
 
 # Project documentation
 
+Do not hard-wrap Markdown; only start a new line for a new paragraph or list item.
+
 ## Durable documents are the default
 
 README, architecture, layout, layering, ownership, and normal instruction
