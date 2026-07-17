@@ -2079,18 +2079,64 @@ function failure(
 function captureLimits(
 	limits: IManuscriptOperationReducerLimits | undefined,
 ): IManuscriptOperationReducerLimits | undefined {
-	const source = limits ?? defaultManuscriptOperationReducerLimits;
-	return (
-		Number.isSafeInteger(source.maximumNodes)
-		&& source.maximumNodes >= 1
-		&& Number.isSafeInteger(source.maximumDepth)
-		&& source.maximumDepth >= 0
-	)
-		? Object.freeze({
-			maximumNodes: source.maximumNodes,
-			maximumDepth: source.maximumDepth,
-		})
-		: undefined;
+	const source: unknown =
+		limits ?? defaultManuscriptOperationReducerLimits;
+	try {
+		if (
+			source === null
+			|| typeof source !== 'object'
+			|| Array.isArray(source)
+		) {
+			return undefined;
+		}
+		const prototype = Reflect.getPrototypeOf(source);
+		if (prototype !== Object.prototype && prototype !== null) {
+			return undefined;
+		}
+		const keys = Reflect.ownKeys(source);
+		if (
+			keys.length !== 2
+			|| keys.some(key =>
+				key !== 'maximumNodes'
+					&& key !== 'maximumDepth'
+			)
+		) {
+			return undefined;
+		}
+		const maximumNodesDescriptor =
+			Reflect.getOwnPropertyDescriptor(source, 'maximumNodes');
+		const maximumDepthDescriptor =
+			Reflect.getOwnPropertyDescriptor(source, 'maximumDepth');
+		if (
+			maximumNodesDescriptor === undefined
+			|| !maximumNodesDescriptor.enumerable
+			|| !('value' in maximumNodesDescriptor)
+			|| maximumDepthDescriptor === undefined
+			|| !maximumDepthDescriptor.enumerable
+			|| !('value' in maximumDepthDescriptor)
+		) {
+			return undefined;
+		}
+		const maximumNodes: unknown = maximumNodesDescriptor.value;
+		const maximumDepth: unknown = maximumDepthDescriptor.value;
+		if (
+			!Number.isSafeInteger(maximumNodes)
+			|| (maximumNodes as number) < 1
+			|| !Number.isSafeInteger(maximumDepth)
+			|| (maximumDepth as number) < 0
+		) {
+			return undefined;
+		}
+		if (Object.isFrozen(source)) {
+			return source as IManuscriptOperationReducerLimits;
+		}
+		return Object.freeze({
+			maximumNodes: maximumNodes as number,
+			maximumDepth: maximumDepth as number,
+		});
+	} catch {
+		return undefined;
+	}
 }
 
 function validateBase(

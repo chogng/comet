@@ -43,9 +43,11 @@ import { normalizeManuscriptRoot } from 'cs/editor/common/model/normalization';
 import type { Operation } from 'cs/editor/common/model/operation';
 import {
 	consumeManuscriptOperationTransition,
+	defaultManuscriptOperationReducerLimits,
 	getManuscriptOperationTransitionView,
 	reduceManuscriptOperation,
 	type IConsumedManuscriptOperationTransition,
+	type IManuscriptOperationReducerLimits,
 	type IManuscriptOperationReducerInstrumentation,
 	type IManuscriptOperationTransitionView,
 	type ManuscriptOperationTransition,
@@ -596,6 +598,131 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(getManuscriptOperationTransitionView(transitionB), undefined);
 		assert.equal(consumeManuscriptOperationTransition(transitionA), undefined);
 		assert.equal(consumeManuscriptOperationTransition(transitionB), undefined);
+	});
+
+	test('captures only closed reducer limits and preserves frozen identity', () => {
+		const fixture = createFixture();
+		const reduceWithLimits = (
+			sequence: number,
+			limits?: IManuscriptOperationReducerLimits,
+		): ReduceManuscriptOperationResult => reduceManuscriptOperation({
+			resource: fixture.resource,
+			generatedAgainstRevisionId:
+				fixture.generatedAgainstRevisionId,
+			content: fixture.content,
+			index: fixture.index,
+			merkleState: fixture.merkleState,
+			operation: {
+				id: operationId(sequence),
+				type: 'replace-text',
+				textNodeId: fixture.ids.leftText,
+				expectedNodeHash: nodeHash(
+					fixture,
+					fixture.ids.leftText,
+				),
+				startUtf16Offset: offset(0),
+				endUtf16Offset: offset(1),
+				replacement: 'x',
+			},
+			limits,
+		});
+		const exactLimits = {
+			maximumNodes: fixture.index.nodeCount + 10,
+			maximumDepth: 200,
+		};
+		const frozenLimits = Object.freeze({
+			...exactLimits,
+		});
+		assert.strictEqual(
+			expectOk(reduceWithLimits(4_700, frozenLimits)).limits,
+			frozenLimits,
+		);
+		assert.strictEqual(
+			expectOk(reduceWithLimits(4_701)).limits,
+			defaultManuscriptOperationReducerLimits,
+		);
+		const nullPrototypeLimits =
+			Object.assign(
+				Object.create(null),
+				exactLimits,
+			) as IManuscriptOperationReducerLimits;
+		Object.freeze(nullPrototypeLimits);
+		assert.strictEqual(
+			expectOk(
+				reduceWithLimits(4_702, nullPrototypeLimits),
+			).limits,
+			nullPrototypeLimits,
+		);
+
+		const mutableLimits = {
+			...exactLimits,
+		};
+		const mutableTransition = expectTransition(
+			reduceWithLimits(4_703, mutableLimits),
+		);
+		mutableLimits.maximumNodes = 1;
+		mutableLimits.maximumDepth = 0;
+		const capturedMutable = expectConsumedTransition(
+			mutableTransition,
+		).limits;
+		assert.notStrictEqual(capturedMutable, mutableLimits);
+		assert.deepStrictEqual(capturedMutable, exactLimits);
+		assert.equal(Object.isFrozen(capturedMutable), true);
+
+		let accessorReads = 0;
+		const accessorLimits = Object.defineProperties({}, {
+			maximumNodes: {
+				enumerable: true,
+				get() {
+					accessorReads += 1;
+					return exactLimits.maximumNodes;
+				},
+			},
+			maximumDepth: {
+				enumerable: true,
+				value: exactLimits.maximumDepth,
+			},
+		}) as IManuscriptOperationReducerLimits;
+		expectFailure(
+			reduceWithLimits(4_704, accessorLimits),
+			'invalid-limits',
+		);
+		assert.equal(accessorReads, 0);
+
+		const extraLimits = {
+			...exactLimits,
+			extra: true,
+		} as unknown as IManuscriptOperationReducerLimits;
+		expectFailure(
+			reduceWithLimits(4_705, extraLimits),
+			'invalid-limits',
+		);
+		const symbolLimits = {
+			...exactLimits,
+		};
+		Reflect.defineProperty(symbolLimits, Symbol('extra'), {
+			enumerable: true,
+			value: true,
+		});
+		expectFailure(
+			reduceWithLimits(4_706, symbolLimits),
+			'invalid-limits',
+		);
+
+		let inspectionAttempts = 0;
+		const hostileLimits = new Proxy({
+			...exactLimits,
+		}, {
+			ownKeys() {
+				inspectionAttempts += 1;
+				throw new Error('limits inspection failed');
+			},
+		});
+		expectFailure(
+			reduceWithLimits(4_707, hostileLimits),
+			'invalid-limits',
+		);
+		assert.equal(inspectionAttempts, 1);
 	});
 
 	test('rejects malformed candidate cross-links without minting authority', () => {

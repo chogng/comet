@@ -9,17 +9,23 @@ import { suite, test } from 'node:test';
 import { URI } from 'cs/base/common/uri';
 import {
 	parseNodeId,
+	parseOperationId,
 	parseRevisionId,
 	type NodeId,
+	type OperationId,
 	type RevisionId,
 } from 'cs/editor/common/core/identifiers';
 import { createManuscriptDraftResource } from 'cs/editor/common/core/manuscriptResource';
 import {
+	advanceManuscriptDraftOperation,
 	decodeManuscriptDraft,
 	getManuscriptDraftReadView,
+	type AdvanceManuscriptDraftOperationResult,
 	type ManuscriptDraft,
+	type ManuscriptDraftAdvanceFailure,
 } from 'cs/editor/common/model/manuscriptDraft';
 import type { ManuscriptNode } from 'cs/editor/common/model/manuscript';
+import type { Operation } from 'cs/editor/common/model/operation';
 import { rebuildRevisionMerkleState } from 'cs/editor/common/model/revisionMerkleState';
 import {
 	documentFormat,
@@ -35,6 +41,7 @@ import {
 	type IDocumentSnapshotCodecLimits,
 	type PersistedDocumentSnapshotV1,
 } from 'cs/editor/common/model/snapshotDecoder';
+import { maximumOperationWitness } from 'cs/editor/test/common/performance/manuscriptProfiles';
 
 interface IFixture {
 	readonly resource: URI;
@@ -71,6 +78,14 @@ function revisionId(sequence: number): RevisionId {
 	const parsed = parseRevisionId(uuid(sequence));
 	if (parsed.type === 'invalid') {
 		throw new Error('Expected a valid test Revision ID.');
+	}
+	return parsed.value;
+}
+
+function operationId(sequence: number): OperationId {
+	const parsed = parseOperationId(uuid(sequence));
+	if (parsed.type === 'invalid') {
+		throw new Error('Expected a valid test Operation ID.');
 	}
 	return parsed.value;
 }
@@ -153,7 +168,73 @@ function requireDraft(
 	return result.value;
 }
 
-suite('Manuscript draft base provenance', () => {
+function requireAdvanced(
+	result: AdvanceManuscriptDraftOperationResult,
+): ManuscriptDraft {
+	if (result.type === 'error') {
+		throw new Error(
+			`Expected draft advance success, received ${result.error.reason}.`,
+		);
+	}
+	return result.value;
+}
+
+function requireAdvanceFailure(
+	result: AdvanceManuscriptDraftOperationResult,
+	reason: ManuscriptDraftAdvanceFailure['reason'],
+): ManuscriptDraftAdvanceFailure {
+	if (result.type === 'ok') {
+		throw new Error('Expected draft advance failure.');
+	}
+	assert.equal(result.error.reason, reason);
+	return result.error;
+}
+
+function contentFromSnapshot(
+	snapshot: DocumentSnapshot,
+): DocumentContent {
+	return Object.freeze({
+		format: snapshot.format,
+		formatVersion: snapshot.formatVersion,
+		schemaId: snapshot.schemaId,
+		schemaVersion: snapshot.schemaVersion,
+		metadata: snapshot.metadata,
+		root: snapshot.root,
+		academicGraph: snapshot.academicGraph,
+		settings: snapshot.settings,
+	});
+}
+
+function createSetMetadataOperation(
+	content: DocumentContent,
+	sequence: number,
+	title: string,
+): Extract<Operation, { readonly type: 'set-metadata' }> {
+	return Object.freeze({
+		id: operationId(sequence),
+		type: 'set-metadata',
+		expectedMetadataHash:
+			rebuildRevisionMerkleState(content).metadataHash,
+		metadata: Object.freeze({
+			title,
+			authors: content.metadata.authors,
+			abstract: content.metadata.abstract,
+			keywords: content.metadata.keywords,
+		}),
+	});
+}
+
+function applySetMetadataOperation(
+	content: DocumentContent,
+	operation: Extract<Operation, { readonly type: 'set-metadata' }>,
+): DocumentContent {
+	return Object.freeze({
+		...content,
+		metadata: operation.metadata,
+	});
+}
+
+suite('Manuscript draft authority', () => {
 	test('mints only zero-field identity tokens and exposes primitive summaries', () => {
 		const fixture = createFixture();
 		const draft = requireDraft(decodeManuscriptDraft(
@@ -416,5 +497,513 @@ suite('Manuscript draft base provenance', () => {
 		}, fixture.resource, generousLimits);
 		assert.equal(invalidSnapshot.type, 'invalid');
 		assert.equal(getManuscriptDraftReadView(invalidSnapshot), undefined);
+	});
+
+	test('advances linearly through current checkpoint hashes', () => {
+		const fixture = createFixture();
+		const base = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		let expectedContent = contentFromSnapshot(fixture.snapshot);
+		const firstOperation = createSetMetadataOperation(
+			expectedContent,
+			300,
+			'First successor',
+		);
+		const firstResult = advanceManuscriptDraftOperation(
+			base,
+			firstOperation,
+		);
+		assert.equal(Object.isFrozen(firstResult), true);
+		assert.deepStrictEqual(
+			Reflect.ownKeys(firstResult).sort(),
+			['type', 'value'],
+		);
+		const first = requireAdvanced(firstResult);
+		expectedContent = applySetMetadataOperation(
+			expectedContent,
+			firstOperation,
+		);
+
+		assert.equal(getManuscriptDraftReadView(base), undefined);
+		assert.deepStrictEqual(Reflect.ownKeys(first), []);
+		assert.equal(Reflect.getPrototypeOf(first), null);
+		assert.equal(Object.isFrozen(first), true);
+		const firstView = getManuscriptDraftReadView(first);
+		assert.ok(firstView);
+		assert.equal(
+			firstView.documentHash,
+			rebuildRevisionMerkleState(expectedContent).documentHash,
+		);
+		assert.equal(firstView.pendingTransitionCount, 1);
+
+		const secondOperation = createSetMetadataOperation(
+			expectedContent,
+			301,
+			'Second successor',
+		);
+		const second = requireAdvanced(
+			advanceManuscriptDraftOperation(first, secondOperation),
+		);
+		expectedContent = applySetMetadataOperation(
+			expectedContent,
+			secondOperation,
+		);
+
+		assert.equal(getManuscriptDraftReadView(first), undefined);
+		const secondView = getManuscriptDraftReadView(second);
+		assert.ok(secondView);
+		assert.equal(
+			secondView.documentHash,
+			rebuildRevisionMerkleState(expectedContent).documentHash,
+		);
+		assert.notEqual(secondView.documentHash, firstView.documentHash);
+		assert.equal(
+			secondView.generatedAgainstRevisionId,
+			fixture.snapshot.revisionId,
+		);
+		assert.equal(secondView.pendingTransitionCount, 2);
+		assert.equal(secondView.nodeCount, firstView.nodeCount);
+		assert.equal(secondView.entityCount, firstView.entityCount);
+		assert.equal(secondView.relationCount, firstView.relationCount);
+	});
+
+	test('preserves predecessor authority when an Operation is rejected', () => {
+		const fixture = createFixture();
+		const draft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		const expectedContent = contentFromSnapshot(fixture.snapshot);
+		const validOperation = createSetMetadataOperation(
+			expectedContent,
+			310,
+			'Accepted after retry',
+		);
+		assert.notEqual(
+			validOperation.expectedMetadataHash,
+			fixture.snapshot.documentHash,
+		);
+		const rejectedOperation: Operation = Object.freeze({
+			...validOperation,
+			id: operationId(311),
+			expectedMetadataHash: fixture.snapshot.documentHash,
+		});
+		const before = getManuscriptDraftReadView(draft);
+		assert.ok(before);
+
+		const failure = requireAdvanceFailure(
+			advanceManuscriptDraftOperation(draft, rejectedOperation),
+			'operation-rejected',
+		);
+		assert.equal(Object.isFrozen(failure), true);
+		assert.deepStrictEqual(
+			Reflect.ownKeys(failure).sort(),
+			['reason', 'reducerFailure'],
+		);
+		assert.equal(
+			failure.reason === 'operation-rejected'
+				? failure.reducerFailure.reason
+				: undefined,
+			'hash-mismatch',
+		);
+		const after = getManuscriptDraftReadView(draft);
+		assert.ok(after);
+		assert.equal(after.documentHash, before.documentHash);
+		assert.equal(after.pendingTransitionCount, 0);
+
+		const successor = requireAdvanced(
+			advanceManuscriptDraftOperation(draft, validOperation),
+		);
+		assert.equal(getManuscriptDraftReadView(draft), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(successor)?.pendingTransitionCount,
+			1,
+		);
+	});
+
+	test('captures immutable Operation limits at decode authority creation', () => {
+		const fixture = createFixture();
+		const mutableLimits = {
+			...generousLimits,
+		};
+		const draft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			mutableLimits,
+		));
+		mutableLimits.maximumNodes = 0;
+		mutableLimits.maximumNodeDepth = 0;
+
+		const successor = requireAdvanced(
+			advanceManuscriptDraftOperation(
+				draft,
+				createSetMetadataOperation(
+					contentFromSnapshot(fixture.snapshot),
+					315,
+					'Captured limits',
+				),
+			),
+		);
+		assert.equal(getManuscriptDraftReadView(draft), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(successor)?.pendingTransitionCount,
+			1,
+		);
+	});
+
+	test('keeps independently decoded A/B authorities isolated', () => {
+		const fixture = createFixture();
+		const first = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		const second = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		const initialContent = contentFromSnapshot(fixture.snapshot);
+		const operation = createSetMetadataOperation(
+			initialContent,
+			320,
+			'Independent advance',
+		);
+
+		const firstSuccessor = requireAdvanced(
+			advanceManuscriptDraftOperation(first, operation),
+		);
+		assert.equal(getManuscriptDraftReadView(first), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(second)?.pendingTransitionCount,
+			0,
+		);
+
+		const secondSuccessor = requireAdvanced(
+			advanceManuscriptDraftOperation(second, operation),
+		);
+		assert.notEqual(firstSuccessor, secondSuccessor);
+		assert.equal(getManuscriptDraftReadView(second), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(firstSuccessor)?.documentHash,
+			getManuscriptDraftReadView(secondSuccessor)?.documentHash,
+		);
+
+		requireAdvanceFailure(
+			advanceManuscriptDraftOperation(firstSuccessor, operation),
+			'operation-rejected',
+		);
+		assert.equal(
+			getManuscriptDraftReadView(firstSuccessor)
+				?.pendingTransitionCount,
+			1,
+		);
+		assert.equal(
+			getManuscriptDraftReadView(secondSuccessor)
+				?.pendingTransitionCount,
+			1,
+		);
+	});
+
+	test('rejects clone, Proxy, derived, same-shape, and stale tokens without reading the Operation', () => {
+		const fixture = createFixture();
+		const draft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		let operationReads = 0;
+		const hostileOperation = new Proxy(Object.create(null), {
+			get() {
+				operationReads += 1;
+				throw new Error('An invalid draft must not inspect its Operation.');
+			},
+		}) as Operation;
+		for (const candidate of [
+			Object.freeze(Object.create(null)),
+			Object.create(draft),
+			{ ...draft },
+			new Proxy(draft, {
+				get() {
+					throw new Error('A token Proxy must not be inspected.');
+				},
+				getPrototypeOf() {
+					throw new Error('A token Proxy must not be inspected.');
+				},
+			}),
+		]) {
+			requireAdvanceFailure(
+				advanceManuscriptDraftOperation(
+					candidate,
+					hostileOperation,
+				),
+				'invalid-draft',
+			);
+		}
+		assert.equal(operationReads, 0);
+
+		const validOperation = createSetMetadataOperation(
+			contentFromSnapshot(fixture.snapshot),
+			330,
+			'Invalidate predecessor',
+		);
+		requireAdvanced(
+			advanceManuscriptDraftOperation(draft, validOperation),
+		);
+		requireAdvanceFailure(
+			advanceManuscriptDraftOperation(draft, hostileOperation),
+			'invalid-draft',
+		);
+		assert.equal(operationReads, 0);
+	});
+
+	test('rejects same-token reentrancy before reading its nested Operation', () => {
+		const fixture = createFixture();
+		const draft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		const independentDraft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		const content = contentFromSnapshot(fixture.snapshot);
+		const metadataOperation = createSetMetadataOperation(
+			content,
+			340,
+			'Reentrant outer advance',
+		);
+		let nestedOperationReads = 0;
+		const nestedOperation = new Proxy(Object.create(null), {
+			get() {
+				nestedOperationReads += 1;
+				throw new Error('A busy draft must not read the nested Operation.');
+			},
+		}) as Operation;
+		let nestedResult:
+			AdvanceManuscriptDraftOperationResult | undefined;
+		let independentResult:
+			AdvanceManuscriptDraftOperationResult | undefined;
+		let typeReads = 0;
+		const reentrantOperation = Object.defineProperties({
+			id: metadataOperation.id,
+			expectedMetadataHash:
+				metadataOperation.expectedMetadataHash,
+			metadata: metadataOperation.metadata,
+		}, {
+			type: {
+				enumerable: true,
+				configurable: true,
+				get() {
+					typeReads += 1;
+					if (typeReads === 1) {
+						nestedResult = advanceManuscriptDraftOperation(
+							draft,
+							nestedOperation,
+						);
+						independentResult =
+							advanceManuscriptDraftOperation(
+								independentDraft,
+								createSetMetadataOperation(
+									content,
+									341,
+									'Independent nested advance',
+								),
+							);
+					}
+					return 'set-metadata';
+				},
+			},
+		}) as Operation;
+
+		const successor = requireAdvanced(
+			advanceManuscriptDraftOperation(
+				draft,
+				reentrantOperation,
+			),
+		);
+		assert.ok(nestedResult);
+		requireAdvanceFailure(nestedResult, 'draft-busy');
+		assert.ok(independentResult);
+		const independentSuccessor = requireAdvanced(independentResult);
+		assert.equal(nestedOperationReads, 0);
+		assert.equal(getManuscriptDraftReadView(draft), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(independentDraft),
+			undefined,
+		);
+		const successorView = getManuscriptDraftReadView(successor);
+		assert.ok(successorView);
+		assert.equal(successorView.pendingTransitionCount, 1);
+		assert.equal(
+			getManuscriptDraftReadView(independentSuccessor)
+				?.pendingTransitionCount,
+			1,
+		);
+
+		const readsAfterAdvance = typeReads;
+		assert.equal(Reflect.defineProperty(reentrantOperation, 'type', {
+			enumerable: true,
+			configurable: true,
+			get() {
+				throw new Error(
+					'Successor authority must not retain or reread the caller Operation.',
+				);
+			},
+		}), true);
+		Reflect.set(reentrantOperation, 'id', operationId(342));
+		Reflect.set(
+			reentrantOperation,
+			'expectedMetadataHash',
+			fixture.snapshot.documentHash,
+		);
+		Reflect.set(reentrantOperation, 'metadata', Object.freeze({
+			title: 'Mutated after success',
+			authors: [],
+			abstract: '',
+			keywords: [],
+		}));
+		assert.equal(
+			getManuscriptDraftReadView(successor)?.documentHash,
+			successorView.documentHash,
+		);
+		assert.equal(typeReads, readsAfterAdvance);
+
+		const expectedSuccessorContent = applySetMetadataOperation(
+			content,
+			metadataOperation,
+		);
+		const finalSuccessor = requireAdvanced(
+			advanceManuscriptDraftOperation(
+				successor,
+				createSetMetadataOperation(
+					expectedSuccessorContent,
+					343,
+					'Advance after caller mutation',
+				),
+			),
+		);
+		assert.equal(getManuscriptDraftReadView(successor), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(finalSuccessor)
+				?.pendingTransitionCount,
+			2,
+		);
+		assert.equal(typeReads, readsAfterAdvance);
+	});
+
+	test('keeps the predecessor atomic when the incremental updater rejects a hostile capture', () => {
+		const fixture = createFixture();
+		const draft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		const content = contentFromSnapshot(fixture.snapshot);
+		const metadataOperation = createSetMetadataOperation(
+			content,
+			350,
+			'Updater must reject this capture',
+		);
+		let typeReads = 0;
+		const hostileOperation = Object.defineProperties({
+			id: metadataOperation.id,
+			expectedMetadataHash:
+				metadataOperation.expectedMetadataHash,
+			metadata: metadataOperation.metadata,
+		}, {
+			type: {
+				enumerable: true,
+				get() {
+					typeReads += 1;
+					return typeReads === 1
+						? 'set-metadata'
+						: 'set-settings';
+				},
+			},
+		}) as Operation;
+
+		requireAdvanceFailure(
+			advanceManuscriptDraftOperation(draft, hostileOperation),
+			'merkle-update-failed',
+		);
+		const afterFailure = getManuscriptDraftReadView(draft);
+		assert.ok(afterFailure);
+		assert.equal(afterFailure.documentHash, fixture.snapshot.documentHash);
+		assert.equal(afterFailure.pendingTransitionCount, 0);
+
+		const successor = requireAdvanced(
+			advanceManuscriptDraftOperation(
+				draft,
+				createSetMetadataOperation(
+					content,
+					351,
+					'Retry after updater failure',
+				),
+			),
+		);
+		assert.equal(getManuscriptDraftReadView(draft), undefined);
+		assert.equal(
+			getManuscriptDraftReadView(successor)?.pendingTransitionCount,
+			1,
+		);
+	});
+
+	test('extends the maximum-operation profile as a private pending cons chain', () => {
+		const fixture = createFixture();
+		let draft = requireDraft(decodeManuscriptDraft(
+			fixture.encoded,
+			fixture.resource,
+			generousLimits,
+		));
+		let expectedContent = contentFromSnapshot(fixture.snapshot);
+		for (
+			let index = 0;
+			index < maximumOperationWitness.operationCount;
+			index += 1
+		) {
+			const operation = createSetMetadataOperation(
+				expectedContent,
+				10_000 + index,
+				`Pending ${index}`,
+			);
+			const predecessor = draft;
+			draft = requireAdvanced(
+				advanceManuscriptDraftOperation(draft, operation),
+			);
+			expectedContent = applySetMetadataOperation(
+				expectedContent,
+				operation,
+			);
+			assert.equal(getManuscriptDraftReadView(predecessor), undefined);
+		}
+
+		const view = getManuscriptDraftReadView(draft);
+		assert.ok(view);
+		assert.equal(
+			view.pendingTransitionCount,
+			maximumOperationWitness.expectedPendingTransitionCount,
+		);
+		assert.equal(
+			view.documentHash,
+			rebuildRevisionMerkleState(expectedContent).documentHash,
+		);
+		assert.equal(
+			Reflect.ownKeys(view).some(key =>
+				key === 'pendingTransitions'
+					|| key === 'pendingTransitionTail'
+					|| key === 'receipt'
+					|| key === 'capture'
+					|| key === 'touchSet'
+					|| key === 'positionMapFragments'
+			),
+			false,
+		);
 	});
 });
