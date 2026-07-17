@@ -56,7 +56,7 @@ import {
 	documentFormatVersion,
 	manuscriptSchemaId,
 	manuscriptSchemaVersion,
-	type DocumentSnapshot,
+	type DocumentContent,
 	type RevisionMerkleState,
 } from 'cs/editor/common/model/snapshot';
 import { rebuildRevisionMerkleState } from 'cs/editor/common/model/revisionMerkleState';
@@ -76,7 +76,8 @@ interface IFixtureIds {
 
 interface IFixture {
 	readonly resource: URI;
-	readonly snapshot: DocumentSnapshot;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly content: DocumentContent;
 	readonly index: DocumentIndex;
 	readonly merkleState: RevisionMerkleState;
 	readonly ids: IFixtureIds;
@@ -421,8 +422,8 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(cases.length, 14);
 		for (const operationCase of cases) {
 			const fixture = createFixture();
-			const originalRoot = fixture.snapshot.root;
-			const originalGraph = fixture.snapshot.academicGraph;
+			const originalRoot = fixture.content.root;
+			const originalGraph = fixture.content.academicGraph;
 			const operation = operationCase.create(fixture);
 			assert.equal(operation.type, operationCase.type);
 			const transition = expectTransition(reduce(fixture, operation));
@@ -433,12 +434,8 @@ suite('Manuscript Operation reducer', () => {
 			assert.equal(summary.operationId, operation.id);
 			assert.equal(summary.operationType, operation.type);
 			assert.equal(
-				summary.previousRevisionId,
-				fixture.snapshot.revisionId,
-			);
-			assert.equal(
-				summary.previousDocumentHash,
-				fixture.snapshot.documentHash,
+				summary.generatedAgainstRevisionId,
+				fixture.generatedAgainstRevisionId,
 			);
 			assert.equal(
 				summary.resource.toString(),
@@ -451,10 +448,20 @@ suite('Manuscript Operation reducer', () => {
 			assert.notStrictEqual(summary.resource, fixture.resource);
 			assert.equal(Object.isFrozen(summary.resource), false);
 			assert.doesNotThrow(() => summary.resource.fsPath);
-			assert.equal(Object.isFrozen(summary.limits), true);
+			assert.deepStrictEqual(Reflect.ownKeys(summary).sort(), [
+				'canonicalResource',
+				'generatedAgainstRevisionId',
+				'operationId',
+				'operationType',
+				'resource',
+			]);
 			const reduced = expectConsumedTransition(transition);
 			assert.strictEqual(reduced.operation, operation);
-			assert.strictEqual(reduced.previousSnapshot, fixture.snapshot);
+			assert.equal(
+				reduced.generatedAgainstRevisionId,
+				fixture.generatedAgainstRevisionId,
+			);
+			assert.strictEqual(reduced.previousContent, fixture.content);
 			assert.strictEqual(reduced.previousIndex, fixture.index);
 			assert.strictEqual(reduced.previousMerkleState, fixture.merkleState);
 			assert.equal(reduced.capture.type, operation.type);
@@ -469,8 +476,8 @@ suite('Manuscript Operation reducer', () => {
 				);
 				assert.equal(Object.isFrozen(nodePath.childIndexes), true);
 			}
-			assert.strictEqual(fixture.snapshot.root, originalRoot);
-			assert.strictEqual(fixture.snapshot.academicGraph, originalGraph);
+			assert.strictEqual(fixture.content.root, originalRoot);
+			assert.strictEqual(fixture.content.academicGraph, originalGraph);
 			operationCase.verify(fixture, reduced);
 			assertIndexMatchesRoot(reduced.nextContent.root, reduced.nextIndex);
 		}
@@ -498,7 +505,9 @@ suite('Manuscript Operation reducer', () => {
 		};
 		const transitionA = expectTransition(reduceManuscriptOperation({
 			resource: fixture.resource,
-			snapshot: fixture.snapshot,
+			generatedAgainstRevisionId:
+				fixture.generatedAgainstRevisionId,
+			content: fixture.content,
 			index: fixture.index,
 			merkleState: fixture.merkleState,
 			operation: operationA,
@@ -514,11 +523,12 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(viewB.operationId, operationB.id);
 		assert.equal(viewA.operationType, operationA.type);
 		assert.equal(viewB.operationType, operationB.type);
+		assert.equal(
+			viewA.generatedAgainstRevisionId,
+			fixture.generatedAgainstRevisionId,
+		);
 		assert.equal(Object.isFrozen(viewA), true);
 		assert.equal(Object.isFrozen(viewB), true);
-		assert.notStrictEqual(viewA.limits, callerLimits);
-		assert.deepStrictEqual(viewA.limits, callerLimits);
-		assert.equal(Object.isFrozen(viewA.limits), true);
 		assert.equal(Object.isFrozen(callerLimits), false);
 		const secondViewA = expectTransitionView(transitionA);
 		const secondViewB = expectTransitionView(transitionB);
@@ -561,7 +571,7 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(getManuscriptOperationTransitionView(derived), undefined);
 		assert.equal(getManuscriptOperationTransitionView(sameShape), undefined);
 		assert.equal(
-			getManuscriptOperationTransitionView(viewA.touchSet),
+			getManuscriptOperationTransitionView(callerLimits),
 			undefined,
 		);
 		assert.equal(
@@ -575,6 +585,9 @@ suite('Manuscript Operation reducer', () => {
 
 		const reducedA = expectConsumedTransition(transitionA);
 		const reducedB = expectConsumedTransition(transitionB);
+		assert.notStrictEqual(reducedA.limits, callerLimits);
+		assert.deepStrictEqual(reducedA.limits, callerLimits);
+		assert.equal(Object.isFrozen(reducedA.limits), true);
 		assert.strictEqual(reducedA.operation, operationA);
 		assert.strictEqual(reducedB.operation, operationB);
 		assert.notStrictEqual(reducedA.nextContent, reducedB.nextContent);
@@ -585,7 +598,82 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(consumeManuscriptOperationTransition(transitionB), undefined);
 	});
 
-	test('rejects step-local hash conflicts without changing the trusted base', () => {
+	test('rejects malformed candidate cross-links without minting authority', () => {
+		const fixture = createFixture();
+		const operation: Operation = {
+			id: operationId(417),
+			type: 'replace-text',
+			textNodeId: fixture.ids.leftText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.leftText),
+			startUtf16Offset: offset(0),
+			endUtf16Offset: offset(1),
+			replacement: 'x',
+		};
+		const clonedRoot = Object.freeze({
+			...fixture.content.root,
+		});
+		expectFailure(reduceManuscriptOperation({
+			resource: fixture.resource,
+			generatedAgainstRevisionId:
+				fixture.generatedAgainstRevisionId,
+			content: Object.freeze({
+				...fixture.content,
+				root: clonedRoot,
+			}),
+			index: fixture.index,
+			merkleState: fixture.merkleState,
+			operation,
+		}), 'inconsistent-base');
+		expectFailure(reduceManuscriptOperation({
+			resource: fixture.resource,
+			generatedAgainstRevisionId:
+				fixture.generatedAgainstRevisionId.toUpperCase() as RevisionId,
+			content: fixture.content,
+			index: fixture.index,
+			merkleState: fixture.merkleState,
+			operation,
+		}), 'inconsistent-base');
+	});
+
+	test('uses the current checkpoint state for each ordered Operation hash', () => {
+		const base = createFixture();
+		const current = advanceFixture(base, {
+			id: operationId(418),
+			type: 'replace-text',
+			textNodeId: base.ids.leftText,
+			expectedNodeHash: nodeHash(base, base.ids.leftText),
+			startUtf16Offset: offset(0),
+			endUtf16Offset: offset(1),
+			replacement: 'A',
+		}, {});
+		const second = expectOk(reduce(current, {
+			id: operationId(419),
+			type: 'replace-text',
+			textNodeId: current.ids.leftText,
+			expectedNodeHash: nodeHash(current, current.ids.leftText),
+			startUtf16Offset: offset(1),
+			endUtf16Offset: offset(2),
+			replacement: 'B',
+		}));
+
+		assert.strictEqual(second.previousContent, current.content);
+		assert.strictEqual(second.previousIndex, current.index);
+		assert.strictEqual(second.previousMerkleState, current.merkleState);
+		assert.equal(
+			second.generatedAgainstRevisionId,
+			base.generatedAgainstRevisionId,
+		);
+		assert.equal(
+			second.previousMerkleState.documentHash,
+			current.merkleState.documentHash,
+		);
+		assert.notEqual(
+			current.merkleState.documentHash,
+			base.merkleState.documentHash,
+		);
+	});
+
+	test('rejects step-local hash conflicts without changing the candidate checkpoint', () => {
 		const fixture = createFixture();
 		const failures: readonly Operation[] = [
 			{
@@ -625,13 +713,13 @@ suite('Manuscript Operation reducer', () => {
 				id: operationId(424),
 				type: 'set-metadata',
 				expectedMetadataHash: contentHash(996),
-				metadata: fixture.snapshot.metadata,
+				metadata: fixture.content.metadata,
 			},
 			{
 				id: operationId(425),
 				type: 'set-settings',
 				expectedSettingsHash: contentHash(995),
-				settings: fixture.snapshot.settings,
+				settings: fixture.content.settings,
 			},
 		];
 		for (const operation of failures) {
@@ -701,9 +789,11 @@ suite('Manuscript Operation reducer', () => {
 		});
 		expectFailure(cycle, 'node-cycle');
 
-			const splitBudget = reduceManuscriptOperation({
-				resource: fixture.resource,
-				snapshot: fixture.snapshot,
+		const splitBudget = reduceManuscriptOperation({
+			resource: fixture.resource,
+			generatedAgainstRevisionId:
+				fixture.generatedAgainstRevisionId,
+			content: fixture.content,
 			index: fixture.index,
 			merkleState: fixture.merkleState,
 			limits: {
@@ -829,7 +919,7 @@ suite('Manuscript Operation reducer', () => {
 			return body.children;
 		};
 		const verify = (): void => {
-			assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+			assertIndexMatchesRoot(fixture.content.root, fixture.index);
 		};
 		const insertedHeadId = nodeId(91_000);
 		const insertedMiddleId = nodeId(91_001);
@@ -1587,7 +1677,7 @@ suite('Manuscript Operation reducer', () => {
 			],
 			[7, 0, 4, 0, 1, 0, 1, 0],
 		);
-		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+		assertIndexMatchesRoot(fixture.content.root, fixture.index);
 		assert.equal(preorderMaterializations, 1);
 	});
 
@@ -1653,7 +1743,7 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(fixture.index.hasNode(temporaryParagraphId), false);
 		assert.equal(fixture.index.hasNode(temporaryTextId), false);
 		assert.equal(fixture.index.hasNode(temporaryRightTextId), false);
-		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+		assertIndexMatchesRoot(fixture.content.root, fixture.index);
 
 		fixture = advanceFixture(fixture, {
 			id: operationId(2_503),
@@ -1682,7 +1772,7 @@ suite('Manuscript Operation reducer', () => {
 			rightTextNodeId: temporaryRightTextId,
 		}, instrumentation);
 		assert.deepStrictEqual(cardinalities, [5, 0, 3, 0, 2, 0, 2, 0]);
-		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+		assertIndexMatchesRoot(fixture.content.root, fixture.index);
 
 		fixture = advanceFixture(fixture, {
 			id: operationId(2_505),
@@ -1694,7 +1784,7 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(fixture.index.hasNode(temporaryParagraphId), false);
 		assert.equal(fixture.index.hasNode(temporaryTextId), false);
 		assert.equal(fixture.index.hasNode(temporaryRightTextId), false);
-		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+		assertIndexMatchesRoot(fixture.content.root, fixture.index);
 	});
 });
 
@@ -2003,7 +2093,7 @@ function buildFixture(
 	academicGraph: AcademicGraphSnapshot,
 	ids: IFixtureIds,
 ): IFixture {
-	const content = {
+	const content: DocumentContent = Object.freeze({
 		format: documentFormat,
 		formatVersion: documentFormatVersion,
 		schemaId: manuscriptSchemaId,
@@ -2022,20 +2112,16 @@ function buildFixture(
 			headingNumbering: false,
 			bibliographyEnabled: true,
 		},
-	} as const;
+	});
 	const merkleState = rebuildRevisionMerkleState(content);
-	const snapshot: DocumentSnapshot = {
-		...content,
-		revisionId: revisionId(201),
-		documentHash: merkleState.documentHash,
-	};
 	const indexResult = createDocumentIndex(root);
 	if (indexResult.type === 'error') {
 		throw new Error(`Fixture index failed: ${indexResult.error.reason}.`);
 	}
 	return {
 		resource,
-		snapshot,
+		generatedAgainstRevisionId: revisionId(201),
+		content,
 		index: indexResult.value,
 		merkleState,
 		ids,
@@ -2049,7 +2135,9 @@ function reduce(
 ): ReduceManuscriptOperationResult {
 	return reduceManuscriptOperation({
 		resource: fixture.resource,
-		snapshot: fixture.snapshot,
+		generatedAgainstRevisionId:
+			fixture.generatedAgainstRevisionId,
+		content: fixture.content,
 		index: fixture.index,
 		merkleState: fixture.merkleState,
 		operation,
@@ -2066,11 +2154,7 @@ function advanceFixture(
 	const merkleState = rebuildRevisionMerkleState(reduced.nextContent);
 	return {
 		...fixture,
-		snapshot: {
-			...reduced.nextContent,
-			revisionId: fixture.snapshot.revisionId,
-			documentHash: merkleState.documentHash,
-		},
+		content: reduced.nextContent,
 		index: reduced.nextIndex,
 		merkleState,
 	};

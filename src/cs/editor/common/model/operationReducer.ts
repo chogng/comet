@@ -5,11 +5,13 @@
 
 import { isEqual } from 'cs/base/common/resources';
 import { URI } from 'cs/base/common/uri';
-import type {
-	ContentHash,
-	EntityId,
-	NodeId,
-	OperationId,
+import {
+	parseRevisionId,
+	type ContentHash,
+	type EntityId,
+	type NodeId,
+	type OperationId,
+	type RevisionId,
 } from 'cs/editor/common/core/identifiers';
 import { isWellFormedUnicodeString } from 'cs/editor/common/core/canonicalJson';
 import {
@@ -59,10 +61,13 @@ import {
 	type Operation,
 } from 'cs/editor/common/model/operation';
 import type { PositionMapFragment } from 'cs/editor/common/model/positionMap';
-import type {
-	DocumentContent,
-	DocumentSnapshot,
-	RevisionMerkleState,
+import {
+	documentFormat,
+	documentFormatVersion,
+	manuscriptSchemaId,
+	manuscriptSchemaVersion,
+	type DocumentContent,
+	type RevisionMerkleState,
 } from 'cs/editor/common/model/snapshot';
 
 export interface IManuscriptOperationReducerLimits extends IDocumentIndexLimits {
@@ -125,7 +130,8 @@ export const defaultManuscriptOperationReducerLimits: IManuscriptOperationReduce
 
 export interface IReduceManuscriptOperationInput {
 	readonly resource: URI;
-	readonly snapshot: DocumentSnapshot;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly content: DocumentContent;
 	readonly index: DocumentIndex;
 	readonly merkleState: RevisionMerkleState;
 	readonly operation: Operation;
@@ -311,11 +317,7 @@ export interface IManuscriptOperationTransitionView {
 	readonly canonicalResource: string;
 	readonly operationId: OperationId;
 	readonly operationType: Operation['type'];
-	readonly previousRevisionId: DocumentSnapshot['revisionId'];
-	readonly previousDocumentHash: ContentHash;
-	readonly limits: IManuscriptOperationReducerLimits;
-	readonly touchSet: IManuscriptOperationTouchSet;
-	readonly positionMapFragments: readonly PositionMapFragment[];
+	readonly generatedAgainstRevisionId: RevisionId;
 }
 
 /**
@@ -328,7 +330,8 @@ export interface IConsumedManuscriptOperationTransition {
 	readonly resource: URI;
 	readonly canonicalResource: string;
 	readonly operation: Operation;
-	readonly previousSnapshot: DocumentSnapshot;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly previousContent: DocumentContent;
 	readonly previousIndex: DocumentIndex;
 	readonly previousMerkleState: RevisionMerkleState;
 	readonly limits: IManuscriptOperationReducerLimits;
@@ -353,8 +356,7 @@ interface IManuscriptOperationTransitionRecord
 	extends IConsumedManuscriptOperationTransition {
 	readonly summaryOperationId: OperationId;
 	readonly summaryOperationType: Operation['type'];
-	readonly summaryPreviousRevisionId: DocumentSnapshot['revisionId'];
-	readonly summaryPreviousDocumentHash: ContentHash;
+	readonly summaryGeneratedAgainstRevisionId: RevisionId;
 	/**
 	 * This canonical clone remains private because URI maintains mutable lazy
 	 * caches and TypeScript readonly fields are writable at runtime.
@@ -374,14 +376,25 @@ const manuscriptOperationTransitionRecords = new WeakMap<
  * intermediate draft may be temporarily schema-invalid until later Operations and
  * touched-neighborhood normalization complete; the Transaction kernel owns the final
  * complete schema and academic-invariant validation before installation. The opaque
- * result binds the exact supplied base; it does not confer trust on that base. The
- * owning Transaction boundary validates base provenance before reduction.
+ * result binds the exact supplied DraftCheckpoint candidate; it does not confer trust
+ * on that candidate. The owning draft authority validates exact provenance before
+ * reduction and before accepting the transferred result.
  */
 export function reduceManuscriptOperation(
 	input: IReduceManuscriptOperationInput,
 ): ReduceManuscriptOperationResult {
 	const resource = validateManuscriptResource(input.resource);
 	if (resource.type === 'invalid') {
+		return failure(input.operation, 'inconsistent-base');
+	}
+	const generatedAgainstRevisionId =
+		typeof input.generatedAgainstRevisionId === 'string'
+			? parseRevisionId(input.generatedAgainstRevisionId)
+			: undefined;
+	if (
+		generatedAgainstRevisionId === undefined
+		|| generatedAgainstRevisionId.type === 'invalid'
+	) {
 		return failure(input.operation, 'inconsistent-base');
 	}
 	const limits = captureLimits(input.limits);
@@ -391,6 +404,7 @@ export function reduceManuscriptOperation(
 	const capturedInput: ICapturedReduceManuscriptOperationInput = {
 		...input,
 		resource: resource.resource,
+		generatedAgainstRevisionId: generatedAgainstRevisionId.value,
 		limits,
 	};
 	const baseFailure = validateBase(capturedInput, limits);
@@ -488,11 +502,8 @@ export function getManuscriptOperationTransitionView(
 		canonicalResource: record.canonicalResource,
 		operationId: record.summaryOperationId,
 		operationType: record.summaryOperationType,
-		previousRevisionId: record.summaryPreviousRevisionId,
-		previousDocumentHash: record.summaryPreviousDocumentHash,
-		limits: record.limits,
-		touchSet: record.touchSet,
-		positionMapFragments: record.positionMapFragments,
+		generatedAgainstRevisionId:
+			record.summaryGeneratedAgainstRevisionId,
 	});
 }
 
@@ -602,7 +613,7 @@ function reduceInsertNode(
 	}
 	const nextParent = cloneNodeWithChildren(parent, nextChildren);
 	const nextRoot = replaceNodeAtPath(
-		input.snapshot.root,
+		input.content.root,
 		input.index,
 		parent.id,
 		nextParent,
@@ -714,7 +725,7 @@ function reduceDeleteNode(
 	);
 	const nextParent = cloneNodeWithChildren(parent, nextChildren);
 	const nextRoot = replaceNodeAtPath(
-		input.snapshot.root,
+		input.content.root,
 		input.index,
 		parent.id,
 		nextParent,
@@ -892,7 +903,7 @@ function reduceMoveNode(
 		}
 		const nextParent = cloneNodeWithChildren(sourceParent, nextChildren);
 		nextRoot = replaceNodeAtPath(
-			input.snapshot.root,
+			input.content.root,
 			input.index,
 			sourceParent.id,
 			nextParent,
@@ -915,7 +926,7 @@ function reduceMoveNode(
 			sourceChildren,
 		);
 		const rootAfterRemoval = replaceNodeAtPath(
-			input.snapshot.root,
+			input.content.root,
 			input.index,
 			sourceParent.id,
 			nextSourceParent,
@@ -1203,7 +1214,7 @@ function reduceSplitText(
 	}
 	const nextParent = cloneNodeWithChildren(parent, nextChildren);
 	const nextRoot = replaceNodeAtPath(
-		input.snapshot.root,
+		input.content.root,
 		input.index,
 		parent.id,
 		nextParent,
@@ -1340,7 +1351,7 @@ function reduceJoinText(
 	);
 	const nextParent = cloneNodeWithChildren(parent, nextChildren);
 	const nextRoot = replaceNodeAtPath(
-		input.snapshot.root,
+		input.content.root,
 		input.index,
 		parent.id,
 		nextParent,
@@ -1434,7 +1445,7 @@ function reduceSetNodeAttributes(
 	}
 	const nextNode = cloneNodeWithAttributes(target, attributes);
 	const nextRoot = replaceNodeAtPath(
-		input.snapshot.root,
+		input.content.root,
 		input.index,
 		target.id,
 		nextNode,
@@ -1522,13 +1533,13 @@ function reduceCreateAcademicEntity(
 	if (entity === undefined) {
 		return failure(operation, 'invalid-operation');
 	}
-	if (findAcademicEntity(input.snapshot.academicGraph, entity.id) !== undefined) {
+	if (findAcademicEntity(input.content.academicGraph, entity.id) !== undefined) {
 		return failure(operation, 'duplicate-entity-id', {
 			entityId: entity.id,
 		});
 	}
 	const collection = academicEntityCollection(entity);
-	const source = input.snapshot.academicGraph[collection] as readonly AcademicEntity[];
+	const source = input.content.academicGraph[collection] as readonly AcademicEntity[];
 	const insertionIndex = findEntityInsertionIndex(source, entity.id);
 	const nextCollection = insertAt(
 		source,
@@ -1538,7 +1549,7 @@ function reduceCreateAcademicEntity(
 		'academic-collection-slots',
 	);
 	const nextGraph = replaceAcademicCollection(
-		input.snapshot.academicGraph,
+		input.content.academicGraph,
 		collection,
 		nextCollection,
 	);
@@ -1578,7 +1589,7 @@ function reduceReplaceAcademicEntity(
 		});
 	}
 	const located = findAcademicEntity(
-		input.snapshot.academicGraph,
+		input.content.academicGraph,
 		operation.entityId,
 	);
 	if (located === undefined) {
@@ -1599,7 +1610,7 @@ function reduceReplaceAcademicEntity(
 			entityId: operation.entityId,
 		});
 	}
-	const source = input.snapshot.academicGraph[
+	const source = input.content.academicGraph[
 		located.collection
 	] as readonly AcademicEntity[];
 	const replacementCollection = academicEntityCollection(replacement);
@@ -1615,13 +1626,13 @@ function reduceReplaceAcademicEntity(
 			'academic-collection-slots',
 		);
 		nextGraph = replaceAcademicCollection(
-			input.snapshot.academicGraph,
+			input.content.academicGraph,
 			located.collection,
 			nextCollection,
 		);
 	} else {
 		const graphAfterRemoval = replaceAcademicCollection(
-			input.snapshot.academicGraph,
+			input.content.academicGraph,
 			located.collection,
 			removeAt(
 				source,
@@ -1688,7 +1699,7 @@ function reduceDeleteAcademicEntity(
 ): ReduceManuscriptOperationResult {
 	const { operation } = input;
 	const located = findAcademicEntity(
-		input.snapshot.academicGraph,
+		input.content.academicGraph,
 		operation.entityId,
 	);
 	if (located === undefined) {
@@ -1704,7 +1715,7 @@ function reduceDeleteAcademicEntity(
 	if (hashFailure !== undefined) {
 		return hashFailure;
 	}
-	const source = input.snapshot.academicGraph[
+	const source = input.content.academicGraph[
 		located.collection
 	] as readonly AcademicEntity[];
 	const nextCollection = removeAt(
@@ -1714,7 +1725,7 @@ function reduceDeleteAcademicEntity(
 		'academic-collection-slots',
 	);
 	const nextGraph = replaceAcademicCollection(
-		input.snapshot.academicGraph,
+		input.content.academicGraph,
 		located.collection,
 		nextCollection,
 	);
@@ -1762,7 +1773,7 @@ function reduceSetClaimEvidenceRelation(
 			evidenceId: operation.evidenceId,
 		});
 	}
-	const relations = input.snapshot.academicGraph.claimEvidenceRelations;
+	const relations = input.content.academicGraph.claimEvidenceRelations;
 	const relationIndex = findRelationIndex(
 		relations,
 		operation.claimId,
@@ -1816,11 +1827,11 @@ function reduceSetClaimEvidenceRelation(
 		replacement !== null
 		&& (
 			findEntityIndex(
-				input.snapshot.academicGraph.claims,
+				input.content.academicGraph.claims,
 				operation.claimId,
 			) < 0
 			|| findEntityIndex(
-				input.snapshot.academicGraph.evidenceLinks,
+				input.content.academicGraph.evidenceLinks,
 				operation.evidenceId,
 			) < 0
 		)
@@ -1859,9 +1870,9 @@ function reduceSetClaimEvidenceRelation(
 			);
 	}
 	const nextGraph: AcademicGraphSnapshot = Object.freeze({
-		referenceSnapshots: input.snapshot.academicGraph.referenceSnapshots,
-		evidenceLinks: input.snapshot.academicGraph.evidenceLinks,
-		claims: input.snapshot.academicGraph.claims,
+		referenceSnapshots: input.content.academicGraph.referenceSnapshots,
+		evidenceLinks: input.content.academicGraph.evidenceLinks,
+		claims: input.content.academicGraph.claims,
 		claimEvidenceRelations: nextRelations,
 	});
 	const academicPaths: IOperationTouchedAcademicPath[] = [];
@@ -1921,7 +1932,7 @@ function reduceSetMetadata(
 		});
 	}
 	const metadata = cloneMetadata(operation.metadata);
-	const previousMetadata = cloneMetadata(input.snapshot.metadata);
+	const previousMetadata = cloneMetadata(input.content.metadata);
 	if (metadata === undefined || previousMetadata === undefined) {
 		return failure(operation, 'invalid-operation');
 	}
@@ -1952,7 +1963,7 @@ function reduceSetSettings(
 		});
 	}
 	const settings = cloneSettings(operation.settings);
-	const previousSettings = cloneSettings(input.snapshot.settings);
+	const previousSettings = cloneSettings(input.content.settings);
 	if (settings === undefined || previousSettings === undefined) {
 		return failure(operation, 'invalid-operation');
 	}
@@ -2004,16 +2015,16 @@ function success(
 	capture: ManuscriptOperationCapture,
 	positionMapFragments: readonly PositionMapFragment[],
 ): ReduceManuscriptOperationResult {
-	const { snapshot } = input;
+	const previousContent = input.content;
 	const content: DocumentContent = Object.freeze({
-		format: snapshot.format,
-		formatVersion: snapshot.formatVersion,
-		schemaId: snapshot.schemaId,
-		schemaVersion: snapshot.schemaVersion,
-		metadata: changes.metadata ?? snapshot.metadata,
-		root: changes.root ?? snapshot.root,
-		academicGraph: changes.academicGraph ?? snapshot.academicGraph,
-		settings: changes.settings ?? snapshot.settings,
+		format: previousContent.format,
+		formatVersion: previousContent.formatVersion,
+		schemaId: previousContent.schemaId,
+		schemaVersion: previousContent.schemaVersion,
+		metadata: changes.metadata ?? previousContent.metadata,
+		root: changes.root ?? previousContent.root,
+		academicGraph: changes.academicGraph ?? previousContent.academicGraph,
+		settings: changes.settings ?? previousContent.settings,
 	});
 	const frozenPositionMapFragments = Object.freeze([
 		...positionMapFragments,
@@ -2026,10 +2037,11 @@ function success(
 		canonicalResource: input.resource.toString(),
 		summaryOperationId: input.operation.id,
 		summaryOperationType: input.operation.type,
-		summaryPreviousRevisionId: snapshot.revisionId,
-		summaryPreviousDocumentHash: snapshot.documentHash,
+		summaryGeneratedAgainstRevisionId:
+			input.generatedAgainstRevisionId,
 		operation: input.operation,
-		previousSnapshot: snapshot,
+		generatedAgainstRevisionId: input.generatedAgainstRevisionId,
+		previousContent,
 		previousIndex: input.index,
 		previousMerkleState: input.merkleState,
 		limits: input.limits,
@@ -2085,16 +2097,26 @@ function validateBase(
 	input: IReduceManuscriptOperationInput,
 	limits: IManuscriptOperationReducerLimits,
 ): ReduceManuscriptOperationResult | undefined {
+	// This is deliberately local coherence validation, not provenance
+	// authentication. The draft owner alone retains the exact eight content
+	// field references, index, and Merkle state that form its DraftCheckpoint;
+	// it must reject a transferred candidate whose identities do not match.
+	const { content, index, merkleState } = input;
 	if (
-		input.snapshot.documentHash !== input.merkleState.documentHash
-		|| input.snapshot.root.id !== input.index.rootNodeId
-		|| input.index.getNode(input.snapshot.root.id) !== input.snapshot.root
-		|| input.index.nodeCount !== input.merkleState.nodeCount
-		|| input.index.nodeCount > limits.maximumNodes
-		|| countAcademicEntities(input.snapshot.academicGraph)
-			!== input.merkleState.entityCount
-		|| input.snapshot.academicGraph.claimEvidenceRelations.length
-			!== input.merkleState.relationCount
+		content.format !== documentFormat
+		|| content.formatVersion !== documentFormatVersion
+		|| content.schemaId !== manuscriptSchemaId
+		|| content.schemaVersion !== manuscriptSchemaVersion
+		|| content.root.id !== index.rootNodeId
+		|| index.getNode(content.root.id) !== content.root
+		|| index.nodeCount !== merkleState.nodeCount
+		|| index.nodeCount > limits.maximumNodes
+		|| merkleState.getNodeHash(content.root.id)
+			!== merkleState.rootNodeHash
+		|| countAcademicEntities(content.academicGraph)
+			!== merkleState.entityCount
+		|| content.academicGraph.claimEvidenceRelations.length
+			!== merkleState.relationCount
 	) {
 		return failure(input.operation, 'inconsistent-base');
 	}
@@ -2211,7 +2233,7 @@ function replaceTextNode(
 	normalizeParent: boolean,
 ): ReduceManuscriptOperationResult {
 	const nextRoot = replaceNodeAtPath(
-		input.snapshot.root,
+		input.content.root,
 		input.index,
 		before.id,
 		after,
