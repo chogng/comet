@@ -9,7 +9,8 @@ The temporary change surface is:
 - `src/cs/editor/common/core/**` for canonical JSON, SHA-256, Editor domain identifiers, semantic positions, manuscript resource validation, and typed errors;
 - `src/cs/editor/common/model.ts` and `src/cs/editor/common/model/**` for the authoritative Manuscript model, schema, snapshots, indexes, transactions, PositionMap, Revision, Proposal, Semantic Diff, replay, and recovery semantics;
 - `src/cs/editor/common/services/**` for Model Service, resolver, history, revision-bound reads, diagnostics, Proposal, and Editor durability;
-- `src/cs/editor/browser/text/**` for the ProseMirror projection, step translation, selection, composition, clipboard, commands, and DOM divergence handling;
+- `src/cs/editor/browser/text/**` for the indispensable ProseMirror projection, step translation, selection, composition, input, and DOM divergence handling;
+- `src/cs/editor/contrib/**` for removable Editor-owned capabilities such as formatting UI and Figure resize behavior;
 - `src/cs/platform/storage/**` for a generic fenced durable byte-storage port and its real runtime implementations;
 - `src/cs/workbench/contrib/draftEditor/**` for model references, save/revert, user review, Agent session/grant/cursor, Tool execution, attachments, targets, and presentations;
 - affected Platform Agent Host call sites and tests where Feature-specific Editor types or copied Nireco contracts must be removed; and
@@ -32,7 +33,7 @@ Gate 0 reports, Browser Spike artifacts, old performance measurements, and `/pri
 
 ## Upstream structure evidence
 
-The final directory follows the ownership pattern visible in upstream Monaco:
+The final directory follows the ownership rules visible in upstream Monaco:
 
 ```text
 common/model.ts
@@ -40,9 +41,12 @@ common/model/**
 common/services/model.ts
 common/services/modelService.ts
 common/services/resolverService.ts
-browser/**
-test/**
+browser/**                  # indispensable Editor core
+contrib/<feature>/**        # removable Editor features
+test/{common,browser}/**    # tests mirror their runtime owner
 ```
+
+`src/cs/editor/standalone` is absent because Comet does not publish a standalone editor distribution. Product-only Input, Pane, Agent Tool, and review behavior remains under `src/cs/workbench/contrib/draftEditor`; it does not become Editor `contrib`.
 
 This evidence determines ownership, not implementation text. Comet uses its own Manuscript contracts and existing base/platform services. No upstream source, fixture, barrel, standalone API, or unrelated contribution tree is copied.
 
@@ -58,7 +62,7 @@ The direct cutover removes these current conflicts rather than wrapping them:
 - `DraftEditorService` scans active groups instead of resolving the resource model; and
 - Draft Agent Tools operate on handwritten block snapshots instead of revision-bound Editor services and Proposal contracts.
 
-The current uncommitted core files are provisional. Their names and APIs must be reconciled to `NIRECO.md` before the first phase commit; no call site may depend on a transitional name.
+Every migrated file enters its final owner and name. No call site may depend on a transitional name or on an uncommitted compatibility surface.
 
 ## Direct migration phases
 
