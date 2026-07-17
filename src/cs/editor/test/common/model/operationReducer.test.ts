@@ -55,10 +55,10 @@ import {
 	documentFormatVersion,
 	manuscriptSchemaId,
 	manuscriptSchemaVersion,
-	rebuildRevisionMerkleState,
 	type DocumentSnapshot,
 	type RevisionMerkleState,
 } from 'cs/editor/common/model/snapshot';
+import { rebuildRevisionMerkleState } from 'cs/editor/common/model/revisionMerkleState';
 
 interface IFixtureIds {
 	readonly root: NodeId;

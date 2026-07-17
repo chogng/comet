@@ -71,16 +71,18 @@ import {
 	type IRevisionMerkleHashCall,
 	type RevisionMerkleHashCallObserver,
 } from 'cs/editor/common/model/revisionHashPayload';
+import * as revisionMerkleStateModule from 'cs/editor/common/model/revisionMerkleState';
 import {
 	documentFormat,
 	documentFormatVersion,
 	manuscriptSchemaId,
 	manuscriptSchemaVersion,
-	rebuildRevisionMerkleState,
 	type DocumentContent,
 	type DocumentSnapshot,
 	type RevisionMerkleState,
 } from 'cs/editor/common/model/snapshot';
+
+const { rebuildRevisionMerkleState } = revisionMerkleStateModule;
 
 interface ITestFixture {
 	readonly content: DocumentContent;
@@ -1389,6 +1391,10 @@ suite('Document Snapshot Merkle state', () => {
 		assert.equal(Object.hasOwn(first, 'canonicalJson'), false);
 		assert.equal(Object.hasOwn(first, 'snapshot'), false);
 		assert.equal(Object.hasOwn(first, 'cache'), false);
+		assert.deepStrictEqual(
+			Object.keys(revisionMerkleStateModule),
+			['rebuildRevisionMerkleState'],
+		);
 		assert.equal(
 			Reflect.ownKeys(first).some(key =>
 				typeof key === 'string'

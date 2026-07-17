@@ -74,6 +74,7 @@ src/cs/editor/
 │   │   ├── snapshotDecoder.ts
 │   │   ├── documentIndex.ts
 │   │   ├── merkleVector.ts
+│   │   ├── revisionMerkleState.ts
 │   │   ├── academicGraph.ts
 │   │   ├── operation.ts
 │   │   ├── transaction.ts

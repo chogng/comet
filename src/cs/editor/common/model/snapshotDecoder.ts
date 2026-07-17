@@ -54,11 +54,11 @@ import {
 	documentFormatVersion,
 	manuscriptSchemaId,
 	manuscriptSchemaVersion,
-	rebuildRevisionMerkleState,
 	type DocumentContent,
 	type DocumentSnapshot,
 	type RevisionMerkleState,
 } from 'cs/editor/common/model/snapshot';
+import { rebuildRevisionMerkleState } from 'cs/editor/common/model/revisionMerkleState';
 
 export interface IDocumentSnapshotCodecLimits extends IBoundedClosedJsonLimits {
 	readonly maximumNodes: number;

@@ -37,10 +37,10 @@ import {
 	documentFormatVersion,
 	manuscriptSchemaId,
 	manuscriptSchemaVersion,
-	rebuildRevisionMerkleState,
 	type DocumentContent,
 	type DocumentSnapshot,
 } from 'cs/editor/common/model/snapshot';
+import { rebuildRevisionMerkleState } from 'cs/editor/common/model/revisionMerkleState';
 import {
 	decodeDocumentSnapshot,
 	encodeDocumentSnapshotV1,
