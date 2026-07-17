@@ -42,12 +42,13 @@ import { maximumManuscriptTextUtf16Length } from 'cs/editor/common/model/manuscr
 import { normalizeManuscriptRoot } from 'cs/editor/common/model/normalization';
 import type { Operation } from 'cs/editor/common/model/operation';
 import {
-	isTrustedManuscriptOperationCapture,
-	isTrustedManuscriptOperationTouchSet,
-	isTrustedManuscriptOperationTransition,
+	consumeManuscriptOperationTransition,
+	getManuscriptOperationTransitionView,
 	reduceManuscriptOperation,
+	type IConsumedManuscriptOperationTransition,
 	type IManuscriptOperationReducerInstrumentation,
-	type IReducedManuscriptOperation,
+	type IManuscriptOperationTransitionView,
+	type ManuscriptOperationTransition,
 	type ReduceManuscriptOperationResult,
 } from 'cs/editor/common/model/operationReducer';
 import {
@@ -94,13 +95,13 @@ interface INodePayloadAccessProbe {
 }
 
 suite('Manuscript Operation reducer', () => {
-	test('applies all fourteen Operation kinds with trusted captures', () => {
+	test('applies all fourteen Operation kinds through opaque transitions', () => {
 		const cases: readonly {
 			readonly type: Operation['type'];
 			readonly create: (fixture: IFixture) => Operation;
 			readonly verify: (
 				fixture: IFixture,
-				reduced: IReducedManuscriptOperation,
+				reduced: IConsumedManuscriptOperationTransition,
 			) => void;
 		}[] = [
 			{
@@ -137,7 +138,7 @@ suite('Manuscript Operation reducer', () => {
 					},
 				}),
 				verify: (fixture, reduced) => {
-					const body = reduced.index.getNode(fixture.ids.body);
+					const body = reduced.nextIndex.getNode(fixture.ids.body);
 					assert.equal(body?.type, 'body');
 					assert.equal(body?.children.length, 3);
 					assert.deepStrictEqual(
@@ -145,8 +146,8 @@ suite('Manuscript Operation reducer', () => {
 						[fixture.ids.body, nodeId(21)],
 					);
 					const normalized = normalizeManuscriptRoot({
-						root: reduced.content.root,
-						index: reduced.index,
+						root: reduced.nextContent.root,
+						index: reduced.nextIndex,
 						touchedParentNodeIds:
 							reduced.touchSet.normalizationParentNodeIds,
 						touchedNodeIds: [],
@@ -179,7 +180,7 @@ suite('Manuscript Operation reducer', () => {
 					expectedNodeHash: nodeHash(fixture, fixture.ids.secondParagraph),
 				}),
 				verify: (fixture, reduced) => {
-					assert.equal(reduced.index.hasNode(fixture.ids.secondParagraph), false);
+					assert.equal(reduced.nextIndex.hasNode(fixture.ids.secondParagraph), false);
 					assert.equal(reduced.positionMapFragments[0]?.kind, 'child-delete');
 				},
 			},
@@ -195,7 +196,7 @@ suite('Manuscript Operation reducer', () => {
 					childIndex: 1,
 				}),
 				verify: (fixture, reduced) => {
-					const body = reduced.index.getNode(fixture.ids.body);
+					const body = reduced.nextIndex.getNode(fixture.ids.body);
 					assert.equal(body?.type, 'body');
 					assert.deepStrictEqual(
 						body?.children.map(child => child.id),
@@ -235,7 +236,7 @@ suite('Manuscript Operation reducer', () => {
 					replacement: 'X',
 				}),
 				verify: (fixture, reduced) => {
-					const text = reduced.index.getNode(fixture.ids.leftText);
+					const text = reduced.nextIndex.getNode(fixture.ids.leftText);
 					assert.equal(text?.type, 'text');
 					assert.equal(text?.value, 'aXa');
 					assert.equal(reduced.positionMapFragments[0]?.kind, 'text-replace');
@@ -252,8 +253,8 @@ suite('Manuscript Operation reducer', () => {
 					rightTextNodeId: nodeId(24),
 				}),
 				verify: (fixture, reduced) => {
-					const left = reduced.index.getNode(fixture.ids.leftText);
-					const right = reduced.index.getNode(nodeId(24));
+					const left = reduced.nextIndex.getNode(fixture.ids.leftText);
+					const right = reduced.nextIndex.getNode(nodeId(24));
 					assert.equal(left?.type, 'text');
 					assert.equal(right?.type, 'text');
 					assert.equal(left?.value, 'al');
@@ -272,10 +273,10 @@ suite('Manuscript Operation reducer', () => {
 					expectedRightNodeHash: nodeHash(fixture, fixture.ids.rightText),
 				}),
 				verify: (fixture, reduced) => {
-					const left = reduced.index.getNode(fixture.ids.leftText);
+					const left = reduced.nextIndex.getNode(fixture.ids.leftText);
 					assert.equal(left?.type, 'text');
 					assert.equal(left?.value, 'alphabeta');
-					assert.equal(reduced.index.hasNode(fixture.ids.rightText), false);
+					assert.equal(reduced.nextIndex.hasNode(fixture.ids.rightText), false);
 					assert.equal(reduced.positionMapFragments[0]?.kind, 'text-join');
 				},
 			},
@@ -289,7 +290,7 @@ suite('Manuscript Operation reducer', () => {
 					attributes: { alignment: 'center' },
 				}),
 				verify: (fixture, reduced) => {
-					const paragraph = reduced.index.getNode(fixture.ids.firstParagraph);
+					const paragraph = reduced.nextIndex.getNode(fixture.ids.firstParagraph);
 					assert.equal(paragraph?.type, 'paragraph');
 					assert.equal(paragraph?.attrs.alignment, 'center');
 				},
@@ -304,7 +305,7 @@ suite('Manuscript Operation reducer', () => {
 					marks: [{ type: 'bold' }],
 				}),
 				verify: (fixture, reduced) => {
-					const text = reduced.index.getNode(fixture.ids.leftText);
+					const text = reduced.nextIndex.getNode(fixture.ids.leftText);
 					assert.equal(text?.type, 'text');
 					assert.deepStrictEqual(text?.marks, [{ type: 'bold' }]);
 				},
@@ -318,7 +319,7 @@ suite('Manuscript Operation reducer', () => {
 				}),
 				verify: (_fixture, reduced) => {
 					assert.deepStrictEqual(
-						reduced.content.academicGraph.referenceSnapshots.map(item => item.id),
+						reduced.nextContent.academicGraph.referenceSnapshots.map(item => item.id),
 						[entityId(101), entityId(104)],
 					);
 				},
@@ -334,7 +335,7 @@ suite('Manuscript Operation reducer', () => {
 				}),
 				verify: (_fixture, reduced) => {
 					assert.deepStrictEqual(
-						reduced.content.academicGraph.referenceSnapshots[0]?.cslJson,
+						reduced.nextContent.academicGraph.referenceSnapshots[0]?.cslJson,
 						{ title: 'Replaced' },
 					);
 				},
@@ -349,7 +350,7 @@ suite('Manuscript Operation reducer', () => {
 				}),
 				verify: (_fixture, reduced) => {
 					assert.equal(
-						reduced.content.academicGraph.referenceSnapshots.length,
+						reduced.nextContent.academicGraph.referenceSnapshots.length,
 						0,
 					);
 				},
@@ -374,7 +375,7 @@ suite('Manuscript Operation reducer', () => {
 				}),
 				verify: (_fixture, reduced) => {
 					assert.equal(
-						reduced.content.academicGraph.claimEvidenceRelations[0]?.relation,
+						reduced.nextContent.academicGraph.claimEvidenceRelations[0]?.relation,
 						'contradicts',
 					);
 				},
@@ -393,7 +394,7 @@ suite('Manuscript Operation reducer', () => {
 					},
 				}),
 				verify: (_fixture, reduced) => {
-					assert.equal(reduced.content.metadata.title, 'Changed title');
+					assert.equal(reduced.nextContent.metadata.title, 'Changed title');
 					assert.equal(reduced.touchSet.metadata, true);
 				},
 			},
@@ -411,7 +412,7 @@ suite('Manuscript Operation reducer', () => {
 					},
 				}),
 				verify: (_fixture, reduced) => {
-					assert.equal(reduced.content.settings.language, 'zh-Hans');
+					assert.equal(reduced.nextContent.settings.language, 'zh-Hans');
 					assert.equal(reduced.touchSet.settings, true);
 				},
 			},
@@ -424,54 +425,40 @@ suite('Manuscript Operation reducer', () => {
 			const originalGraph = fixture.snapshot.academicGraph;
 			const operation = operationCase.create(fixture);
 			assert.equal(operation.type, operationCase.type);
-			const reduced = expectOk(reduce(fixture, operation));
+			const transition = expectTransition(reduce(fixture, operation));
+			const summary = expectTransitionView(transition);
+			assert.deepStrictEqual(Reflect.ownKeys(transition), []);
+			assert.equal(Object.getPrototypeOf(transition), null);
+			assert.equal(Object.isFrozen(transition), true);
+			assert.equal(summary.operationId, operation.id);
+			assert.equal(summary.operationType, operation.type);
+			assert.equal(
+				summary.previousRevisionId,
+				fixture.snapshot.revisionId,
+			);
+			assert.equal(
+				summary.previousDocumentHash,
+				fixture.snapshot.documentHash,
+			);
+			assert.equal(
+				summary.resource.toString(),
+				fixture.resource.toString(),
+			);
+			assert.equal(
+				summary.canonicalResource,
+				fixture.resource.toString(),
+			);
+			assert.notStrictEqual(summary.resource, fixture.resource);
+			assert.equal(Object.isFrozen(summary.resource), false);
+			assert.doesNotThrow(() => summary.resource.fsPath);
+			assert.equal(Object.isFrozen(summary.limits), true);
+			const reduced = expectConsumedTransition(transition);
+			assert.strictEqual(reduced.operation, operation);
+			assert.strictEqual(reduced.previousSnapshot, fixture.snapshot);
+			assert.strictEqual(reduced.previousIndex, fixture.index);
+			assert.strictEqual(reduced.previousMerkleState, fixture.merkleState);
 			assert.equal(reduced.capture.type, operation.type);
-			assert.equal(isTrustedManuscriptOperationCapture(reduced.capture), true);
-			assert.equal(
-				isTrustedManuscriptOperationCapture({ ...reduced.capture }),
-				false,
-			);
-			assert.equal(
-				isTrustedManuscriptOperationTouchSet(reduced.touchSet),
-				true,
-			);
-			assert.equal(
-				isTrustedManuscriptOperationTouchSet({ ...reduced.touchSet }),
-				false,
-			);
-			assert.equal(
-				isTrustedManuscriptOperationTransition(
-					reduced.touchSet,
-					fixture.snapshot,
-					reduced.content,
-				),
-				true,
-			);
-			assert.equal(
-				isTrustedManuscriptOperationTransition(
-					reduced.touchSet,
-					{ ...fixture.snapshot },
-					reduced.content,
-				),
-				false,
-			);
-			assert.equal(
-				isTrustedManuscriptOperationTransition(
-					reduced.touchSet,
-					fixture.snapshot,
-					{ ...reduced.content },
-				),
-				false,
-			);
-			assert.equal(
-				isTrustedManuscriptOperationTransition(
-					{ ...reduced.touchSet },
-					fixture.snapshot,
-					reduced.content,
-				),
-				false,
-			);
-			assert.equal(Object.isFrozen(reduced.content), true);
+			assert.equal(Object.isFrozen(reduced.nextContent), true);
 			assert.equal(Object.isFrozen(reduced.touchSet), true);
 			assert.equal(Object.isFrozen(reduced.touchSet.nodePaths), true);
 			assert.equal(Object.isFrozen(reduced.positionMapFragments), true);
@@ -485,8 +472,117 @@ suite('Manuscript Operation reducer', () => {
 			assert.strictEqual(fixture.snapshot.root, originalRoot);
 			assert.strictEqual(fixture.snapshot.academicGraph, originalGraph);
 			operationCase.verify(fixture, reduced);
-			assertIndexMatchesRoot(reduced.content.root, reduced.index);
+			assertIndexMatchesRoot(reduced.nextContent.root, reduced.nextIndex);
 		}
+	});
+
+	test('binds exact A/B inputs and rejects hostile token lookalikes', () => {
+		const fixture = createFixture();
+		const operationA: Operation = {
+			id: operationId(415),
+			type: 'replace-text',
+			textNodeId: fixture.ids.leftText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.leftText),
+			startUtf16Offset: offset(0),
+			endUtf16Offset: offset(1),
+			replacement: 'A',
+		};
+		const operationB: Operation = {
+			...operationA,
+			id: operationId(416),
+			replacement: 'B',
+		};
+		const callerLimits = {
+			maximumNodes: fixture.index.nodeCount + 10,
+			maximumDepth: 200,
+		};
+		const transitionA = expectTransition(reduceManuscriptOperation({
+			resource: fixture.resource,
+			snapshot: fixture.snapshot,
+			index: fixture.index,
+			merkleState: fixture.merkleState,
+			operation: operationA,
+			limits: callerLimits,
+		}));
+		const transitionB = expectTransition(reduce(fixture, operationB));
+		const viewA = expectTransitionView(transitionA);
+		const viewB = expectTransitionView(transitionB);
+
+		assert.notStrictEqual(transitionA, transitionB);
+		assert.notStrictEqual(viewA, viewB);
+		assert.equal(viewA.operationId, operationA.id);
+		assert.equal(viewB.operationId, operationB.id);
+		assert.equal(viewA.operationType, operationA.type);
+		assert.equal(viewB.operationType, operationB.type);
+		assert.equal(Object.isFrozen(viewA), true);
+		assert.equal(Object.isFrozen(viewB), true);
+		assert.notStrictEqual(viewA.limits, callerLimits);
+		assert.deepStrictEqual(viewA.limits, callerLimits);
+		assert.equal(Object.isFrozen(viewA.limits), true);
+		assert.equal(Object.isFrozen(callerLimits), false);
+		const secondViewA = expectTransitionView(transitionA);
+		const secondViewB = expectTransitionView(transitionB);
+		assert.notStrictEqual(secondViewA, viewA);
+		assert.notStrictEqual(secondViewB, viewB);
+		assert.notStrictEqual(secondViewA.resource, viewA.resource);
+		assert.notStrictEqual(secondViewB.resource, viewB.resource);
+		assert.equal(secondViewA.canonicalResource, viewA.canonicalResource);
+		assert.equal(secondViewB.canonicalResource, viewB.canonicalResource);
+		Object.defineProperty(viewA.resource, 'path', {
+			value: '/01900000-0000-7000-8000-000000000999',
+		});
+		const thirdViewA = expectTransitionView(transitionA);
+		assert.equal(
+			thirdViewA.resource.toString(),
+			fixture.resource.toString(),
+		);
+		assert.equal(
+			thirdViewA.canonicalResource,
+			fixture.resource.toString(),
+		);
+		let hostileOperationReads = 0;
+		Object.defineProperty(operationA, 'id', {
+			get: () => {
+				hostileOperationReads += 1;
+				consumeManuscriptOperationTransition(transitionA);
+				return operationId(999);
+			},
+		});
+		const stableViewA = expectTransitionView(transitionA);
+		assert.equal(stableViewA.operationId, operationId(415));
+		assert.equal(hostileOperationReads, 0);
+
+		const clone = { ...transitionA };
+		const proxy = new Proxy(transitionA, {});
+		const derived = Object.create(transitionA);
+		const sameShape = Object.freeze(Object.create(null));
+		assert.equal(getManuscriptOperationTransitionView(clone), undefined);
+		assert.equal(getManuscriptOperationTransitionView(proxy), undefined);
+		assert.equal(getManuscriptOperationTransitionView(derived), undefined);
+		assert.equal(getManuscriptOperationTransitionView(sameShape), undefined);
+		assert.equal(
+			getManuscriptOperationTransitionView(viewA.touchSet),
+			undefined,
+		);
+		assert.equal(
+			getManuscriptOperationTransitionView(operationB),
+			undefined,
+		);
+		assert.equal(consumeManuscriptOperationTransition(clone), undefined);
+		assert.equal(consumeManuscriptOperationTransition(proxy), undefined);
+		assert.equal(consumeManuscriptOperationTransition(derived), undefined);
+		assert.equal(consumeManuscriptOperationTransition(sameShape), undefined);
+
+		const reducedA = expectConsumedTransition(transitionA);
+		const reducedB = expectConsumedTransition(transitionB);
+		assert.strictEqual(reducedA.operation, operationA);
+		assert.strictEqual(reducedB.operation, operationB);
+		assert.notStrictEqual(reducedA.nextContent, reducedB.nextContent);
+		assert.notStrictEqual(reducedA.nextIndex, reducedB.nextIndex);
+		assert.equal(getManuscriptOperationTransitionView(transitionA), undefined);
+		assert.equal(getManuscriptOperationTransitionView(transitionB), undefined);
+		assert.equal(consumeManuscriptOperationTransition(transitionA), undefined);
+		assert.equal(consumeManuscriptOperationTransition(transitionB), undefined);
 	});
 
 	test('rejects step-local hash conflicts without changing the trusted base', () => {
@@ -637,7 +733,7 @@ suite('Manuscript Operation reducer', () => {
 			expectedParentHash: nodeHash(fixture, fixture.ids.body),
 			childIndex: 0,
 		}));
-		const keptBody = keepPosition.index.getNode(fixture.ids.body);
+		const keptBody = keepPosition.nextIndex.getNode(fixture.ids.body);
 		assert.equal(keptBody?.type, 'body');
 		assert.deepStrictEqual(
 			keptBody?.children.map(child => child.id),
@@ -653,7 +749,7 @@ suite('Manuscript Operation reducer', () => {
 			expectedParentHash: nodeHash(fixture, fixture.ids.body),
 			childIndex: 1,
 		}));
-		const movedBody = moveToEnd.index.getNode(fixture.ids.body);
+		const movedBody = moveToEnd.nextIndex.getNode(fixture.ids.body);
 		assert.equal(movedBody?.type, 'body');
 		assert.deepStrictEqual(
 			movedBody?.children.map(child => child.id),
@@ -683,8 +779,8 @@ suite('Manuscript Operation reducer', () => {
 			expectedParentHash: nodeHash(fixture, fixture.ids.secondParagraph),
 			childIndex: 1,
 		}));
-		const first = reduced.index.getNode(fixture.ids.firstParagraph);
-		const second = reduced.index.getNode(fixture.ids.secondParagraph);
+		const first = reduced.nextIndex.getNode(fixture.ids.firstParagraph);
+		const second = reduced.nextIndex.getNode(fixture.ids.secondParagraph);
 		assert.equal(first?.type, 'paragraph');
 		assert.equal(second?.type, 'paragraph');
 		assert.deepStrictEqual(
@@ -840,10 +936,10 @@ suite('Manuscript Operation reducer', () => {
 			},
 		}));
 		assert.equal(
-			reduced.content.academicGraph.referenceSnapshots.length,
+			reduced.nextContent.academicGraph.referenceSnapshots.length,
 			0,
 		);
-		const ownedEvidence = reduced.content.academicGraph.evidenceLinks.find(
+		const ownedEvidence = reduced.nextContent.academicGraph.evidenceLinks.find(
 			entity => entity.id === fixture.ids.reference,
 		);
 		assert.equal(ownedEvidence?.locator.kind, 'page');
@@ -909,13 +1005,13 @@ suite('Manuscript Operation reducer', () => {
 		}));
 		relationActor.id = 'relation-after';
 		assert.equal(
-			relationReduced.content.academicGraph
+			relationReduced.nextContent.academicGraph
 				.claimEvidenceRelations[0]?.assessedBy.id,
 			'relation-before',
 		);
 		assert.equal(
 			Object.isFrozen(
-				relationReduced.content.academicGraph
+				relationReduced.nextContent.academicGraph
 					.claimEvidenceRelations[0]?.assessedBy,
 			),
 			true,
@@ -956,16 +1052,16 @@ suite('Manuscript Operation reducer', () => {
 			expectedNodeHash: nodeHash(fixture, targetId),
 			attributes: { alignment: 'end' },
 		}));
-		const target = reduced.index.getNode(targetId);
+		const target = reduced.nextIndex.getNode(targetId);
 		assert.equal(target?.type, 'paragraph');
 		assert.equal(target?.attrs.alignment, 'end');
-		assert.equal(reduced.index.nodeCount, fixture.index.nodeCount);
+		assert.equal(reduced.nextIndex.nodeCount, fixture.index.nodeCount);
 		assert.strictEqual(
-			reduced.index.preorderNodeIds,
+			reduced.nextIndex.preorderNodeIds,
 			fixture.index.preorderNodeIds,
 		);
 		assert.strictEqual(
-			reduced.index.getNode(nodeId(30_000)),
+			reduced.nextIndex.getNode(nodeId(30_000)),
 			fixture.index.getNode(nodeId(30_000)),
 		);
 	});
@@ -1020,24 +1116,24 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(changedParentReads, 0);
 		assert.equal(preorderNodeReads, 0);
 		assert.equal(preorderMaterializations, 0);
-		assert.equal(reduced.index.nodeCount, fixture.index.nodeCount + 1);
+		assert.equal(reduced.nextIndex.nodeCount, fixture.index.nodeCount + 1);
 		assert.deepStrictEqual(
-			reduced.index.getParentLocation(insertedNodeId),
+			reduced.nextIndex.getParentLocation(insertedNodeId),
 			{ parentNodeId: fixture.ids.body, childIndex: 10_000 },
 		);
 		assert.equal(changedParentReads, 0);
 		assert.deepStrictEqual(
-			reduced.index.getParentLocation(shiftedNodeId),
+			reduced.nextIndex.getParentLocation(shiftedNodeId),
 			{ parentNodeId: fixture.ids.body, childIndex: 10_001 },
 		);
 		assert.equal(changedParentReads, 20_001);
 		assert.strictEqual(
-			reduced.index.getNode(untouchedTextNodeId),
+			reduced.nextIndex.getNode(untouchedTextNodeId),
 			fixture.index.getNode(untouchedTextNodeId),
 		);
 		probe.enabled = false;
 		assert.equal(
-			reduced.index.preorderNodeIds.indexOf(insertedNodeId),
+			reduced.nextIndex.preorderNodeIds.indexOf(insertedNodeId),
 			2 + (10_000 * 2),
 		);
 		assert.equal(preorderNodeReads, 40_003);
@@ -1493,25 +1589,49 @@ function advanceFixture(
 	instrumentation: IManuscriptOperationReducerInstrumentation,
 ): IFixture {
 	const reduced = expectOk(reduce(fixture, operation, instrumentation));
-	const merkleState = rebuildRevisionMerkleState(reduced.content);
+	const merkleState = rebuildRevisionMerkleState(reduced.nextContent);
 	return {
 		...fixture,
 		snapshot: {
-			...reduced.content,
+			...reduced.nextContent,
 			revisionId: fixture.snapshot.revisionId,
 			documentHash: merkleState.documentHash,
 		},
-		index: reduced.index,
+		index: reduced.nextIndex,
 		merkleState,
 	};
 }
 
-function expectOk(result: ReduceManuscriptOperationResult): IReducedManuscriptOperation {
+function expectOk(
+	result: ReduceManuscriptOperationResult,
+): IConsumedManuscriptOperationTransition {
+	return expectConsumedTransition(expectTransition(result));
+}
+
+function expectTransition(
+	result: ReduceManuscriptOperationResult,
+): ManuscriptOperationTransition {
 	if (result.type === 'error') {
 		throw new Error(`Expected reducer success, received ${result.error.reason}.`);
 	}
 	assert.equal(result.type, 'ok');
 	return result.value;
+}
+
+function expectTransitionView(
+	transition: ManuscriptOperationTransition,
+): IManuscriptOperationTransitionView {
+	const view = getManuscriptOperationTransitionView(transition);
+	assert.notEqual(view, undefined);
+	return view as IManuscriptOperationTransitionView;
+}
+
+function expectConsumedTransition(
+	transition: ManuscriptOperationTransition,
+): IConsumedManuscriptOperationTransition {
+	const consumed = consumeManuscriptOperationTransition(transition);
+	assert.notEqual(consumed, undefined);
+	return consumed as IConsumedManuscriptOperationTransition;
 }
 
 function expectFailure(

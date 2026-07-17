@@ -12,7 +12,10 @@ import type {
 	OperationId,
 } from 'cs/editor/common/core/identifiers';
 import { isWellFormedUnicodeString } from 'cs/editor/common/core/canonicalJson';
-import { validateManuscriptResource } from 'cs/editor/common/core/manuscriptResource';
+import {
+	parseManuscriptResource,
+	validateManuscriptResource,
+} from 'cs/editor/common/core/manuscriptResource';
 import type { Utf16Offset } from 'cs/editor/common/core/semanticPosition';
 import {
 	decodeAcademicEntityV1,
@@ -114,6 +117,11 @@ export interface IReduceManuscriptOperationInput {
 	readonly operation: Operation;
 	readonly limits?: IManuscriptOperationReducerLimits;
 	readonly instrumentation?: IManuscriptOperationReducerInstrumentation;
+}
+
+interface ICapturedReduceManuscriptOperationInput
+	extends Omit<IReduceManuscriptOperationInput, 'limits'> {
+	readonly limits: IManuscriptOperationReducerLimits;
 }
 
 export type ManuscriptOperationReducerFailureReason =
@@ -270,9 +278,48 @@ export type ManuscriptOperationCapture =
 		readonly previousSettings: DocumentSemanticSettings;
 	});
 
-export interface IReducedManuscriptOperation {
-	readonly content: DocumentContent;
-	readonly index: DocumentIndex;
+declare const manuscriptOperationTransitionBrand: unique symbol;
+
+/**
+ * An opaque, reducer-owned record of one exact Operation transition.
+ *
+ * Runtime tokens deliberately have no own properties. Consumers may inspect a
+ * token through {@link getManuscriptOperationTransitionView}, but only the token
+ * itself carries the module-owned transition identity.
+ */
+export type ManuscriptOperationTransition = {
+	readonly [manuscriptOperationTransitionBrand]:
+		typeof manuscriptOperationTransitionBrand;
+};
+
+export interface IManuscriptOperationTransitionView {
+	readonly resource: URI;
+	readonly canonicalResource: string;
+	readonly operationId: OperationId;
+	readonly operationType: Operation['type'];
+	readonly previousRevisionId: DocumentSnapshot['revisionId'];
+	readonly previousDocumentHash: ContentHash;
+	readonly limits: IManuscriptOperationReducerLimits;
+	readonly touchSet: IManuscriptOperationTouchSet;
+	readonly positionMapFragments: readonly PositionMapFragment[];
+}
+
+/**
+ * Exact candidate values transferred out of a consumed transition.
+ *
+ * This structural result carries no provenance and is not accepted by an
+ * installation boundary. The opaque transition is invalid after transfer.
+ */
+export interface IConsumedManuscriptOperationTransition {
+	readonly resource: URI;
+	readonly canonicalResource: string;
+	readonly operation: Operation;
+	readonly previousSnapshot: DocumentSnapshot;
+	readonly previousIndex: DocumentIndex;
+	readonly previousMerkleState: RevisionMerkleState;
+	readonly limits: IManuscriptOperationReducerLimits;
+	readonly nextContent: DocumentContent;
+	readonly nextIndex: DocumentIndex;
 	readonly touchSet: IManuscriptOperationTouchSet;
 	readonly capture: ManuscriptOperationCapture;
 	readonly positionMapFragments: readonly PositionMapFragment[];
@@ -281,30 +328,40 @@ export interface IReducedManuscriptOperation {
 export type ReduceManuscriptOperationResult =
 	| {
 		readonly type: 'ok';
-		readonly value: IReducedManuscriptOperation;
+		readonly value: ManuscriptOperationTransition;
 	}
 	| {
 		readonly type: 'error';
 		readonly error: IManuscriptOperationReducerFailure;
 	};
 
-const trustedOperationCaptures = new WeakSet<object>();
-const trustedOperationTouchSets = new WeakSet<object>();
-const trustedOperationTransitions = new WeakMap<
-	object,
-	{
-		readonly previousSnapshot: DocumentSnapshot;
-		readonly nextContent: DocumentContent;
-	}
+interface IManuscriptOperationTransitionRecord
+	extends IConsumedManuscriptOperationTransition {
+	readonly summaryOperationId: OperationId;
+	readonly summaryOperationType: Operation['type'];
+	readonly summaryPreviousRevisionId: DocumentSnapshot['revisionId'];
+	readonly summaryPreviousDocumentHash: ContentHash;
+	/**
+	 * This canonical clone remains private because URI maintains mutable lazy
+	 * caches and TypeScript readonly fields are writable at runtime.
+	 */
+	readonly resource: URI;
+}
+
+const manuscriptOperationTransitionRecords = new WeakMap<
+	ManuscriptOperationTransition,
+	IManuscriptOperationTransitionRecord
 >();
 
 /**
- * Applies one decoded Operation to trusted revision-local state without allocating identity.
+ * Applies one decoded Operation to candidate revision-local state without allocating identity.
  *
  * This is an ordered-draft step, not the Transaction commit boundary. A successful
  * intermediate draft may be temporarily schema-invalid until later Operations and
  * touched-neighborhood normalization complete; the Transaction kernel owns the final
- * complete schema and academic-invariant validation before installation.
+ * complete schema and academic-invariant validation before installation. The opaque
+ * result binds the exact supplied base; it does not confer trust on that base. The
+ * owning Transaction boundary validates base provenance before reduction.
  */
 export function reduceManuscriptOperation(
 	input: IReduceManuscriptOperationInput,
@@ -313,14 +370,15 @@ export function reduceManuscriptOperation(
 	if (resource.type === 'invalid') {
 		return failure(input.operation, 'inconsistent-base');
 	}
-	const capturedInput: IReduceManuscriptOperationInput = {
-		...input,
-		resource: resource.resource,
-	};
 	const limits = captureLimits(input.limits);
 	if (limits === undefined) {
 		return failure(input.operation, 'invalid-limits');
 	}
+	const capturedInput: ICapturedReduceManuscriptOperationInput = {
+		...input,
+		resource: resource.resource,
+		limits,
+	};
 	const baseFailure = validateBase(capturedInput, limits);
 	if (baseFailure !== undefined) {
 		return baseFailure;
@@ -400,37 +458,64 @@ export function reduceManuscriptOperation(
 	}
 }
 
-export function isTrustedManuscriptOperationCapture(
-	value: unknown,
-): value is ManuscriptOperationCapture {
-	return value !== null
-		&& typeof value === 'object'
-			&& trustedOperationCaptures.has(value);
-}
-
-export function isTrustedManuscriptOperationTouchSet(
-	value: unknown,
-): value is IManuscriptOperationTouchSet {
-	return value !== null
-		&& typeof value === 'object'
-		&& trustedOperationTouchSets.has(value);
-}
-
-export function isTrustedManuscriptOperationTransition(
-	touchSet: unknown,
-	previousSnapshot: DocumentSnapshot,
-	nextContent: DocumentContent,
-): touchSet is IManuscriptOperationTouchSet {
-	if (touchSet === null || typeof touchSet !== 'object') {
-		return false;
+export function getManuscriptOperationTransitionView(
+	transition: unknown,
+): IManuscriptOperationTransitionView | undefined {
+	const record = getManuscriptOperationTransitionRecord(transition);
+	if (record === undefined) {
+		return undefined;
 	}
-	const transition = trustedOperationTransitions.get(touchSet);
-	return transition?.previousSnapshot === previousSnapshot
-		&& transition.nextContent === nextContent;
+	const resource = parseManuscriptResource(record.canonicalResource);
+	if (resource.type === 'invalid') {
+		throw new Error('A manuscript Operation transition lost its canonical resource.');
+	}
+	return Object.freeze({
+		resource: resource.resource,
+		canonicalResource: record.canonicalResource,
+		operationId: record.summaryOperationId,
+		operationType: record.summaryOperationType,
+		previousRevisionId: record.summaryPreviousRevisionId,
+		previousDocumentHash: record.summaryPreviousDocumentHash,
+		limits: record.limits,
+		touchSet: record.touchSet,
+		positionMapFragments: record.positionMapFragments,
+	});
+}
+
+/**
+ * Destructively transfers one exact reducer candidate to its next owner.
+ *
+ * The returned structure is deliberately not authority: callers cannot feed it
+ * back into this module, and the opaque transition can be consumed only once.
+ */
+export function consumeManuscriptOperationTransition(
+	transition: unknown,
+): IConsumedManuscriptOperationTransition | undefined {
+	const record = getManuscriptOperationTransitionRecord(transition);
+	if (record === undefined) {
+		return undefined;
+	}
+	manuscriptOperationTransitionRecords.delete(
+		transition as ManuscriptOperationTransition,
+	);
+	return record;
+}
+
+function getManuscriptOperationTransitionRecord(
+	transition: unknown,
+): IManuscriptOperationTransitionRecord | undefined {
+	return (
+		transition !== null
+		&& typeof transition === 'object'
+	)
+		? manuscriptOperationTransitionRecords.get(
+			transition as ManuscriptOperationTransition,
+		)
+		: undefined;
 }
 
 function reduceInsertNode(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'insert-node' }>;
 	},
 	limits: IManuscriptOperationReducerLimits,
@@ -531,7 +616,7 @@ function reduceInsertNode(
 		return failure(operation, 'index-update-failed');
 	}
 
-	const capture = trustCapture({
+	const capture = freezeOperationCapture({
 		operationId: operation.id,
 		type: operation.type,
 		parentNodeId: parent.id,
@@ -546,7 +631,7 @@ function reduceInsertNode(
 		insertedNodeIds,
 	});
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({
@@ -562,7 +647,7 @@ function reduceInsertNode(
 }
 
 function reduceDeleteNode(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'delete-node' }>;
 	},
 	limits: IManuscriptOperationReducerLimits,
@@ -636,7 +721,7 @@ function reduceDeleteNode(
 		return failure(operation, 'index-update-failed');
 	}
 
-	const capture = trustCapture({
+	const capture = freezeOperationCapture({
 		operationId: operation.id,
 		type: operation.type,
 		parentNodeId: parent.id,
@@ -652,7 +737,7 @@ function reduceDeleteNode(
 		deletedNodeIds,
 	});
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({
@@ -665,7 +750,7 @@ function reduceDeleteNode(
 }
 
 function reduceMoveNode(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'move-node' }>;
 	},
 	limits: IManuscriptOperationReducerLimits,
@@ -900,7 +985,7 @@ function reduceMoveNode(
 	const normalizationParents = sourceParent.id === destinationParent.id
 		? [sourceParent.id]
 		: [sourceParent.id, destinationParent.id];
-	const capture = trustCapture({
+	const capture = freezeOperationCapture({
 		operationId: operation.id,
 		type: operation.type,
 		targetNodeId: target.id,
@@ -920,7 +1005,7 @@ function reduceMoveNode(
 		movedNodeIds,
 	});
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({
@@ -947,7 +1032,7 @@ function reduceMoveNode(
 }
 
 function reduceReplaceText(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'replace-text' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -999,7 +1084,7 @@ function reduceReplaceText(
 		input,
 		target,
 		nextText,
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			textNodeId: target.id,
@@ -1019,7 +1104,7 @@ function reduceReplaceText(
 }
 
 function reduceSplitText(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'split-text' }>;
 	},
 	limits: IManuscriptOperationReducerLimits,
@@ -1125,7 +1210,7 @@ function reduceSplitText(
 	) {
 		return failure(operation, 'index-update-failed');
 	}
-	const capture = trustCapture({
+	const capture = freezeOperationCapture({
 		operationId: operation.id,
 		type: operation.type,
 		parentNodeId: parent.id,
@@ -1143,7 +1228,7 @@ function reduceSplitText(
 		splitUtf16Offset: operation.splitUtf16Offset,
 	});
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({
@@ -1156,7 +1241,7 @@ function reduceSplitText(
 }
 
 function reduceJoinText(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'join-text' }>;
 	},
 	_limits: IManuscriptOperationReducerLimits,
@@ -1262,7 +1347,7 @@ function reduceJoinText(
 	) {
 		return failure(operation, 'index-update-failed');
 	}
-	const capture = trustCapture({
+	const capture = freezeOperationCapture({
 		operationId: operation.id,
 		type: operation.type,
 		parentNodeId: parent.id,
@@ -1279,7 +1364,7 @@ function reduceJoinText(
 		leftUtf16Length: left.value.length,
 	});
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({
@@ -1292,7 +1377,7 @@ function reduceJoinText(
 }
 
 function reduceSetNodeAttributes(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'set-node-attributes' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1349,11 +1434,11 @@ function reduceSetNodeAttributes(
 		return failure(operation, 'index-update-failed');
 	}
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({ nodePaths: [beforePath, afterPath] }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			nodeId: target.id,
@@ -1364,7 +1449,7 @@ function reduceSetNodeAttributes(
 }
 
 function reduceSetTextMarks(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'set-text-marks' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1393,7 +1478,7 @@ function reduceSetTextMarks(
 		input,
 		target,
 		nextText,
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			textNodeId: target.id,
@@ -1405,7 +1490,7 @@ function reduceSetTextMarks(
 }
 
 function reduceCreateAcademicEntity(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'create-academic-entity' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1441,11 +1526,11 @@ function reduceCreateAcademicEntity(
 		entityId: entity.id,
 	});
 	return success(
-		input.snapshot,
+		input,
 		{ academicGraph: nextGraph },
 		input.index,
 		touchSet({ academicPaths: [academicPath] }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			entityId: entity.id,
@@ -1455,7 +1540,7 @@ function reduceCreateAcademicEntity(
 }
 
 function reduceReplaceAcademicEntity(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'replace-academic-entity' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1560,11 +1645,11 @@ function reduceReplaceAcademicEntity(
 		});
 	}
 	return success(
-		input.snapshot,
+		input,
 		{ academicGraph: nextGraph },
 		input.index,
 		touchSet({ academicPaths: [beforePath, afterPath] }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			previousEntity,
@@ -1574,7 +1659,7 @@ function reduceReplaceAcademicEntity(
 }
 
 function reduceDeleteAcademicEntity(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'delete-academic-entity' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1623,11 +1708,11 @@ function reduceDeleteAcademicEntity(
 		});
 	}
 	return success(
-		input.snapshot,
+		input,
 		{ academicGraph: nextGraph },
 		input.index,
 		touchSet({ academicPaths: [beforePath] }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			deletedEntity,
@@ -1637,7 +1722,7 @@ function reduceDeleteAcademicEntity(
 }
 
 function reduceSetClaimEvidenceRelation(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<
 			Operation,
 			{ readonly type: 'set-claim-evidence-relation' }
@@ -1785,11 +1870,11 @@ function reduceSetClaimEvidenceRelation(
 		});
 	}
 	return success(
-		input.snapshot,
+		input,
 		{ academicGraph: nextGraph },
 		input.index,
 		touchSet({ academicPaths }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			claimId: operation.claimId,
@@ -1801,7 +1886,7 @@ function reduceSetClaimEvidenceRelation(
 }
 
 function reduceSetMetadata(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'set-metadata' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1818,11 +1903,11 @@ function reduceSetMetadata(
 		return failure(operation, 'invalid-operation');
 	}
 	return success(
-		input.snapshot,
+		input,
 		{ metadata },
 		input.index,
 		touchSet({ metadata: true }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			previousMetadata,
@@ -1832,7 +1917,7 @@ function reduceSetMetadata(
 }
 
 function reduceSetSettings(
-	input: IReduceManuscriptOperationInput & {
+	input: ICapturedReduceManuscriptOperationInput & {
 		readonly operation: Extract<Operation, { readonly type: 'set-settings' }>;
 	},
 ): ReduceManuscriptOperationResult {
@@ -1849,11 +1934,11 @@ function reduceSetSettings(
 		return failure(operation, 'invalid-operation');
 	}
 	return success(
-		input.snapshot,
+		input,
 		{ settings },
 		input.index,
 		touchSet({ settings: true }),
-		trustCapture({
+		freezeOperationCapture({
 			operationId: operation.id,
 			type: operation.type,
 			previousSettings,
@@ -1889,13 +1974,14 @@ interface IRelationIndex {
 }
 
 function success(
-	snapshot: DocumentSnapshot,
+	input: ICapturedReduceManuscriptOperationInput,
 	changes: IDocumentContentChanges,
 	index: DocumentIndex,
 	operationTouchSet: IManuscriptOperationTouchSet,
 	capture: ManuscriptOperationCapture,
 	positionMapFragments: readonly PositionMapFragment[],
 ): ReduceManuscriptOperationResult {
+	const { snapshot } = input;
 	const content: DocumentContent = Object.freeze({
 		format: snapshot.format,
 		formatVersion: snapshot.formatVersion,
@@ -1906,21 +1992,35 @@ function success(
 		academicGraph: changes.academicGraph ?? snapshot.academicGraph,
 		settings: changes.settings ?? snapshot.settings,
 	});
-	const result = Object.freeze({
-		type: 'ok',
-		value: Object.freeze({
-			content,
-			index,
-			touchSet: operationTouchSet,
-			capture,
-			positionMapFragments: Object.freeze([...positionMapFragments]),
-		}),
-	});
-	trustedOperationTransitions.set(operationTouchSet, Object.freeze({
+	const frozenPositionMapFragments = Object.freeze([
+		...positionMapFragments,
+	]);
+	const transition = Object.freeze(
+		Object.create(null),
+	) as ManuscriptOperationTransition;
+	const record: IManuscriptOperationTransitionRecord = Object.freeze({
+		resource: input.resource,
+		canonicalResource: input.resource.toString(),
+		summaryOperationId: input.operation.id,
+		summaryOperationType: input.operation.type,
+		summaryPreviousRevisionId: snapshot.revisionId,
+		summaryPreviousDocumentHash: snapshot.documentHash,
+		operation: input.operation,
 		previousSnapshot: snapshot,
+		previousIndex: input.index,
+		previousMerkleState: input.merkleState,
+		limits: input.limits,
 		nextContent: content,
-	}));
-	return result;
+		nextIndex: index,
+		touchSet: operationTouchSet,
+		capture,
+		positionMapFragments: frozenPositionMapFragments,
+	});
+	manuscriptOperationTransitionRecords.set(transition, record);
+	return Object.freeze({
+		type: 'ok',
+		value: transition,
+	});
 }
 
 function failure(
@@ -2080,7 +2180,7 @@ function isUtf16Boundary(value: string, offset: number): boolean {
 }
 
 function replaceTextNode(
-	input: IReduceManuscriptOperationInput,
+	input: ICapturedReduceManuscriptOperationInput,
 	before: TextNode,
 	after: TextNode,
 	capture: ManuscriptOperationCapture,
@@ -2120,7 +2220,7 @@ function replaceTextNode(
 		? [parentLocation.parentNodeId]
 		: [];
 	return success(
-		input.snapshot,
+		input,
 		{ root: nextRoot },
 		nextIndex,
 		touchSet({
@@ -3955,7 +4055,7 @@ function touchedNodePath(
 }
 
 function touchSet(source: ITouchSetSource): IManuscriptOperationTouchSet {
-	const trusted = Object.freeze({
+	return Object.freeze({
 		nodePaths: Object.freeze([...(source.nodePaths ?? [])]),
 		academicPaths: Object.freeze([...(source.academicPaths ?? [])]),
 		normalizationParentNodeIds: Object.freeze(
@@ -3964,8 +4064,6 @@ function touchSet(source: ITouchSetSource): IManuscriptOperationTouchSet {
 		metadata: source.metadata === true,
 		settings: source.settings === true,
 	});
-	trustedOperationTouchSets.add(trusted);
-	return trusted;
 }
 
 function stableUniqueNodeIds(nodeIds: readonly NodeId[]): readonly NodeId[] {
@@ -3980,10 +4078,8 @@ function stableUniqueNodeIds(nodeIds: readonly NodeId[]): readonly NodeId[] {
 	return result;
 }
 
-function trustCapture<TCapture extends ManuscriptOperationCapture>(
+function freezeOperationCapture<TCapture extends ManuscriptOperationCapture>(
 	capture: TCapture,
 ): TCapture {
-	const trusted = Object.freeze(capture);
-	trustedOperationCaptures.add(trusted);
-	return trusted;
+	return Object.freeze(capture);
 }
