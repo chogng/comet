@@ -9,7 +9,11 @@ import type {
 	NodeId,
 } from 'cs/editor/common/core/identifiers';
 import type { ManuscriptMerkleVector } from 'cs/editor/common/model/merkleVector';
-import type { RevisionMerkleState } from 'cs/editor/common/model/snapshot';
+import type { DocumentIndex } from 'cs/editor/common/model/documentIndex';
+import type {
+	DocumentContent,
+	RevisionMerkleState,
+} from 'cs/editor/common/model/snapshot';
 
 export type RevisionMerkleStoreKind =
 	| 'node-hashes'
@@ -342,6 +346,8 @@ class PersistentRevisionMerkleState implements RevisionMerkleState {
 		constructionToken: object,
 		parts: IRevisionMerkleStateParts,
 		stores: IRevisionMerkleStateStores,
+		content: DocumentContent,
+		index: DocumentIndex,
 	) {
 		if (constructionToken !== revisionMerkleStateConstructionToken) {
 			throw new TypeError(
@@ -367,6 +373,10 @@ class PersistentRevisionMerkleState implements RevisionMerkleState {
 		this.entityCount = stores.entityHashes.size;
 		this.relationCount = stores.relationHashes.size;
 		revisionMerkleStateStores.set(this, Object.freeze({ ...stores }));
+		revisionMerkleStateBindings.set(this, Object.freeze({
+			content,
+			index,
+		}));
 		Object.freeze(this);
 	}
 
@@ -398,6 +408,14 @@ const revisionMerkleStateStores = new WeakMap<
 	RevisionMerkleState,
 	IRevisionMerkleStateStores
 >();
+interface IRevisionMerkleStateBinding {
+	readonly content: DocumentContent;
+	readonly index: DocumentIndex;
+}
+const revisionMerkleStateBindings = new WeakMap<
+	RevisionMerkleState,
+	IRevisionMerkleStateBinding
+>();
 
 Object.defineProperty(PersistentRevisionMerkleState.prototype, 'constructor', {
 	value: undefined,
@@ -410,12 +428,35 @@ Object.freeze(PersistentRevisionMerkleState);
 export function createRevisionMerkleState(
 	parts: IRevisionMerkleStateParts,
 	stores: IRevisionMerkleStateStores,
+	content: DocumentContent,
+	index: DocumentIndex,
 ): RevisionMerkleState {
 	return new PersistentRevisionMerkleState(
 		revisionMerkleStateConstructionToken,
 		parts,
 		stores,
+		content,
+		index,
 	);
+}
+
+export function requireRevisionMerkleStateBinding(
+	state: unknown,
+	content: DocumentContent,
+	index: DocumentIndex,
+): void {
+	const binding = typeof state === 'object' && state !== null
+		? revisionMerkleStateBindings.get(state as RevisionMerkleState)
+		: undefined;
+	if (
+		binding === undefined
+		|| binding.content !== content
+		|| binding.index !== index
+	) {
+		throw new TypeError(
+			'Revision Merkle state does not belong to the exact content and index.',
+		);
+	}
 }
 
 export function getRevisionMerkleStateStores(

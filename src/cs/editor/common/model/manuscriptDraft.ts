@@ -225,16 +225,7 @@ export function decodeManuscriptDraft(
 			maximumNodes: capturedLimits.maximumNodes,
 			maximumDepth: capturedLimits.maximumNodeDepth,
 		});
-	const content: DocumentContent = Object.freeze({
-		format: snapshot.format,
-		formatVersion: snapshot.formatVersion,
-		schemaId: snapshot.schemaId,
-		schemaVersion: snapshot.schemaVersion,
-		metadata: snapshot.metadata,
-		root: snapshot.root,
-		academicGraph: snapshot.academicGraph,
-		settings: snapshot.settings,
-	});
+	const content = decoded.value.content;
 	const checkpoint = createDraftCheckpoint(
 		content,
 		decoded.value.index,

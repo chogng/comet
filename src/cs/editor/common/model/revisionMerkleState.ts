@@ -12,6 +12,7 @@ import { manuscriptHashDomains } from 'cs/editor/common/core/hashPreimage';
 import type { AcademicGraphSnapshot } from 'cs/editor/common/model/academicGraph';
 import {
 	createDocumentIndex,
+	type DocumentIndex,
 	type IDocumentIndexLimits,
 } from 'cs/editor/common/model/documentIndex';
 import {
@@ -58,6 +59,7 @@ interface INodeMerkleBuild {
 	readonly rootHash: ContentHash;
 	readonly hashesById: ReadonlyMap<NodeId, ContentHash>;
 	readonly childVectorsById: ReadonlyMap<NodeId, ManuscriptMerkleVector>;
+	readonly index: DocumentIndex;
 }
 
 interface IMetadataMerkleBuild {
@@ -97,9 +99,15 @@ export function rebuildRevisionMerkleState(
 	content: DocumentContent,
 	observer?: RevisionMerkleHashCallObserver,
 	indexLimits?: IDocumentIndexLimits,
+	exactIndex?: DocumentIndex,
 ): RevisionMerkleState {
 	const entityHashesById = new Map<EntityId, ContentHash>();
-	const nodes = rebuildNodeMerkleState(content.root, observer, indexLimits);
+	const nodes = rebuildNodeMerkleState(
+		content.root,
+		observer,
+		indexLimits,
+		exactIndex,
+	);
 	const metadata = rebuildMetadataMerkleState(
 		content.metadata,
 		observer,
@@ -152,6 +160,8 @@ export function rebuildRevisionMerkleState(
 				academicGraph.relationHashesByKey,
 			),
 		},
+		content,
+		nodes.index,
 	);
 }
 
@@ -159,14 +169,28 @@ function rebuildNodeMerkleState(
 	root: ManuscriptNode,
 	observer: RevisionMerkleHashCallObserver | undefined,
 	indexLimits: IDocumentIndexLimits | undefined,
+	exactIndex: DocumentIndex | undefined,
 ): INodeMerkleBuild {
-	const indexResult = createDocumentIndex(root, indexLimits);
-	if (indexResult.type === 'error') {
-		throw new TypeError(
-			`Cannot rebuild document node hashes: ${indexResult.error.reason}.`,
-		);
+	let index: DocumentIndex;
+	if (exactIndex === undefined) {
+		const indexResult = createDocumentIndex(root, indexLimits);
+		if (indexResult.type === 'error') {
+			throw new TypeError(
+				`Cannot rebuild document node hashes: ${indexResult.error.reason}.`,
+			);
+		}
+		index = indexResult.value;
+	} else {
+		if (
+			exactIndex.rootNodeId !== root.id
+			|| exactIndex.getNode(root.id) !== root
+		) {
+			throw new TypeError(
+				'Cannot bind Node hashes to an inconsistent exact index.',
+			);
+		}
+		index = exactIndex;
 	}
-	const index = indexResult.value;
 	const hashesById = new Map<NodeId, ContentHash>();
 	const childVectorsById = new Map<NodeId, ManuscriptMerkleVector>();
 	const pending: NodeTraversalFrame[] = [{
@@ -250,6 +274,7 @@ function rebuildNodeMerkleState(
 		rootHash,
 		hashesById,
 		childVectorsById,
+		index,
 	};
 }
 function rebuildMetadataMerkleState(

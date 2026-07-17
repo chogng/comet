@@ -53,6 +53,7 @@ import {
 	PersistentRevisionMerkleMap,
 } from 'cs/editor/common/model/revisionMerkleStateInternal';
 import {
+	updateRevisionMerkleNormalizationCandidate,
 	updateRevisionMerkleStateCandidate,
 	type IRevisionMerkleUpdaterInstrumentation,
 } from 'cs/editor/common/model/revisionMerkleUpdater';
@@ -900,6 +901,257 @@ suite('incremental Revision Merkle updater', () => {
 		assert.equal(reinserted.get(key), 'fresh');
 		assert.ok(allocatedSlots.every(slots => slots >= 1 && slots <= 16));
 	});
+
+	test('normalizes one direct neighborhood and updates ancestors without subtree reads', () => {
+		const fixture = createFixture();
+		const previousBody = fixture.index.getNode(fixture.ids.body);
+		const previousParagraph = fixture.index.getNode(
+			fixture.ids.firstParagraph,
+		);
+		const previousLeft = fixture.index.getNode(fixture.ids.leftText);
+		const previousSecondParagraph = previousBody?.type === 'body'
+			? previousBody.children[1]
+			: undefined;
+		if (
+			previousBody?.type !== 'body'
+			|| previousParagraph?.type !== 'paragraph'
+			|| previousLeft?.type !== 'text'
+			|| previousSecondParagraph === undefined
+		) {
+			throw new Error('Expected the normalization fixture Nodes.');
+		}
+		const joinedLeft = Object.freeze({
+			id: previousLeft.id,
+			type: 'text' as const,
+			value: 'alphabeta',
+			marks: previousLeft.marks,
+		});
+		const nextParagraph = Object.freeze({
+			...previousParagraph,
+			children: Object.freeze([joinedLeft]),
+		});
+		const nextBody: BodyNode = Object.freeze({
+			...previousBody,
+			children: Object.freeze([
+				nextParagraph,
+				previousSecondParagraph,
+			]) as BodyNode['children'],
+		});
+		const nextRoot: ManuscriptNode = Object.freeze({
+			...fixture.content.root,
+			children: Object.freeze([nextBody]) as ManuscriptNode['children'],
+		});
+		const nextContent: DocumentContent = Object.freeze({
+			...fixture.content,
+			root: nextRoot,
+		});
+		const nextIndexResult = createDocumentIndex(nextRoot);
+		if (nextIndexResult.type === 'error') {
+			throw new Error(nextIndexResult.error.reason);
+		}
+		const normalizationReads: NodeId[] = [];
+		const unrelatedNodeIds = new Set([
+			fixture.ids.secondParagraph,
+			fixture.ids.secondText,
+		]);
+		assert.throws(
+			() => updateRevisionMerkleNormalizationCandidate(
+				fixture.merkleState,
+				{
+					previousContent: fixture.content,
+					previousIndex: fixture.index,
+					nextContent,
+					nextIndex: nextIndexResult.value,
+					normalizedParentNodeIds: Object.freeze([
+						fixture.ids.firstParagraph,
+					]),
+					rehashNodeIds: Object.freeze([
+						fixture.ids.leftText,
+						fixture.ids.secondText,
+						fixture.ids.firstParagraph,
+						fixture.ids.secondParagraph,
+						fixture.ids.body,
+						fixture.ids.root,
+					]),
+				},
+			),
+			/exact changed paths/u,
+		);
+		const merkleState = updateRevisionMerkleNormalizationCandidate(
+			fixture.merkleState,
+			{
+				previousContent: fixture.content,
+				previousIndex: fixture.index,
+				nextContent,
+				nextIndex: nextIndexResult.value,
+				normalizedParentNodeIds: Object.freeze([
+					fixture.ids.firstParagraph,
+				]),
+				rehashNodeIds: Object.freeze([
+					fixture.ids.leftText,
+					fixture.ids.firstParagraph,
+					fixture.ids.body,
+					fixture.ids.root,
+				]),
+				instrumentation: {
+					onNodePayloadRead: (nodeId, kind) => {
+						if (kind === 'normalization-parent') {
+							normalizationReads.push(nodeId);
+						}
+					},
+				},
+			},
+		);
+
+		assertStateMatchesFullRebuild(
+			merkleState,
+			nextContent,
+			nextIndexResult.value,
+			fixture.content,
+		);
+		assert.equal(
+			merkleState.getNodeHash(fixture.ids.rightText),
+			undefined,
+		);
+		assert.deepStrictEqual(
+			normalizationReads,
+			[fixture.ids.rightText, fixture.ids.leftText],
+		);
+		assert.equal(
+			normalizationReads.some(nodeId => unrelatedNodeIds.has(nodeId)),
+			false,
+		);
+		assert.equal(
+			nextIndexResult.value.getNode(fixture.ids.secondParagraph),
+			fixture.index.getNode(fixture.ids.secondParagraph),
+		);
+	});
+
+	test('rejects spliced source bindings and arbitrary retained Text replacement', () => {
+		const fixture = createFixture();
+		const wrongContent: DocumentContent = Object.freeze({
+			...fixture.content,
+			metadata: Object.freeze({
+				...fixture.content.metadata,
+				title: 'Wrong bound content',
+			}),
+		});
+		const wrongContentState = rebuildRevisionMerkleState(
+			wrongContent,
+			undefined,
+			undefined,
+			fixture.index,
+		);
+		assert.throws(
+			() => updateRevisionMerkleNormalizationCandidate(
+				wrongContentState,
+				{
+					previousContent: fixture.content,
+					previousIndex: fixture.index,
+					nextContent: fixture.content,
+					nextIndex: fixture.index,
+					normalizedParentNodeIds: Object.freeze([]),
+					rehashNodeIds: Object.freeze([]),
+				},
+			),
+			/exact content and index/u,
+		);
+
+		const splicedIndexResult = createDocumentIndex(
+			fixture.content.root,
+		);
+		if (splicedIndexResult.type === 'error') {
+			throw new Error(splicedIndexResult.error.reason);
+		}
+		const wrongIndexState = rebuildRevisionMerkleState(
+			fixture.content,
+			undefined,
+			undefined,
+			splicedIndexResult.value,
+		);
+		assert.throws(
+			() => updateRevisionMerkleNormalizationCandidate(
+				wrongIndexState,
+				{
+					previousContent: fixture.content,
+					previousIndex: fixture.index,
+					nextContent: fixture.content,
+					nextIndex: fixture.index,
+					normalizedParentNodeIds: Object.freeze([]),
+					rehashNodeIds: Object.freeze([]),
+				},
+			),
+			/exact content and index/u,
+		);
+
+		const previousBody = fixture.index.getNode(fixture.ids.body);
+		const previousParagraph = fixture.index.getNode(
+			fixture.ids.firstParagraph,
+		);
+		const previousLeft = fixture.index.getNode(fixture.ids.leftText);
+		if (
+			previousBody?.type !== 'body'
+			|| previousParagraph?.type !== 'paragraph'
+			|| previousLeft?.type !== 'text'
+		) {
+			throw new Error('Expected retained Text fixture Nodes.');
+		}
+		const replacedLeft = Object.freeze({
+			...previousLeft,
+			value: 'arbitrary replacement',
+		});
+		const replacedParagraph = Object.freeze({
+			...previousParagraph,
+			children: Object.freeze([
+				replacedLeft,
+				previousParagraph.children[1] as NonNullable<
+					typeof previousParagraph.children[1]
+				>,
+			]),
+		});
+		const replacedBody: BodyNode = Object.freeze({
+			...previousBody,
+			children: Object.freeze([
+				replacedParagraph,
+				...previousBody.children.slice(1),
+			]) as BodyNode['children'],
+		});
+		const replacedRoot: ManuscriptNode = Object.freeze({
+			...fixture.content.root,
+			children: Object.freeze([
+				replacedBody,
+			]) as ManuscriptNode['children'],
+		});
+		const replacedContent: DocumentContent = Object.freeze({
+			...fixture.content,
+			root: replacedRoot,
+		});
+		const replacedIndexResult = createDocumentIndex(replacedRoot);
+		if (replacedIndexResult.type === 'error') {
+			throw new Error(replacedIndexResult.error.reason);
+		}
+		assert.throws(
+			() => updateRevisionMerkleNormalizationCandidate(
+				fixture.merkleState,
+				{
+					previousContent: fixture.content,
+					previousIndex: fixture.index,
+					nextContent: replacedContent,
+					nextIndex: replacedIndexResult.value,
+					normalizedParentNodeIds: Object.freeze([
+						fixture.ids.firstParagraph,
+					]),
+					rehashNodeIds: Object.freeze([
+						fixture.ids.leftText,
+						fixture.ids.firstParagraph,
+						fixture.ids.body,
+						fixture.ids.root,
+					]),
+				},
+			),
+			/without a Text join/u,
+		);
+	});
 });
 
 function advanceIncrementally(
@@ -1318,7 +1570,12 @@ function buildFixture(
 		revisionId: revisionId(201),
 		content,
 		index: indexResult.value,
-		merkleState: rebuildRevisionMerkleState(content),
+		merkleState: rebuildRevisionMerkleState(
+			content,
+			undefined,
+			undefined,
+			indexResult.value,
+		),
 		ids,
 	};
 }

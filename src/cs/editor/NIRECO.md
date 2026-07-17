@@ -580,9 +580,11 @@ Snapshot 顶层不包含 manuscript URI、DOM、Selection、ViewState、durabili
 string。`decodeDocumentSnapshot(value, expectedResource, limits)` 从
 `unknown` 做一次 descriptor-safe closed decode，校验所有 URI、ID、预算、
 schema、graph reference、anchor resource 和 declared hash，并返回一个
-`IDecodedDocumentSnapshotCandidateV1`：Snapshot、DocumentIndex 与独立重建的
-Revision Merkle state。这个结构只是完整验证的 codec candidate，不是在线
-provenance authority。
+`IDecodedDocumentSnapshotCandidateV1`：用于 Merkle rebuild 的 exact closed
+`DocumentContent` wrapper、Snapshot、DocumentIndex 与独立重建的 Revision
+Merkle state。在线 draft owner 必须保留该 exact content wrapper；不得从 Snapshot
+字段重建 lookalike wrapper 后与 state 拼接。这个结构只是完整验证的 codec
+candidate，不是在线 provenance authority。
 
 `manuscriptDraft.ts` 拥有唯一在线 base provenance authority。
 `decodeManuscriptDraft(value, expectedResource, limits)` 必须在自己的 authority

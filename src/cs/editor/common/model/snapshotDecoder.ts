@@ -134,6 +134,13 @@ export type DocumentSnapshotCodecError =
  * adopt a caller-supplied Snapshot/index/Merkle triple.
  */
 export interface IDecodedDocumentSnapshotCandidateV1 {
+	/**
+	 * Exact closed content wrapper used to build `merkleState`.
+	 *
+	 * Online provenance owners retain this identity rather than reconstructing
+	 * a lookalike wrapper from the Snapshot fields.
+	 */
+	readonly content: DocumentContent;
 	readonly snapshot: DocumentSnapshot;
 	readonly index: DocumentIndex;
 	readonly merkleState: RevisionMerkleState;
@@ -317,6 +324,7 @@ export function decodeDocumentSnapshot(
 				maximumNodes: copiedLimits.maximumNodes,
 				maximumDepth: copiedLimits.maximumNodeDepth,
 			},
+			indexResult.value,
 		);
 	} catch {
 		return invalidSnapshot('invalid-merkle-state', '$');
@@ -328,6 +336,7 @@ export function decodeDocumentSnapshot(
 	return {
 		type: 'valid',
 		value: Object.freeze({
+			content,
 			snapshot,
 			index: indexResult.value,
 			merkleState,

@@ -19,6 +19,7 @@ import {
 	type DocumentNode,
 	type DocumentSemanticSettings,
 	type ManuscriptMetadata,
+	type Mark,
 } from 'cs/editor/common/model/manuscript';
 import {
 	ManuscriptMerkleVector,
@@ -54,6 +55,7 @@ import {
 import {
 	createRevisionMerkleState,
 	relationStoreKey,
+	requireRevisionMerkleStateBinding,
 	requireRevisionMerkleStateStores,
 	type IRevisionMerkleStateStores,
 	type IRevisionMerkleStoreInstrumentation,
@@ -68,7 +70,8 @@ export type RevisionMerkleUpdaterNodeReadKind =
 	| 'changed-path'
 	| 'inserted-subtree'
 	| 'deleted-subtree'
-	| 'structural-neighbor';
+	| 'structural-neighbor'
+	| 'normalization-parent';
 
 export type RevisionMerkleUpdaterAcademicReadKind =
 	| 'structural-target'
@@ -110,6 +113,26 @@ export interface IUpdateRevisionMerkleStateCandidateInput {
 	readonly nextIndex: DocumentIndex;
 	readonly capture: ManuscriptOperationCapture;
 	readonly touchSet: IManuscriptOperationTouchSet;
+	readonly instrumentation?: IRevisionMerkleUpdaterInstrumentation;
+}
+
+export interface IUpdateRevisionMerkleNormalizationCandidateInput {
+	readonly previousContent: DocumentContent;
+	readonly previousIndex: DocumentIndex;
+	readonly nextContent: DocumentContent;
+	readonly nextIndex: DocumentIndex;
+
+	/**
+	 * Direct-child neighborhoods normalized by the owning normalizer.
+	 *
+	 * These IDs are a subset of `rehashNodeIds`. Their final child collections
+	 * may be scanned once to rebuild the keyed child sequence; other ancestors
+	 * are updated only through exact keyed child-hash replacement.
+	 */
+	readonly normalizedParentNodeIds: readonly NodeId[];
+
+	/** Changed nodes in strict descendant-to-root order. */
+	readonly rehashNodeIds: readonly NodeId[];
 	readonly instrumentation?: IRevisionMerkleUpdaterInstrumentation;
 }
 
@@ -250,7 +273,657 @@ export function updateRevisionMerkleStateCandidate(
 				academic.claimEvidenceRelationsVector,
 		},
 		stores,
+		nextContent,
+		nextIndex,
 	);
+}
+
+/**
+ * Computes the exact Merkle candidate for one touched-neighborhood
+ * normalization pass.
+ *
+ * The normalizer may linearly scan each changed direct-child neighborhood.
+ * Ancestors are updated through the keyed structural sequence and therefore do
+ * not scan unrelated siblings or subtrees.
+ */
+export function updateRevisionMerkleNormalizationCandidate(
+	previousState: RevisionMerkleState,
+	input: IUpdateRevisionMerkleNormalizationCandidateInput,
+): RevisionMerkleState {
+	const previousStores = requireRevisionMerkleStateStores(previousState);
+	validateNormalizationCandidateInput(
+		previousState,
+		previousStores,
+		input,
+	);
+
+	if (input.rehashNodeIds.length === 0) {
+		return previousState;
+	}
+
+	const instrumentation = input.instrumentation;
+	const normalizedParentNodeIds = new Set(
+		input.normalizedParentNodeIds,
+	);
+	const changedChildrenByParent = collectNormalizationChangedChildren(
+		input.nextIndex,
+		input.rehashNodeIds,
+	);
+	let nodeHashes = previousStores.nodeHashes;
+	let nodeChildVectors = previousStores.nodeChildVectors;
+	const removedNodeIds = new Set<NodeId>();
+	const updatedNodeIds = new Set<NodeId>();
+
+	for (const nodeId of input.rehashNodeIds) {
+		const nextNode = requireIndexNode(input.nextIndex, nodeId);
+		if (!isContainerNode(nextNode)) {
+			const hash = hashDocumentNode(
+				nextNode,
+				undefined,
+				instrumentation,
+			);
+			nodeHashes = nodeHashes.set(
+				nodeId,
+				hash,
+				'node-hashes',
+				instrumentation,
+			);
+			updatedNodeIds.add(nodeId);
+			instrumentation?.onAncestorRehash?.(nodeId);
+			continue;
+		}
+		let vector: ManuscriptMerkleVector;
+		if (normalizedParentNodeIds.has(nodeId)) {
+			const previousNode = requireContainerNode(
+				input.previousIndex,
+				nodeId,
+			);
+			const nextParent = requireContainerNode(
+				input.nextIndex,
+				nodeId,
+			);
+			const parentTransition = validateNormalizationParentTransition(
+				previousNode,
+				nextParent,
+				input.previousIndex,
+				input.nextIndex,
+				removedNodeIds,
+				instrumentation,
+			);
+			for (const changedLeaf of parentTransition.changedLeaves) {
+				if (!updatedNodeIds.has(changedLeaf.id)) {
+					throw new TypeError(
+						'A changed normalization leaf was not rehashed before its parent.',
+					);
+				}
+			}
+			const structuralItems = nextParent.children.map(child => {
+				instrumentation?.onNodePayloadRead?.(
+					child.id,
+					'normalization-parent',
+				);
+				return Object.freeze({
+					item: child,
+					hash: requireStoreValue(
+						nodeHashes.get(
+							child.id,
+							'node-hashes',
+							instrumentation,
+						),
+						`Missing normalized child hash for ${child.id}.`,
+					),
+				});
+			});
+			vector = ManuscriptMerkleVector.createStructural(
+				manuscriptMerkleVectorRoles.nodeChildren,
+				structuralItems,
+				vectorInstrumentation(
+					manuscriptMerkleVectorRoles.nodeChildren,
+					instrumentation,
+				),
+			);
+		} else {
+			const existing = nodeChildVectors.get(
+				nodeId,
+				'node-child-vectors',
+				instrumentation,
+			);
+			vector = requireStoreValue(
+				existing,
+				`Missing child vector for normalized ancestor ${nodeId}.`,
+			);
+			for (const childId of changedChildrenByParent.get(nodeId) ?? []) {
+				const child = requireIndexNode(input.nextIndex, childId);
+				vector = vector.replaceStructuralItem(
+					child,
+					requireStoreValue(
+						nodeHashes.get(
+							child.id,
+							'node-hashes',
+							instrumentation,
+						),
+						`Missing changed child hash for ${child.id}.`,
+					),
+					vectorInstrumentation(
+						manuscriptMerkleVectorRoles.nodeChildren,
+						instrumentation,
+					),
+				);
+			}
+		}
+
+		const hash = hashDocumentNode(nextNode, vector, instrumentation);
+		nodeHashes = nodeHashes.set(
+			nodeId,
+			hash,
+			'node-hashes',
+			instrumentation,
+		);
+		nodeChildVectors = nodeChildVectors.set(
+			nodeId,
+			vector,
+			'node-child-vectors',
+			instrumentation,
+		);
+		updatedNodeIds.add(nodeId);
+		instrumentation?.onAncestorRehash?.(nodeId);
+	}
+
+	for (const nodeId of removedNodeIds) {
+		nodeHashes = nodeHashes.unset(
+			nodeId,
+			'node-hashes',
+			instrumentation,
+		);
+		nodeChildVectors = nodeChildVectors.unset(
+			nodeId,
+			'node-child-vectors',
+			instrumentation,
+		);
+	}
+
+	const rootNodeHash = requireStoreValue(
+		nodeHashes.get(
+			input.nextContent.root.id,
+			'node-hashes',
+			instrumentation,
+		),
+		`Missing normalized root Node hash for ${input.nextContent.root.id}.`,
+	);
+	const documentHash = hashRevisionMerklePayload(
+		manuscriptHashDomains.documentContent,
+		createDocumentMerkleHashPayload({
+			schemaId: input.nextContent.schemaId,
+			schemaVersion: input.nextContent.schemaVersion,
+			metadataHash: previousState.metadataHash,
+			rootNodeHash,
+			academicGraphHash: previousState.academicGraphHash,
+			settingsHash: previousState.settingsHash,
+		}),
+		instrumentation?.onHashCall,
+	);
+	const stores: IRevisionMerkleStateStores = {
+		nodeHashes,
+		nodeChildVectors,
+		entityHashes: previousStores.entityHashes,
+		relationHashes: previousStores.relationHashes,
+	};
+	validateFinalStoreCardinality(
+		stores,
+		input.nextContent,
+		input.nextIndex,
+	);
+	emitStoreCardinality(stores, instrumentation);
+	return createRevisionMerkleState(
+		{
+			documentHash,
+			metadataHash: previousState.metadataHash,
+			rootNodeHash,
+			academicGraphHash: previousState.academicGraphHash,
+			settingsHash: previousState.settingsHash,
+			titleHash: previousState.titleHash,
+			abstractHash: previousState.abstractHash,
+			metadataAuthorsVector: previousState.metadataAuthorsVector,
+			metadataKeywordsVector: previousState.metadataKeywordsVector,
+			academicReferenceSnapshotsVector:
+				previousState.academicReferenceSnapshotsVector,
+			academicEvidenceLinksVector:
+				previousState.academicEvidenceLinksVector,
+			academicClaimsVector: previousState.academicClaimsVector,
+			academicClaimEvidenceRelationsVector:
+				previousState.academicClaimEvidenceRelationsVector,
+		},
+		stores,
+		input.nextContent,
+		input.nextIndex,
+	);
+}
+
+function validateNormalizationCandidateInput(
+	previousState: RevisionMerkleState,
+	previousStores: IRevisionMerkleStateStores,
+	input: IUpdateRevisionMerkleNormalizationCandidateInput,
+): void {
+	const {
+		previousContent,
+		previousIndex,
+		nextContent,
+		nextIndex,
+		normalizedParentNodeIds,
+		rehashNodeIds,
+	} = input;
+	requireRevisionMerkleStateBinding(
+		previousState,
+		previousContent,
+		previousIndex,
+	);
+	if (
+		!Object.isFrozen(normalizedParentNodeIds)
+		|| !Object.isFrozen(rehashNodeIds)
+		|| previousContent.format !== nextContent.format
+		|| previousContent.formatVersion !== nextContent.formatVersion
+		|| previousContent.schemaId !== nextContent.schemaId
+		|| previousContent.schemaVersion !== nextContent.schemaVersion
+		|| previousContent.metadata !== nextContent.metadata
+		|| previousContent.academicGraph !== nextContent.academicGraph
+		|| previousContent.settings !== nextContent.settings
+		|| previousIndex.rootNodeId !== previousContent.root.id
+		|| nextIndex.rootNodeId !== nextContent.root.id
+		|| previousContent.root.id !== nextContent.root.id
+		|| previousIndex.getNode(previousContent.root.id)
+			!== previousContent.root
+		|| nextIndex.getNode(nextContent.root.id) !== nextContent.root
+		|| previousState.getNodeHash(previousContent.root.id)
+			!== previousState.rootNodeHash
+		|| previousStores.nodeHashes.size !== previousIndex.nodeCount
+		|| previousStores.nodeChildVectors.size
+			> previousStores.nodeHashes.size
+		|| previousStores.entityHashes.size !== previousState.entityCount
+		|| previousStores.relationHashes.size !== previousState.relationCount
+	) {
+		throw new TypeError(
+			'Inconsistent incremental normalization Merkle input.',
+		);
+	}
+
+	const rehashOrder = new Map<NodeId, number>();
+	for (let index = 0; index < rehashNodeIds.length; index += 1) {
+		const nodeId = rehashNodeIds[index];
+		if (
+			nodeId === undefined
+			|| rehashOrder.has(nodeId)
+			|| nextIndex.getNode(nodeId) === undefined
+		) {
+			throw new TypeError(
+				'Normalization rehash IDs must be unique indexed Nodes.',
+			);
+		}
+		rehashOrder.set(nodeId, index);
+	}
+	const normalizedParentSet = new Set<NodeId>();
+	for (const nodeId of normalizedParentNodeIds) {
+		if (
+			normalizedParentSet.has(nodeId)
+			|| !rehashOrder.has(nodeId)
+			|| !isContainerNode(previousIndex.getNode(nodeId))
+			|| !isContainerNode(nextIndex.getNode(nodeId))
+		) {
+			throw new TypeError(
+				'Normalization parent IDs must be unique rehashed containers.',
+			);
+		}
+		normalizedParentSet.add(nodeId);
+	}
+	const expectedRehashNodeIds = collectExpectedNormalizationRehashNodeIds(
+		previousIndex,
+		nextIndex,
+		normalizedParentNodeIds,
+	);
+	if (
+		expectedRehashNodeIds.length !== rehashNodeIds.length
+		|| expectedRehashNodeIds.some(
+			(nodeId, index) => nodeId !== rehashNodeIds[index],
+		)
+	) {
+		throw new TypeError(
+			'Normalization rehash IDs do not match the exact changed paths.',
+		);
+	}
+
+	if (rehashNodeIds.length === 0) {
+		if (
+			normalizedParentNodeIds.length !== 0
+			|| previousContent.root !== nextContent.root
+			|| previousIndex !== nextIndex
+			|| previousState.nodeCount !== nextIndex.nodeCount
+		) {
+			throw new TypeError(
+				'An empty normalization candidate must preserve exact state.',
+			);
+		}
+		return;
+	}
+	if (
+		normalizedParentNodeIds.length === 0
+		|| previousContent.root === nextContent.root
+		|| rehashNodeIds[rehashNodeIds.length - 1] !== nextContent.root.id
+	) {
+		throw new TypeError(
+			'A changed normalization candidate must terminate at its root.',
+		);
+	}
+
+	for (const [nodeId, index] of rehashOrder) {
+		const parent = nextIndex.getParentLocation(nodeId);
+		if (parent === undefined) {
+			if (nodeId !== nextContent.root.id) {
+				throw new TypeError(
+					'A normalization rehash path is disconnected.',
+				);
+			}
+			continue;
+		}
+		const parentOrder = rehashOrder.get(parent.parentNodeId);
+		if (parentOrder === undefined || parentOrder <= index) {
+			throw new TypeError(
+				'Normalization rehash IDs must be descendant-to-root.',
+			);
+		}
+	}
+}
+
+function collectExpectedNormalizationRehashNodeIds(
+	previousIndex: DocumentIndex,
+	nextIndex: DocumentIndex,
+	normalizedParentNodeIds: readonly NodeId[],
+): readonly NodeId[] {
+	const depthByNodeId = new Map<NodeId, number>();
+	for (const parentNodeId of normalizedParentNodeIds) {
+		const path = nextIndex.iteratePath(parentNodeId);
+		if (path === undefined) {
+			throw new TypeError(
+				'A normalized parent is missing from the target index.',
+			);
+		}
+		const pathNodeIds = [...path];
+		for (let depth = 0; depth < pathNodeIds.length; depth += 1) {
+			const nodeId = pathNodeIds[depth];
+			if (nodeId === undefined) {
+				throw new TypeError(
+					'A normalized parent path is incomplete.',
+				);
+			}
+			const knownDepth = depthByNodeId.get(nodeId);
+			if (knownDepth !== undefined && knownDepth !== depth) {
+				throw new TypeError(
+					'Normalization paths disagree on Node depth.',
+				);
+			}
+			depthByNodeId.set(nodeId, depth);
+		}
+
+		const nextParent = requireContainerNode(nextIndex, parentNodeId);
+		for (const child of nextParent.children) {
+			if (previousIndex.getNode(child.id) === child) {
+				continue;
+			}
+			const depth = pathNodeIds.length;
+			const knownDepth = depthByNodeId.get(child.id);
+			if (knownDepth !== undefined && knownDepth !== depth) {
+				throw new TypeError(
+					'A changed normalization child has inconsistent depth.',
+				);
+			}
+			depthByNodeId.set(child.id, depth);
+		}
+	}
+	return Object.freeze(
+		[...depthByNodeId]
+			.sort((left, right) => {
+				const depthOrder = right[1] - left[1];
+				return depthOrder !== 0
+					? depthOrder
+					: left[0] < right[0]
+						? -1
+						: left[0] > right[0]
+							? 1
+							: 0;
+			})
+			.map(([nodeId]) => nodeId),
+	);
+}
+
+function collectNormalizationChangedChildren(
+	index: DocumentIndex,
+	rehashNodeIds: readonly NodeId[],
+): ReadonlyMap<NodeId, readonly NodeId[]> {
+	const mutable = new Map<NodeId, NodeId[]>();
+	for (const nodeId of rehashNodeIds) {
+		const parent = index.getParentLocation(nodeId);
+		if (parent === undefined) {
+			continue;
+		}
+		const changed = mutable.get(parent.parentNodeId);
+		if (changed === undefined) {
+			mutable.set(parent.parentNodeId, [nodeId]);
+		} else {
+			changed.push(nodeId);
+		}
+	}
+	return new Map(
+		[...mutable].map(([parentNodeId, childNodeIds]) => [
+			parentNodeId,
+			Object.freeze(childNodeIds),
+		]),
+	);
+}
+
+interface INormalizationParentTransition {
+	readonly changedLeaves: readonly DocumentNode[];
+}
+
+function validateNormalizationParentTransition(
+	previousParent: DocumentNode & {
+		readonly children: readonly DocumentNode[];
+	},
+	nextParent: DocumentNode & {
+		readonly children: readonly DocumentNode[];
+	},
+	previousIndex: DocumentIndex,
+	nextIndex: DocumentIndex,
+	removedNodeIds: Set<NodeId>,
+	instrumentation: IRevisionMerkleUpdaterInstrumentation | undefined,
+): INormalizationParentTransition {
+	const previousChildren = previousParent.children;
+	const nextChildren = nextParent.children;
+	const changedLeaves: DocumentNode[] = [];
+	let previousIndexAtChild = 0;
+	let retained:
+		| {
+			readonly source: DocumentNode;
+			readonly target: DocumentNode;
+			expectedTextValue: string | undefined;
+			joinedNonEmptyText: boolean;
+		}
+		| undefined;
+	for (const nextChild of nextChildren) {
+		while (
+			previousIndexAtChild < previousChildren.length
+			&& previousChildren[previousIndexAtChild]?.id !== nextChild.id
+		) {
+			const removed = previousChildren[previousIndexAtChild];
+			recordRemovedNormalizationChild(
+				removed,
+				retained,
+				previousIndex,
+				nextIndex,
+				removedNodeIds,
+				instrumentation,
+			);
+			previousIndexAtChild += 1;
+		}
+		finalizeRetainedNormalizationChild(retained, changedLeaves);
+		const previousChild = previousChildren[previousIndexAtChild];
+		if (
+			previousChild === undefined
+			|| previousChild.id !== nextChild.id
+			|| previousIndex.getNode(previousChild.id) !== previousChild
+			|| nextIndex.getNode(nextChild.id) !== nextChild
+		) {
+			throw new TypeError(
+				'Normalization child order disagrees with its exact indexes.',
+				);
+		}
+		retained = {
+			source: previousChild,
+			target: nextChild,
+			expectedTextValue: previousChild.type === 'text'
+				? previousChild.value
+				: undefined,
+			joinedNonEmptyText: false,
+		};
+		previousIndexAtChild += 1;
+	}
+	while (previousIndexAtChild < previousChildren.length) {
+		const removed = previousChildren[previousIndexAtChild];
+		recordRemovedNormalizationChild(
+			removed,
+			retained,
+			previousIndex,
+			nextIndex,
+			removedNodeIds,
+			instrumentation,
+		);
+		previousIndexAtChild += 1;
+	}
+	finalizeRetainedNormalizationChild(retained, changedLeaves);
+	return Object.freeze({
+		changedLeaves: Object.freeze(changedLeaves),
+	});
+}
+
+function recordRemovedNormalizationChild(
+	removed: DocumentNode | undefined,
+	retained: {
+		readonly source: DocumentNode;
+		readonly target: DocumentNode;
+		expectedTextValue: string | undefined;
+		joinedNonEmptyText: boolean;
+	} | undefined,
+	previousIndex: DocumentIndex,
+	nextIndex: DocumentIndex,
+	removedNodeIds: Set<NodeId>,
+	instrumentation: IRevisionMerkleUpdaterInstrumentation | undefined,
+): void {
+	if (
+		removed === undefined
+		|| removed.type !== 'text'
+		|| previousIndex.getNode(removed.id) !== removed
+		|| nextIndex.hasNode(removed.id)
+		|| removedNodeIds.has(removed.id)
+	) {
+		throw new TypeError(
+			'Normalization may only remove unique Text Nodes in order.',
+		);
+	}
+	if (removed.value.length > 0) {
+		if (
+			retained?.source.type !== 'text'
+			|| retained.target.type !== 'text'
+			|| retained.expectedTextValue === undefined
+			|| !normalizationMarksEqual(
+				retained.source.marks,
+				removed.marks,
+			)
+		) {
+			throw new TypeError(
+				'Normalization removed Text that cannot join its left neighbor.',
+			);
+		}
+		retained.expectedTextValue += removed.value;
+		retained.joinedNonEmptyText = true;
+	}
+	instrumentation?.onNodePayloadRead?.(
+		removed.id,
+		'normalization-parent',
+	);
+	removedNodeIds.add(removed.id);
+}
+
+function finalizeRetainedNormalizationChild(
+	retained: {
+		readonly source: DocumentNode;
+		readonly target: DocumentNode;
+		readonly expectedTextValue: string | undefined;
+		readonly joinedNonEmptyText: boolean;
+	} | undefined,
+	changedLeaves: DocumentNode[],
+): void {
+	if (retained === undefined) {
+		return;
+	}
+	const { source, target } = retained;
+	if (!retained.joinedNonEmptyText) {
+		if (target !== source) {
+			throw new TypeError(
+				'Normalization replaced a retained Node without a Text join.',
+			);
+		}
+		return;
+	}
+	if (
+		source.type !== 'text'
+		|| target.type !== 'text'
+		|| target === source
+		|| target.marks !== source.marks
+		|| target.value !== retained.expectedTextValue
+	) {
+		throw new TypeError(
+			'Normalization retained Text does not match its adjacent joins.',
+		);
+	}
+	changedLeaves.push(target);
+}
+
+function normalizationMarksEqual(
+	left: readonly Mark[],
+	right: readonly Mark[],
+): boolean {
+	if (left.length !== right.length) {
+		return false;
+	}
+	for (let index = 0; index < left.length; index += 1) {
+		const leftMark = left[index];
+		const rightMark = right[index];
+		if (
+			leftMark === undefined
+			|| rightMark === undefined
+			|| leftMark.type !== rightMark.type
+		) {
+			return false;
+		}
+		if (
+			leftMark.type === 'link'
+			&& (
+				rightMark.type !== 'link'
+				|| leftMark.href.toString() !== rightMark.href.toString()
+				|| leftMark.title !== rightMark.title
+				|| Object.hasOwn(leftMark, 'title')
+					!== Object.hasOwn(rightMark, 'title')
+			)
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function isContainerNode(
+	node: DocumentNode | undefined,
+): node is DocumentNode & {
+	readonly children: readonly DocumentNode[];
+} {
+	return node !== undefined && 'children' in node;
 }
 
 function validateCandidateUpdateInput(
@@ -263,6 +936,11 @@ function validateCandidateUpdateInput(
 	capture: ManuscriptOperationCapture,
 	touchSet: IManuscriptOperationTouchSet,
 ): void {
+	requireRevisionMerkleStateBinding(
+		previousState,
+		previousContent,
+		previousIndex,
+	);
 	const previousEntityCount = previousContent.academicGraph
 		.referenceSnapshots.length
 		+ previousContent.academicGraph.evidenceLinks.length
