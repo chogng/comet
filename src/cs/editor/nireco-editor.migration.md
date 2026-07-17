@@ -6,6 +6,7 @@ This migration directly replaces the standalone `../nireco-editor` boundary and 
 
 The temporary change surface is:
 
+- `src/cs/editor/editor.all.ts` as the only Editor-owned browser-registration aggregate loaded by the Workbench shell;
 - `src/cs/editor/common/core/**` for canonical JSON, SHA-256, Editor domain identifiers, semantic positions, manuscript resource validation, and typed errors;
 - `src/cs/editor/common/model.ts` and `src/cs/editor/common/model/**` for the authoritative Manuscript model, schema, snapshots, indexes, transactions, PositionMap, Revision, Proposal, Semantic Diff, replay, and recovery semantics;
 - `src/cs/editor/common/services/**` for Model Service, resolver, history, revision-bound reads, diagnostics, Proposal, and Editor durability;

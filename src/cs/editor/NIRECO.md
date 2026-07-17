@@ -52,6 +52,7 @@ Sessions and Agent Host
 ```text
 src/cs/editor/
 ├── NIRECO.md
+├── editor.all.ts
 ├── common/
 │   ├── core/
 │   │   ├── boundedClosedJson.ts
@@ -112,7 +113,7 @@ src/cs/editor/
     └── browser/
 ```
 
-`common/model.ts` 定义 `IManuscriptModel` 及其公共事件和结果，`common/model/**` 保存纯领域值与确定性变换，`common/services/model.ts` 定义 DI 服务契约，`modelService.ts` 管理活动模型，`resolverService.ts` 管理资源到引用计数模型引用的解析。
+`editor.all.ts` 是 Editor-owned browser registration 的唯一聚合入口。Workbench shell 只加载该入口，不直接 side-effect import Editor 内部 service 或 contribution。`common/model.ts` 定义 `IManuscriptModel` 及其公共事件和结果，`common/model/**` 保存纯领域值与确定性变换，`common/services/model.ts` 定义 DI 服务契约，`modelService.ts` 管理活动模型，`resolverService.ts` 管理资源到引用计数模型引用的解析。
 
 目录职责遵循上游 Monaco Editor 的组织规则，而不是复制一棵平行的 Nireco 子树：
 

@@ -11,7 +11,7 @@ import test from 'node:test';
 import ts from 'typescript';
 import { findLayerViolations } from './valid-layers-check.ts';
 
-test('Sessions layer check resolves relative imports, re-exports, and dynamic imports', t => {
+test('Layer check resolves imports and enforces Editor and Sessions entry points', t => {
 	const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'comet-valid-layers-'));
 	const sourceRoot = path.join(fixtureRoot, 'src/cs');
 	t.after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
@@ -57,6 +57,14 @@ test('Sessions layer check resolves relative imports, re-exports, and dynamic im
 		'workbench/browser/dynamic.ts',
 		"void import('../../sessions/common/shared.js');\n",
 	);
+	writeSource(
+		'workbench/workbench.common.main.ts',
+		[
+			"import 'cs/editor/editor.all';",
+			"import 'cs/editor/browser/services/openerService';",
+			'',
+		].join('\n'),
+	);
 
 	const violations = findLayerViolations({
 		sourceRoot,
@@ -65,7 +73,7 @@ test('Sessions layer check resolves relative imports, re-exports, and dynamic im
 			moduleResolution: ts.ModuleResolutionKind.Bundler,
 		},
 	});
-	assert.equal(violations.length, 8);
+	assert.equal(violations.length, 9);
 	assert.ok(violations.some(violation => violation.includes(
 		'workbench/browser/static.ts:1: lower cs layers must not import Sessions',
 	)));
@@ -83,6 +91,9 @@ test('Sessions layer check resolves relative imports, re-exports, and dynamic im
 	)));
 	assert.ok(violations.some(violation => violation.includes(
 		'sessions/contrib/providers/one/browser/provider.ts:1: Sessions providers must not import sibling providers',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'workbench/workbench.common.main.ts:2: Workbench must load Editor registrations through editor.all',
 	)));
 	assert.equal(
 		violations.filter(violation => violation.includes('only Sessions entry points may load contribution entry points')).length,

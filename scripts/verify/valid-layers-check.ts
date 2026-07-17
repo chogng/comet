@@ -140,6 +140,15 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 				&& target.startsWith('cs/sessions/')) {
 				report(relativeFile, imported, 'lower cs layers must not import Sessions');
 			}
+			if (relativeFile === 'workbench/workbench.common.main.ts'
+				&& target.startsWith('cs/editor/')
+				&& target !== 'cs/editor/editor.all') {
+				report(
+					relativeFile,
+					imported,
+					'Workbench must load Editor registrations through editor.all',
+				);
+			}
 			if (relativeFile.startsWith('sessions/common/')
 				&& target.startsWith('cs/sessions/')
 				&& !target.startsWith('cs/sessions/common/')) {
@@ -213,11 +222,11 @@ function runRepositoryLayerCheck(): void {
 		compilerOptions: loadCompilerOptions(repositoryRoot),
 	});
 	if (violations.length > 0) {
-		console.error(['Sessions layer violations:', ...violations.map(violation => `- ${violation}`)].join('\n'));
+		console.error(['Layer violations:', ...violations.map(violation => `- ${violation}`)].join('\n'));
 		process.exitCode = 1;
 		return;
 	}
-	console.log('Sessions layer check passed.');
+	console.log('Layer check passed.');
 }
 
 const invokedFile = process.argv[1] ? path.resolve(process.argv[1]) : undefined;
