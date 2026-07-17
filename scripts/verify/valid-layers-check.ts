@@ -110,6 +110,17 @@ function providerName(relativeFile: string): string | undefined {
 	return /^sessions\/contrib\/providers\/([^/]+)\//u.exec(relativeFile)?.[1];
 }
 
+function isNativeEditorPipelineFile(relativeFile: string): boolean {
+	return relativeFile === 'editor/common/model.ts'
+		|| /^(?:editor\/common\/(?:core|model|services)\/|editor\/browser\/(?:controller|input|services|view|widget)\/|editor\/contrib\/)/u.test(relativeFile);
+}
+
+function isLegacyEditorTextTarget(target: string): boolean {
+	return /^prosemirror(?:-|$)/u.test(target)
+		|| /^cs\/editor\/browser\/text(?:\/|$)/u.test(target)
+		|| target === 'cs/editor/common/writingEditorDocument';
+}
+
 export function findLayerViolations(options: ILayerCheckOptions): readonly string[] {
 	const sourceRoot = path.resolve(options.sourceRoot);
 	const compilerOptions = options.compilerOptions;
@@ -151,7 +162,10 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 			}
 			if (
 				relativeFile === 'editor/editor.all.ts'
-				&& target.startsWith('cs/editor/browser/text/')
+				&& (
+					/^cs\/editor\/browser\/text(?:\/|$)/u.test(target)
+					|| target === 'cs/editor/common/writingEditorDocument'
+				)
 			) {
 				report(
 					relativeFile,
@@ -182,13 +196,13 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 				);
 			}
 			if (
-				/^(?:editor\/common\/(?:core|model|services)\/|editor\/browser\/(?:controller|input|services|view|widget)\/|editor\/contrib\/)/u.test(relativeFile)
-				&& /^prosemirror(?:-|$)/u.test(target)
+				isNativeEditorPipelineFile(relativeFile)
+				&& isLegacyEditorTextTarget(target)
 			) {
 				report(
 					relativeFile,
 					imported,
-					'the native Editor pipeline must not import ProseMirror',
+					'the native Editor pipeline must not import the legacy ProseMirror surface',
 				);
 			}
 			if (relativeFile.startsWith('sessions/common/')

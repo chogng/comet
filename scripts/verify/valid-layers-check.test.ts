@@ -74,6 +74,15 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		"import 'prosemirror-state';\n",
 	);
 	writeSource(
+		'editor/common/model.ts',
+		[
+			"import 'prosemirror-model';",
+			"import 'cs/editor/browser/text/editor';",
+			"import 'cs/editor/common/writingEditorDocument';",
+			'',
+		].join('\n'),
+	);
+	writeSource(
 		'editor/browser/view/loadServiceContribution.ts',
 		"import 'cs/editor/browser/services/editorDraftStyleService.contribution';\n",
 	);
@@ -82,6 +91,7 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		[
 			"import 'cs/editor/browser/services/editorDraftStyleService.contribution';",
 			"import 'cs/editor/browser/text/editorDraftStyleService';",
+			"import 'cs/editor/common/writingEditorDocument';",
 			'',
 		].join('\n'),
 	);
@@ -93,7 +103,7 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 			moduleResolution: ts.ModuleResolutionKind.Bundler,
 		},
 	});
-	assert.equal(violations.length, 13);
+	assert.equal(violations.length, 17);
 	assert.ok(violations.some(violation => violation.includes(
 		'workbench/browser/static.ts:1: lower cs layers must not import Sessions',
 	)));
@@ -116,10 +126,22 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		'workbench/workbench.common.main.ts:2: Workbench must load Editor registrations through editor.all',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
-		'editor/browser/view/invalid.ts:1: the native Editor pipeline must not import ProseMirror',
+		'editor/browser/view/invalid.ts:1: the native Editor pipeline must not import the legacy ProseMirror surface',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/common/model.ts:1: the native Editor pipeline must not import the legacy ProseMirror surface: prosemirror-model',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/common/model.ts:2: the native Editor pipeline must not import the legacy ProseMirror surface: cs/editor/browser/text/editor',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/common/model.ts:3: the native Editor pipeline must not import the legacy ProseMirror surface: cs/editor/common/writingEditorDocument',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
 		'editor/editor.all.ts:2: editor.all must not load the legacy ProseMirror surface',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/editor.all.ts:3: editor.all must not load the legacy ProseMirror surface: cs/editor/common/writingEditorDocument',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
 		'workbench/browser/editorServiceLeak.ts:1: Workbench must consume Editor service contracts',
