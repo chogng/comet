@@ -58,8 +58,12 @@ const reservationStates =
  * Owns the persistent Transaction and Operation ID namespace for one model.
  */
 export class TransactionIdentityAuthority {
-	private readonly committedIdentifiers = new Set<string>();
-	private readonly reservedIdentifiers = new Set<string>();
+	readonly #committedIdentifiers = new Set<string>();
+	readonly #reservedIdentifiers = new Set<string>();
+
+	constructor() {
+		Object.freeze(this);
+	}
 
 	reserve(
 		transactionId: unknown,
@@ -76,7 +80,7 @@ export class TransactionIdentityAuthority {
 		}
 
 		for (const identifier of identityIdentifiers(identity.value)) {
-			this.reservedIdentifiers.add(identifier);
+			this.#reservedIdentifiers.add(identifier);
 		}
 		const reservation = createReservation(identity.value);
 		reservationStates.set(reservation, {
@@ -100,8 +104,8 @@ export class TransactionIdentityAuthority {
 
 		for (const identifier of identityIdentifiers(trustedReservation)) {
 			if (
-				!this.reservedIdentifiers.has(identifier)
-				|| this.committedIdentifiers.has(identifier)
+				!this.#reservedIdentifiers.has(identifier)
+				|| this.#committedIdentifiers.has(identifier)
 			) {
 				return authorityError(
 					'invalid-reservation',
@@ -112,8 +116,8 @@ export class TransactionIdentityAuthority {
 		}
 
 		for (const identifier of identityIdentifiers(trustedReservation)) {
-			this.reservedIdentifiers.delete(identifier);
-			this.committedIdentifiers.add(identifier);
+			this.#reservedIdentifiers.delete(identifier);
+			this.#committedIdentifiers.add(identifier);
 		}
 		state.status = 'committed';
 		return okMutation();
@@ -129,7 +133,7 @@ export class TransactionIdentityAuthority {
 		const trustedReservation = reservation as TransactionIdentityReservation;
 
 		for (const identifier of identityIdentifiers(trustedReservation)) {
-			if (!this.reservedIdentifiers.has(identifier)) {
+			if (!this.#reservedIdentifiers.has(identifier)) {
 				return authorityError(
 					'invalid-reservation',
 					'$reservation',
@@ -139,7 +143,7 @@ export class TransactionIdentityAuthority {
 		}
 
 		for (const identifier of identityIdentifiers(trustedReservation)) {
-			this.reservedIdentifiers.delete(identifier);
+			this.#reservedIdentifiers.delete(identifier);
 		}
 		state.status = 'released';
 		return okMutation();
@@ -159,27 +163,27 @@ export class TransactionIdentityAuthority {
 			return availability;
 		}
 		for (const identifier of identityIdentifiers(identity.value)) {
-			this.committedIdentifiers.add(identifier);
+			this.#committedIdentifiers.add(identifier);
 		}
 		return okMutation();
 	}
 
 	isCommitted(identifier: TransactionId | OperationId): boolean {
-		return this.committedIdentifiers.has(identifier);
+		return this.#committedIdentifiers.has(identifier);
 	}
 
 	private validateAvailability(
 		identity: TransactionIdentityReservation,
 	): ITransactionIdentityAuthorityError | undefined {
 		for (const identifier of identityIdentifiers(identity)) {
-			if (this.committedIdentifiers.has(identifier)) {
+			if (this.#committedIdentifiers.has(identifier)) {
 				return authorityError(
 					'identifier-already-used',
 					'$',
 					identifier,
 				);
 			}
-			if (this.reservedIdentifiers.has(identifier)) {
+			if (this.#reservedIdentifiers.has(identifier)) {
 				return authorityError(
 					'identifier-already-reserved',
 					'$',
@@ -190,6 +194,9 @@ export class TransactionIdentityAuthority {
 		return undefined;
 	}
 }
+
+Object.freeze(TransactionIdentityAuthority.prototype);
+Object.freeze(TransactionIdentityAuthority);
 
 function readTransactionIdentity(
 	transactionId: unknown,
@@ -203,81 +210,90 @@ function readTransactionIdentity(
 		return authorityError('invalid-transaction-id', '$.transactionId');
 	}
 
-	let descriptors: Readonly<Record<string, PropertyDescriptor>>;
-	let keys: readonly PropertyKey[];
 	try {
 		if (!Array.isArray(operationIds)) {
 			return authorityError('invalid-operation-ids', '$.operationIds');
 		}
-		descriptors = Object.getOwnPropertyDescriptors(operationIds);
-		keys = Reflect.ownKeys(operationIds);
-	} catch {
-		return authorityError('inspection-failed', '$.operationIds');
-	}
-
-	const lengthDescriptor = descriptors['length'];
-	if (
-		lengthDescriptor === undefined
-		|| !('value' in lengthDescriptor)
-		|| !Number.isSafeInteger(lengthDescriptor.value)
-		|| lengthDescriptor.value < 1
-	) {
-		return authorityError('invalid-operation-ids', '$.operationIds');
-	}
-	const length = lengthDescriptor.value as number;
-	if (length > maximumTransactionOperations) {
-		return authorityError('operation-limit-exceeded', '$.operationIds');
-	}
-	if (
-		keys.length !== length + 1
-		|| keys.some(key => key !== 'length' && !isArrayIndexKey(key, length))
-	) {
-		return authorityError('invalid-operation-ids', '$.operationIds');
-	}
-
-	const parsedOperationIds: OperationId[] = [];
-	const seenIdentifiers = new Set<string>([parsedTransactionId.value]);
-	for (let index = 0; index < length; index += 1) {
-		const descriptor = descriptors[String(index)];
+		const lengthDescriptor = Reflect.getOwnPropertyDescriptor(
+			operationIds,
+			'length',
+		);
+		const lengthValue = lengthDescriptor !== undefined
+			&& 'value' in lengthDescriptor
+			? lengthDescriptor.value
+			: undefined;
 		if (
-			descriptor === undefined
-			|| !('value' in descriptor)
-			|| descriptor.enumerable !== true
-			|| typeof descriptor.value !== 'string'
+			typeof lengthValue !== 'number'
+			|| !Number.isSafeInteger(lengthValue)
+			|| lengthValue < 1
 		) {
 			return authorityError(
 				'invalid-operation-ids',
-				`$.operationIds[${index}]`,
+				'$.operationIds',
 			);
 		}
-		const parsed = parseOperationId(descriptor.value);
-		if (parsed.type === 'invalid') {
-			return authorityError(
-				'invalid-operation-ids',
-				`$.operationIds[${index}]`,
-			);
+		const length = lengthValue;
+		if (length > maximumTransactionOperations) {
+			return authorityError('operation-limit-exceeded', '$.operationIds');
 		}
-		if (seenIdentifiers.has(parsed.value)) {
-			return authorityError(
-				'duplicate-identifier',
-				`$.operationIds[${index}]`,
-				parsed.value,
-			);
+		const keys = Reflect.ownKeys(operationIds);
+		if (
+			keys.length !== length + 1
+			|| keys.some(key =>
+				key !== 'length' && !isArrayIndexKey(key, length))
+		) {
+			return authorityError('invalid-operation-ids', '$.operationIds');
 		}
-		seenIdentifiers.add(parsed.value);
-		parsedOperationIds.push(parsed.value);
-	}
 
-	return Object.freeze({
-		type: 'ok',
-		value: createReservation({
-			transactionId: parsedTransactionId.value,
-			operationIds: parsedOperationIds as [
-				OperationId,
-				...OperationId[],
-			],
-		}),
-	});
+		const parsedOperationIds: OperationId[] = [];
+		const seenIdentifiers = new Set<string>([parsedTransactionId.value]);
+		for (let index = 0; index < length; index += 1) {
+			const descriptor = Reflect.getOwnPropertyDescriptor(
+				operationIds,
+				String(index),
+			);
+			if (
+				descriptor === undefined
+				|| !('value' in descriptor)
+				|| descriptor.enumerable !== true
+				|| typeof descriptor.value !== 'string'
+			) {
+				return authorityError(
+					'invalid-operation-ids',
+					`$.operationIds[${index}]`,
+				);
+			}
+			const parsed = parseOperationId(descriptor.value);
+			if (parsed.type === 'invalid') {
+				return authorityError(
+					'invalid-operation-ids',
+					`$.operationIds[${index}]`,
+				);
+			}
+			if (seenIdentifiers.has(parsed.value)) {
+				return authorityError(
+					'duplicate-identifier',
+					`$.operationIds[${index}]`,
+					parsed.value,
+				);
+			}
+			seenIdentifiers.add(parsed.value);
+			parsedOperationIds.push(parsed.value);
+		}
+
+		return Object.freeze({
+			type: 'ok',
+			value: createReservation({
+				transactionId: parsedTransactionId.value,
+				operationIds: parsedOperationIds as [
+					OperationId,
+					...OperationId[],
+				],
+			}),
+		});
+	} catch {
+		return authorityError('inspection-failed', '$.operationIds');
+	}
 }
 
 function createReservation(

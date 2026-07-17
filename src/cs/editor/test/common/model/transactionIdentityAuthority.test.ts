@@ -17,6 +17,7 @@ import {
 	type TransactionIdentityReservationResult,
 	type TransactionIdentityReservation,
 } from 'cs/editor/common/model/transactionIdentityAuthority';
+import { maximumTransactionOperations } from 'cs/editor/common/model/transaction';
 
 function uuid(seed: number): string {
 	return `018f0000-0000-7000-8000-${seed.toString(16).padStart(12, '0')}`;
@@ -78,6 +79,31 @@ suite('Transaction identity authority', () => {
 			reason: 'invalid-reservation',
 			path: '$reservation',
 		});
+	});
+
+	test('keeps authority state and dispatch unreachable from runtime callers', () => {
+		const authority = new TransactionIdentityAuthority();
+		const authorityPrototype = Object.getPrototypeOf(authority) as object;
+
+		assert.equal(Object.isFrozen(authority), true);
+		assert.equal(Object.isFrozen(authorityPrototype), true);
+		assert.equal(Object.isFrozen(TransactionIdentityAuthority), true);
+		assert.deepStrictEqual(Reflect.ownKeys(authority), []);
+		assert.equal(
+			Reflect.set(
+				authorityPrototype,
+				'isCommitted',
+				() => true,
+			),
+			false,
+		);
+
+		const transaction = transactionId(4);
+		const operation = operationId(5);
+		const reservation = reserve(authority, transaction, [operation]);
+		assert.deepStrictEqual(authority.commit(reservation), { type: 'ok' });
+		assert.equal(authority.isCommitted(transaction), true);
+		assert.equal(authority.isCommitted(operation), true);
 	});
 
 	test('blocks pending and committed identifiers across identity kinds', () => {
@@ -205,6 +231,86 @@ suite('Transaction identity authority', () => {
 			failureReason(authority.reserve(transaction, oversized)),
 			'operation-limit-exceeded',
 		);
+	});
+
+	test('checks the operation limit before enumerating or copying descriptors', () => {
+		const authority = new TransactionIdentityAuthority();
+		const oversized = new Array<OperationId>(
+			maximumTransactionOperations + 1,
+		);
+		let ownKeysCalls = 0;
+		let descriptorCalls = 0;
+		let getterCalls = 0;
+		const hostile = new Proxy(oversized, {
+			ownKeys(target): ArrayLike<string | symbol> {
+				ownKeysCalls += 1;
+				return Reflect.ownKeys(target);
+			},
+			getOwnPropertyDescriptor(
+				target,
+				key,
+			): PropertyDescriptor | undefined {
+				descriptorCalls += 1;
+				return Reflect.getOwnPropertyDescriptor(target, key);
+			},
+			get(target, key, receiver): unknown {
+				getterCalls += 1;
+				return Reflect.get(target, key, receiver);
+			},
+		});
+
+		assert.equal(
+			failureReason(authority.reserve(transactionId(42), hostile)),
+			'operation-limit-exceeded',
+		);
+		assert.equal(ownKeysCalls, 0);
+		assert.equal(descriptorCalls, 1);
+		assert.equal(getterCalls, 0);
+	});
+
+	test('captures each exact operation ID descriptor once without property reads', () => {
+		const authority = new TransactionIdentityAuthority();
+		const operations = [operationId(43), operationId(44)];
+		const descriptorCounts = new Map<PropertyKey, number>();
+		let ownKeysCalls = 0;
+		let getterCalls = 0;
+		const captured = new Proxy(operations, {
+			ownKeys(target): ArrayLike<string | symbol> {
+				ownKeysCalls += 1;
+				return Reflect.ownKeys(target);
+			},
+			getOwnPropertyDescriptor(
+				target,
+				key,
+			): PropertyDescriptor | undefined {
+				descriptorCounts.set(
+					key,
+					(descriptorCounts.get(key) ?? 0) + 1,
+				);
+				return Reflect.getOwnPropertyDescriptor(target, key);
+			},
+			get(target, key, receiver): unknown {
+				getterCalls += 1;
+				return Reflect.get(target, key, receiver);
+			},
+		});
+
+		const reservation = reserve(
+			authority,
+			transactionId(45),
+			captured,
+		);
+		assert.equal(reservation.operationIds.length, 2);
+		assert.equal(ownKeysCalls, 1);
+		assert.deepStrictEqual(
+			[...descriptorCounts.entries()],
+			[
+				['length', 1],
+				['0', 1],
+				['1', 1],
+			],
+		);
+		assert.equal(getterCalls, 0);
 	});
 
 	test('rejects forged and foreign reservations', () => {
