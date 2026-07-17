@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before, beforeEach } from 'node:test';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 

@@ -3,7 +3,7 @@ import test, { after, before } from 'node:test';
 
 import { GridBranchView, GridView, Orientation } from 'cs/base/browser/ui/grid/gridview';
 import type { IGridView } from 'cs/base/browser/ui/grid/gridview';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 

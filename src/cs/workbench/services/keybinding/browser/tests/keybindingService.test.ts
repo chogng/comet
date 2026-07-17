@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { KeyCode, KeyMod } from 'cs/base/common/keyCodes';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import {
 	commandService,
 	commandsRegistry,

@@ -4,7 +4,7 @@ import test, { after, before } from 'node:test';
 import { append, clearNode, reset } from 'base/browser/dom';
 import { safeSetInnerHtml, sanitizeHtml } from 'base/browser/domSanitize';
 import { createFastDomNode } from 'base/browser/fastDomNode';
-import { installDomTestEnvironment } from 'editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 

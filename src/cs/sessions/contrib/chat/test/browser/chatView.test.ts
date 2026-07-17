@@ -10,7 +10,7 @@ import { Emitter } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import type { IInstantiationService } from 'cs/platform/instantiation/common/instantiation';
 import type { LanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';

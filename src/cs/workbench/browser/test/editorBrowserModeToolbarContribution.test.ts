@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test, { after, afterEach, beforeEach } from 'node:test';
 import { Emitter, Event } from 'cs/base/common/event';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { commandsRegistry } from 'cs/platform/commands/common/commands';
 import { IContextMenuService } from 'cs/platform/contextview/browser/contextView';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';

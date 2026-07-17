@@ -9,7 +9,7 @@ import test from 'node:test';
 import type { TranslationSettingsSectionProps } from 'cs/workbench/contrib/preferences/browser/translationWidget';
 import { createDefaultLlmSettings } from 'cs/workbench/services/llm/config';
 import { createDefaultTranslationSettings } from 'cs/workbench/services/translation/config';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { locales } from 'language/locales';
 

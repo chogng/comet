@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { after, before } from 'node:test';
 
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import type { IView } from 'cs/base/browser/ui/splitview/splitview';
 import type { Orientation as SplitViewOrientation } from 'cs/base/browser/ui/splitview/splitview';
 

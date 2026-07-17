@@ -68,7 +68,7 @@ async function buildTests(testFiles) {
 				'node:assert/strict': path.join(sharedDirectory, 'assert.mjs'),
 				'node:test': path.join(sharedDirectory, 'test-api.mjs'),
 				'node:timers/promises': path.join(sharedDirectory, 'timers.mjs'),
-				'cs/editor/browser/text/tests/domTestUtils': path.join(sharedDirectory, 'browser-dom.mjs'),
+				'cs/base/test/browser/domTestUtils': path.join(sharedDirectory, 'browser-dom.mjs'),
 			},
 			loader: { '.css': 'empty', '.html': 'text', '.svg': 'text' },
 		});

@@ -11,7 +11,7 @@ import { Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { getComparisonKey } from 'cs/base/common/resources';
 import { URI } from 'cs/base/common/uri';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import {
 	collectWritingEditorTextUnits,
 	createWritingEditorDocumentFromPlainText,

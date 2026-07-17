@@ -14,7 +14,7 @@ import {
 	EditorDraftStyleService,
 	type EditorDraftStyleServiceSnapshot,
 } from 'cs/editor/browser/services/editorDraftStyleService';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';
 

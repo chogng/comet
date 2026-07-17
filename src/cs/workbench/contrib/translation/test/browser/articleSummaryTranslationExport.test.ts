@@ -10,7 +10,7 @@ import { DeferredPromise } from 'cs/base/common/async';
 import { URI } from 'cs/base/common/uri';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { DocumentTranslationProgress } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';

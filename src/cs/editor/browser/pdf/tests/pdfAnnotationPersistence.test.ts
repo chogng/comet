@@ -5,7 +5,7 @@ import {
   readStoredPdfAnnotations,
   writeStoredPdfAnnotations,
 } from 'cs/editor/browser/pdf/pdfAnnotationPersistence';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 

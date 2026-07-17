@@ -14,7 +14,7 @@ import type {
 	WebContentPdfDownloadPayload,
 } from 'cs/base/parts/sandbox/common/sandboxTypes';
 import { URI } from 'cs/base/common/uri';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { formatLocaleMessage } from 'cs/workbench/common/errorMessages';

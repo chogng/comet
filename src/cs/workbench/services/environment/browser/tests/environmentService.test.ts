@@ -11,7 +11,7 @@ import type {
 	ElectronWebContentApi,
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import type { WebContentState } from 'cs/platform/browserView/common/browserView';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 
 type TestWindow = Window & {
 	electronAPI?: ElectronAPI;

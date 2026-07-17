@@ -13,7 +13,7 @@ import type { IDisposable } from 'cs/base/common/lifecycle';
 import type { IRenderedMarkdown, MarkdownRenderOptions } from 'cs/base/browser/markdownRenderer';
 import type { IMarkdownString } from 'cs/base/common/htmlContent';
 import { URI } from 'cs/base/common/uri';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import type { IMarkdownRendererService } from 'cs/platform/markdown/browser/markdownRenderer';
 import type { INotificationService } from 'cs/platform/notification/common/notification';
 import type { LanguagePackLocale } from 'cs/platform/languagePacks/common/languagePacks';

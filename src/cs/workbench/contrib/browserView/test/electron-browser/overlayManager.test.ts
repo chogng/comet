@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test, { after, afterEach, before } from 'node:test';
 
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 let BrowserOverlayManager: typeof import('cs/workbench/contrib/browserView/electron-browser/overlayManager').BrowserOverlayManager;

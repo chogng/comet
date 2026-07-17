@@ -3,7 +3,7 @@ import test, { after, before } from 'node:test';
 import type { PdfSelection } from 'cs/editor/browser/pdf/pdfSelection';
 import { PdfSelectionController } from 'cs/editor/browser/pdf/pdfSelectionController';
 import type { PdfReviewerPageInfo } from 'cs/editor/browser/pdf/pdfReviewerTypes';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 
 let cleanupDomEnvironment: (() => void) | null = null;
 

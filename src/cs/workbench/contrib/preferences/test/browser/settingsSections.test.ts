@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { URI } from 'cs/base/common/uri';
 import { DisposableStore } from 'cs/base/common/lifecycle';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { getHoverService } from 'cs/platform/hover/browser/hoverService';
 import { locales } from 'language/locales';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';

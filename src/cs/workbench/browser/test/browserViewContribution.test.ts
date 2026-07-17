@@ -48,7 +48,7 @@ import { IQuickInputService, type IQuickInputService as IQuickInputServiceType }
 import { IStorageService, StorageScope, StorageTarget, type IStorageEntry, type IStorageService as IStorageServiceType } from 'cs/platform/storage/common/storage';
 import { IThemeService, type IThemeService as IThemeServiceType } from 'cs/platform/theme/common/themeService';
 import { ITelemetryService, TelemetryLevel, type ITelemetryService as ITelemetryServiceType } from 'cs/platform/telemetry/common/telemetry';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { EditorResolverService } from 'cs/workbench/services/editor/browser/editorResolverService';
 import { BrowserEditorInput } from 'cs/workbench/contrib/browserView/common/browserEditorInput';
 import {

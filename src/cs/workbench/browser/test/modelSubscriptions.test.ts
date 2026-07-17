@@ -16,7 +16,7 @@ import type {
 import { SyncDescriptor } from 'cs/platform/instantiation/common/descriptors';
 import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
 import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import {
 	ILibraryModel,
 	LibraryModel,

@@ -10,7 +10,7 @@ import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue, type ISettableObservable } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import {
 	commandService,
 	setCommandServiceInstantiationService,

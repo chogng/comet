@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { DisposableStore } from 'cs/base/common/lifecycle';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import type { IQuickInputButton, IQuickPickItem } from 'cs/platform/quickinput/common/quickInput';
 
 test('quick pick renders and dispatches header, separator, and item buttons', async () => {

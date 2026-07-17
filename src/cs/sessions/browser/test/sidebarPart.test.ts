@@ -11,7 +11,7 @@ import { Disposable, DisposableStore } from 'cs/base/common/lifecycle';
 import { observableValue } from 'cs/base/common/observable';
 import { URI } from 'cs/base/common/uri';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
-import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
+import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { IContextMenuService, IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
