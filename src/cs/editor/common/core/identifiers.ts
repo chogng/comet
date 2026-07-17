@@ -119,9 +119,17 @@ export function isCanonicalUuidV7(value: string): boolean {
 }
 
 export class UuidV7IdAllocator {
-	private previousBytes: Uint8Array | undefined;
+	readonly #nextSeed: () => IUuidV7Seed;
+	#previousBytes: Uint8Array | undefined;
 
-	constructor(private readonly source: IUuidV7SeedSource) {}
+	constructor(source: IUuidV7SeedSource) {
+		const nextSeed = source.nextSeed;
+		if (typeof nextSeed !== 'function') {
+			throw new TypeError('A UUIDv7 allocator requires a seed source.');
+		}
+		this.#nextSeed = () => Reflect.apply(nextSeed, source, []);
+		Object.freeze(this);
+	}
 
 	allocateRevisionId(): RevisionId {
 		return this.allocate(parseRevisionId);
@@ -150,11 +158,11 @@ export class UuidV7IdAllocator {
 	private allocate<TIdentifier>(
 		parse: (value: string) => IdentifierParseResult<TIdentifier>,
 	): TIdentifier {
-		const candidate = createUuidV7Bytes(this.source.nextSeed());
-		const bytes = this.previousBytes === undefined
+		const candidate = createUuidV7Bytes(this.#nextSeed());
+		const bytes = this.#previousBytes === undefined
 			? candidate
-			: ensureMonotonicUuidV7(candidate, this.previousBytes);
-		this.previousBytes = bytes;
+			: ensureMonotonicUuidV7(candidate, this.#previousBytes);
+		this.#previousBytes = bytes;
 
 		const parsed = parse(formatUuid(bytes));
 		if (parsed.type === 'invalid') {
@@ -163,6 +171,9 @@ export class UuidV7IdAllocator {
 		return parsed.value;
 	}
 }
+
+Object.freeze(UuidV7IdAllocator.prototype);
+Object.freeze(UuidV7IdAllocator);
 
 export function createUuidV7(seed: IUuidV7Seed): string {
 	return formatUuid(createUuidV7Bytes(seed));

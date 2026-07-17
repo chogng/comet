@@ -55,37 +55,38 @@ export interface IManuscriptIdentityService {
 /**
  * Keeps ambient clock and entropy access outside Editor common.
  */
-export class ManuscriptIdentityService implements IManuscriptIdentityService {
+class DefaultManuscriptIdentityService implements IManuscriptIdentityService {
 	declare readonly _serviceBrand: undefined;
 
-	private readonly allocator: UuidV7IdAllocator;
+	readonly #allocator: UuidV7IdAllocator;
 
 	constructor(source: IUuidV7SeedSource) {
-		this.allocator = new UuidV7IdAllocator(source);
+		this.#allocator = new UuidV7IdAllocator(source);
+		Object.freeze(this);
 	}
 
 	allocateRevisionId(): RevisionId {
-		return this.allocate(() => this.allocator.allocateRevisionId());
+		return this.allocate(() => this.#allocator.allocateRevisionId());
 	}
 
 	allocateTransactionId(): TransactionId {
-		return this.allocate(() => this.allocator.allocateTransactionId());
+		return this.allocate(() => this.#allocator.allocateTransactionId());
 	}
 
 	allocateOperationId(): OperationId {
-		return this.allocate(() => this.allocator.allocateOperationId());
+		return this.allocate(() => this.#allocator.allocateOperationId());
 	}
 
 	allocateNodeId(): NodeId {
-		return this.allocate(() => this.allocator.allocateNodeId());
+		return this.allocate(() => this.#allocator.allocateNodeId());
 	}
 
 	allocateEntityId(): EntityId {
-		return this.allocate(() => this.allocator.allocateEntityId());
+		return this.allocate(() => this.#allocator.allocateEntityId());
 	}
 
 	allocateProposalId(): ProposalId {
-		return this.allocate(() => this.allocator.allocateProposalId());
+		return this.allocate(() => this.#allocator.allocateProposalId());
 	}
 
 	private allocate<TIdentifier>(allocate: () => TIdentifier): TIdentifier {
@@ -114,4 +115,18 @@ export class ManuscriptIdentityService implements IManuscriptIdentityService {
 			throw error;
 		}
 	}
+}
+
+Object.defineProperty(DefaultManuscriptIdentityService.prototype, 'constructor', {
+	value: undefined,
+	writable: false,
+	configurable: false,
+});
+Object.freeze(DefaultManuscriptIdentityService.prototype);
+Object.freeze(DefaultManuscriptIdentityService);
+
+export function createManuscriptIdentityService(
+	source: IUuidV7SeedSource,
+): IManuscriptIdentityService {
+	return new DefaultManuscriptIdentityService(source);
 }

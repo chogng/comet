@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
 import {
-	BrowserManuscriptIdentityService,
+	createBrowserManuscriptIdentityService,
 	type IBrowserManuscriptIdentityEnvironment,
 } from 'cs/editor/browser/services/identityService';
 import {
@@ -18,7 +18,13 @@ import {
 	parseRevisionId,
 	parseTransactionId,
 } from 'cs/editor/common/core/identifiers';
-import { ManuscriptIdentityError } from 'cs/editor/common/services/identityService';
+import {
+	IManuscriptIdentityService,
+	ManuscriptIdentityError,
+} from 'cs/editor/common/services/identityService';
+import { getSingletonServiceDescriptors } from 'cs/platform/instantiation/common/extensions';
+import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
+import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';
 
 class TestIdentityEnvironment implements IBrowserManuscriptIdentityEnvironment {
 	private clockIndex = 0;
@@ -58,9 +64,16 @@ function environment(
 	);
 }
 
+class IdentityServiceConsumer {
+	constructor(
+		@IManuscriptIdentityService
+		readonly identityService: IManuscriptIdentityService,
+	) {}
+}
+
 suite('Manuscript identity service', () => {
 	test('allocates every Editor identity through one monotonic sequence', () => {
-		const service = new BrowserManuscriptIdentityService(environment(
+		const service = createBrowserManuscriptIdentityService(environment(
 			[10, 10, 9, 11, 11, 11],
 			[0, 0xff, 0xff, 0, 0, 0],
 		));
@@ -89,8 +102,89 @@ suite('Manuscript identity service', () => {
 		assert.equal(parseProposalId(values[5]!).type, 'valid');
 	});
 
+	test('seals service state, dispatch, and captured browser callbacks', () => {
+		const testEnvironment = environment(
+			[10, 11],
+			[0, 0],
+		);
+		const service = createBrowserManuscriptIdentityService(testEnvironment);
+		const browserPrototype = Object.getPrototypeOf(service) as object;
+
+		assert.equal(Object.isFrozen(service), true);
+		assert.equal(Object.isFrozen(browserPrototype), true);
+		assert.equal(
+			Reflect.getOwnPropertyDescriptor(
+				browserPrototype,
+				'constructor',
+			)?.value,
+			undefined,
+		);
+		assert.deepStrictEqual(Reflect.ownKeys(service), []);
+		assert.equal(
+			Reflect.set(
+				service,
+				'allocateOperationId',
+				() => '00000000-0000-7000-8000-000000000000',
+			),
+			false,
+		);
+		assert.equal(
+			Reflect.set(
+				browserPrototype,
+				'allocateOperationId',
+				() => '00000000-0000-7000-8000-000000000000',
+			),
+			false,
+		);
+		assert.equal(Reflect.set(testEnvironment, 'now', () => 0), true);
+		assert.equal(
+			Reflect.set(
+				testEnvironment,
+				'fillRandomBytes',
+				(target: Uint8Array) => target.fill(0xff),
+			),
+			true,
+		);
+
+		assert.equal(
+			service.allocateRevisionId(),
+			'00000000-000a-7000-8000-000000000000',
+		);
+		assert.equal(
+			service.allocateOperationId(),
+			'00000000-000b-7000-8000-000000000000',
+		);
+	});
+
+	test('constructs the final browser service through its DI descriptor', () => {
+		const registrations = getSingletonServiceDescriptors().filter(
+			([identifier]) => identifier === IManuscriptIdentityService,
+		);
+		assert.equal(registrations.length, 1);
+		const descriptor = registrations[0]?.[1];
+		assert.ok(descriptor);
+
+		const services = new ServiceCollection();
+		services.set(IManuscriptIdentityService, descriptor);
+		const instantiationService = new InstantiationService(services, true);
+		try {
+			const consumer = instantiationService.createInstance(
+				IdentityServiceConsumer,
+			);
+			assert.equal(Object.isFrozen(consumer.identityService), true);
+			assert.equal(
+				parseRevisionId(
+					consumer.identityService.allocateRevisionId(),
+				).type,
+				'valid',
+			);
+		} finally {
+			instantiationService.dispose();
+		}
+	});
+
 	test('fails closed when the browser clock is unavailable', () => {
-		const service = new BrowserManuscriptIdentityService(environment(
+		const service = createBrowserManuscriptIdentityService(environment(
 			[Number.NaN],
 			[0],
 		));
@@ -103,7 +197,7 @@ suite('Manuscript identity service', () => {
 	});
 
 	test('fails closed when cryptographic entropy is unavailable', () => {
-		const service = new BrowserManuscriptIdentityService({
+		const service = createBrowserManuscriptIdentityService({
 			now: () => 10,
 			fillRandomBytes: () => {
 				throw new ManuscriptIdentityError(
@@ -120,7 +214,7 @@ suite('Manuscript identity service', () => {
 	});
 
 	test('reports sequence exhaustion without wrapping or using another source', () => {
-		const service = new BrowserManuscriptIdentityService(environment(
+		const service = createBrowserManuscriptIdentityService(environment(
 			[10, 10],
 			[0xff, 0xff],
 		));

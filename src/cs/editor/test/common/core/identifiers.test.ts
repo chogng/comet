@@ -219,6 +219,49 @@ suite('Manuscript identifiers', () => {
 		);
 	});
 
+	test('keeps allocator state and seed dispatch runtime-private', () => {
+		const seedSource = source(
+			seed(10),
+			seed(11),
+		);
+		const allocator = new UuidV7IdAllocator(seedSource);
+		const allocatorPrototype = Object.getPrototypeOf(allocator) as object;
+
+		assert.equal(Object.isFrozen(allocator), true);
+		assert.equal(Object.isFrozen(allocatorPrototype), true);
+		assert.equal(Object.isFrozen(UuidV7IdAllocator), true);
+		assert.deepStrictEqual(Reflect.ownKeys(allocator), []);
+		assert.equal(
+			Reflect.set(
+				allocatorPrototype,
+				'allocateRevisionId',
+				() => '00000000-0000-7000-8000-000000000000',
+			),
+			false,
+		);
+		assert.equal(
+			Reflect.set(
+				allocator,
+				'allocateRevisionId',
+				() => '00000000-0000-7000-8000-000000000000',
+			),
+			false,
+		);
+		assert.equal(
+			Reflect.set(seedSource, 'nextSeed', () => seed(0)),
+			true,
+		);
+
+		assert.equal(
+			allocator.allocateRevisionId(),
+			'00000000-000a-7000-8000-000000000000',
+		);
+		assert.equal(
+			allocator.allocateOperationId(),
+			'00000000-000b-7000-8000-000000000000',
+		);
+	});
+
 	test('fails instead of wrapping an exhausted UUIDv7 random field', () => {
 		const maximumRandomField = new Uint8Array(10).fill(0xff);
 		const allocator = new UuidV7IdAllocator(source(
