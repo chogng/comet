@@ -36,9 +36,17 @@ import {
 } from 'cs/platform/agentHost/common/tools';
 import { CodexAgent } from 'cs/platform/agentHost/node/agents/codex/codexAgent';
 import type {
+	CodexClientRequestMethod,
+	CodexClientRequestParams,
+	CodexServerNotificationMethod,
+	CodexServerNotificationParams,
+	CodexServerRequestMethod,
+	CodexServerRequestParams,
 	ICodexAppServerClient,
 	ICodexAppServerFactory,
 } from 'cs/platform/agentHost/node/agents/codex/codexAppServer';
+import type { ClientNotification } from 'cs/platform/agentHost/node/agents/codex/protocol/generated/ClientNotification';
+import type { RequestId } from 'cs/platform/agentHost/node/agents/codex/protocol/generated/RequestId';
 import {
 	CODEX_AGENT_API_KEY_CREDENTIAL_PROVIDER,
 	CODEX_AGENT_API_KEY_CREDENTIAL_REFERENCE,
@@ -55,8 +63,15 @@ import {
 } from 'cs/platform/agentHost/node/agents/codex/codexAgentDefinition';
 import {
 	CODEX_AGENT_SDK_EXECUTABLE_TARGET,
+	CODEX_AGENT_SDK_PROTOCOL_TARGET,
+	CODEX_AGENT_SDK_VERSION,
 	createCodexAgentPackageProduct,
 } from 'cs/platform/agentHost/node/agents/codex/codexAgentPackage';
+import {
+	CODEX_GENERATED_PROTOCOL_FILE_COUNT,
+	CODEX_GENERATED_PROTOCOL_SDK_VERSION,
+	CODEX_GENERATED_PROTOCOL_SOURCE_DIGEST,
+} from 'cs/platform/agentHost/node/agents/codex/protocol/protocolMetadata';
 
 const packageRevision = createAgentPackageRevision('codex.app-server.test');
 const session = createAgentSessionId('codex-sdk-session');
@@ -136,7 +151,8 @@ class TestCodexClient implements ICodexAppServerClient {
 	private readonly exitEmitter = new Emitter<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>();
 	readonly onDidExit = this.exitEmitter.event;
 	private readonly notifications = new Map<string, (params: unknown) => void>();
-	private readonly serverRequests = new Map<string, (params: unknown) => Promise<unknown>>();
+	private readonly serverRequests = new Map<string, (id: string | number, params: unknown) => Promise<unknown>>();
+	private unhandledNotification: ((method: string, params: unknown) => void) | undefined;
 	readonly requests: Array<{ readonly method: string; readonly params: unknown }> = [];
 	readonly toolResults: unknown[] = [];
 	disposed = false;
@@ -160,7 +176,27 @@ class TestCodexClient implements ICodexAppServerClient {
 		this.releaseTurnStartResponse?.();
 	}
 
-	async request(method: string, params: unknown): Promise<unknown> {
+	emitNotification(method: string, params: unknown): void {
+		const handler = this.notifications.get(method);
+		if (handler !== undefined) {
+			handler(params);
+			return;
+		}
+		this.unhandledNotification?.(method, params);
+	}
+
+	requestFromServer(method: string, id: string | number, params: unknown): Promise<unknown> {
+		const handler = this.serverRequests.get(method);
+		if (handler === undefined) {
+			throw new Error(`Codex server request handler is missing: ${method}`);
+		}
+		return handler(id, params);
+	}
+
+	async request<TMethod extends CodexClientRequestMethod>(
+		method: TMethod,
+		params: CodexClientRequestParams<TMethod>,
+	): Promise<unknown> {
 		this.requests.push({ method, params });
 		switch (method) {
 			case 'model/list': return this.models;
@@ -180,7 +216,7 @@ class TestCodexClient implements ICodexAppServerClient {
 						if (handler === undefined) {
 							throw new Error('Codex Tool request handler is missing.');
 						}
-						this.toolResults.push(await handler({
+						this.toolResults.push(await handler('codex-tool-request-1', {
 							threadId: 'codex-thread-1',
 							turnId: 'codex-turn-1',
 							callId: 'codex-call-1',
@@ -198,23 +234,42 @@ class TestCodexClient implements ICodexAppServerClient {
 				});
 				return { turn: { id: 'codex-turn-1' } };
 			case 'turn/interrupt': return {};
+			case 'turn/steer': return {};
+			case 'thread/fork': return { thread: { id: 'codex-thread-forked' } };
 			case 'thread/delete': return {};
 			default: throw new Error(`Unexpected Codex request: ${method}`);
 		}
 	}
 
-	notify(): void {}
+	notify(_notification: ClientNotification): void {}
 
-	onNotification(method: string, handler: (params: unknown) => void): IDisposable {
-		this.notifications.set(method, handler);
+	onNotification<TMethod extends CodexServerNotificationMethod>(
+		method: TMethod,
+		handler: (params: CodexServerNotificationParams<TMethod>) => void,
+	): IDisposable {
+		this.notifications.set(method, params => handler(params as CodexServerNotificationParams<TMethod>));
 		return toDisposable(() => this.notifications.delete(method));
 	}
 
-	onRequest(method: string, handler: (params: unknown) => Promise<unknown>): IDisposable {
+	onUnhandledNotification(handler: (method: string, params: unknown) => void): IDisposable {
+		this.unhandledNotification = handler;
+		return toDisposable(() => {
+			if (this.unhandledNotification === handler) {
+				this.unhandledNotification = undefined;
+			}
+		});
+	}
+
+	onRequest<TMethod extends CodexServerRequestMethod>(
+		method: TMethod,
+		handler: (id: RequestId, params: CodexServerRequestParams<TMethod>) => Promise<unknown>,
+	): IDisposable {
 		if (this.serverRequests.has(method)) {
 			throw new Error(`Duplicate Codex server request handler: ${method}`);
 		}
-		this.serverRequests.set(method, handler);
+		this.serverRequests.set(method, (id, params) => (
+			handler(id, params as CodexServerRequestParams<TMethod>)
+		));
 		return toDisposable(() => this.serverRequests.delete(method));
 	}
 
@@ -222,6 +277,7 @@ class TestCodexClient implements ICodexAppServerClient {
 		this.disposed = true;
 		this.notifications.clear();
 		this.serverRequests.clear();
+		this.unhandledNotification = undefined;
 		this.exitEmitter.dispose();
 	}
 }
@@ -357,13 +413,19 @@ async function createCodexTurnFixture(factory: TestCodexFactory, suffix: string)
 	return { agent, request, fixtureSession, fixtureChat, fixtureTurn };
 }
 
-test('Codex product declares Host execution and one exact native SDK dependency', () => {
+test('Codex product binds Host execution to its exact native SDK and protocol dependencies', () => {
+	assert.equal(CODEX_AGENT_SDK_VERSION, CODEX_GENERATED_PROTOCOL_SDK_VERSION);
+	assert.ok(CODEX_GENERATED_PROTOCOL_FILE_COUNT > 0);
+	assert.match(CODEX_GENERATED_PROTOCOL_SOURCE_DIGEST, /^sha256:[0-9a-f]{64}$/);
+
 	const executableDigest = createAgentPackageContentDigest(`sha256:${'a'.repeat(64)}`);
+	const protocolDigest = createAgentPackageContentDigest(`sha256:${'c'.repeat(64)}`);
 	const product = createCodexAgentPackageProduct(
 		{ operatingSystem: 'darwin', architecture: 'arm64' },
 		{
 			contentDigest: createAgentPackageContentDigest(`sha256:${'b'.repeat(64)}`),
 			executable: { source: 'file:///verified/codex', contentDigest: executableDigest },
+			protocol: { source: 'file:///verified/codex-protocol.json', contentDigest: protocolDigest },
 		},
 		'/tmp/comet-codex-product-state',
 	);
@@ -379,6 +441,11 @@ test('Codex product declares Host execution and one exact native SDK dependency'
 		target: CODEX_AGENT_SDK_EXECUTABLE_TARGET,
 		digest: executableDigest,
 		executable: true,
+		immutable: true,
+	}, {
+		target: CODEX_AGENT_SDK_PROTOCOL_TARGET,
+		digest: protocolDigest,
+		executable: false,
 		immutable: true,
 	}]);
 	assert.deepEqual(product.credentialBindings, [{
@@ -615,6 +682,252 @@ test('Codex Agent interrupts the exact app-server Turn when cancellation races t
 		const terminals = actions.filter(action => action.kind === 'turnTerminal');
 		assert.equal(terminals.length, 1);
 		assert.equal(terminals[0].kind === 'turnTerminal' ? terminals[0].state : undefined, 'cancelled');
+	} finally {
+		listener.dispose();
+		agent.dispose();
+	}
+});
+
+test('Codex Agent maps native behavior and returns exact Host interactions to app-server requests', async () => {
+	const factory = new TestCodexFactory(modelPage, true);
+	const { agent, request, fixtureSession, fixtureChat, fixtureTurn } = await createCodexTurnFixture(factory, 'native-mapping');
+	const actions: IAgentAction[] = [];
+	const listener = agent.onDidEmitAction(action => actions.push(action));
+	try {
+		const send = agent.chats.send(request);
+		const client = await factory.waitForAuthenticatedClient();
+		await client.waitForTurnStart();
+
+		client.emitNotification('item/started', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			startedAtMs: 1,
+			item: {
+				type: 'commandExecution',
+				id: 'native-command-1',
+				command: 'npm test',
+				cwd: '/tmp/comet-codex-native-mapping',
+				processId: 'process-1',
+				source: 'agent',
+				status: 'inProgress',
+				commandActions: [],
+				aggregatedOutput: null,
+				exitCode: null,
+				durationMs: null,
+			},
+		});
+		client.emitNotification('item/commandExecution/outputDelta', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			itemId: 'native-command-1',
+			delta: 'tests passed\n',
+		});
+		client.emitNotification('item/completed', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			completedAtMs: 2,
+			item: {
+				type: 'commandExecution',
+				id: 'native-command-1',
+				command: 'npm test',
+				cwd: '/tmp/comet-codex-native-mapping',
+				processId: 'process-1',
+				source: 'agent',
+				status: 'completed',
+				commandActions: [],
+				aggregatedOutput: 'tests passed\n',
+				exitCode: 0,
+				durationMs: 10,
+			},
+		});
+		client.emitNotification('turn/plan/updated', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			explanation: 'Verify the native integration',
+			plan: [
+				{ step: 'Run tests', status: 'completed' },
+				{ step: 'Report result', status: 'inProgress' },
+			],
+		});
+		client.emitNotification('thread/tokenUsage/updated', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			tokenUsage: {
+				total: { totalTokens: 20, inputTokens: 12, cachedInputTokens: 2, outputTokens: 8, reasoningOutputTokens: 3 },
+				last: { totalTokens: 20, inputTokens: 12, cachedInputTokens: 2, outputTokens: 8, reasoningOutputTokens: 3 },
+				modelContextWindow: 128_000,
+			},
+		});
+		for (const [index, tool] of ['spawnAgent', 'sendInput', 'resumeAgent', 'wait', 'closeAgent'].entries()) {
+			client.emitNotification('item/started', {
+				threadId: 'codex-thread-1',
+				turnId: 'codex-turn-1',
+				startedAtMs: 4 + index,
+				item: {
+					type: 'collabAgentToolCall',
+					id: `native-collaboration-${index}`,
+					tool,
+					receiverThreadIds: [`receiver-${index}`],
+					status: 'inProgress',
+				},
+			});
+		}
+
+		const approval = client.requestFromServer('item/commandExecution/requestApproval', 'approval-1', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			itemId: 'native-command-2',
+			startedAtMs: 3,
+			command: 'git status',
+			cwd: '/tmp/comet-codex-native-mapping',
+			availableDecisions: ['accept', 'decline', 'cancel'],
+		});
+		const approvalAction = actions.find(action => action.kind === 'interactionRequested');
+		assert.equal(approvalAction?.kind, 'interactionRequested');
+		if (approvalAction?.kind !== 'interactionRequested') {
+			throw new Error('Codex approval interaction was not emitted.');
+		}
+		await agent.interactions.respond({
+			...operation('respond-codex-approval', 'b'),
+			session: fixtureSession,
+			chat: fixtureChat,
+			turn: fixtureTurn,
+			interaction: approvalAction.request.id,
+			response: { kind: 'selected', option: 'decision-0' },
+		});
+		assert.deepEqual(await approval, { decision: 'accept' });
+
+		const input = client.requestFromServer('item/tool/requestUserInput', 'input-1', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			itemId: 'native-input-1',
+			autoResolutionMs: null,
+			questions: [{
+				id: 'choice',
+				header: 'Mode',
+				question: 'Choose a mode',
+				isOther: false,
+				isSecret: false,
+				options: [
+					{ label: 'Safe', description: 'Use safe mode.' },
+					{ label: 'Fast', description: 'Use fast mode.' },
+				],
+			}],
+		});
+		const inputAction = actions.filter(action => action.kind === 'interactionRequested').at(-1);
+		assert.equal(inputAction?.kind, 'interactionRequested');
+		if (inputAction?.kind !== 'interactionRequested') {
+			throw new Error('Codex input interaction was not emitted.');
+		}
+		await agent.interactions.respond({
+			...operation('respond-codex-input', 'c'),
+			session: fixtureSession,
+			chat: fixtureChat,
+			turn: fixtureTurn,
+			interaction: inputAction.request.id,
+			response: { kind: 'submitted', value: { choice: ['Safe'] } },
+		});
+		assert.deepEqual(await input, { answers: { choice: { answers: ['Safe'] } } });
+
+		await agent.chats.steer({
+			...operation('steer-codex-turn', 'd'),
+			session: fixtureSession,
+			chat: fixtureChat,
+			turn: fixtureTurn,
+			message: 'Include the native behavior summary.',
+		});
+		assert.deepEqual(client.requests.at(-1), {
+			method: 'turn/steer',
+			params: {
+				threadId: 'codex-thread-1',
+				expectedTurnId: 'codex-turn-1',
+				input: [{ type: 'text', text: 'Include the native behavior summary.', text_elements: [] }],
+			},
+		});
+
+		client.releaseTurnStart();
+		await send;
+		const forkedChat = createAgentChatId('codex-sdk-chat-native-mapping-fork');
+		const forked = await agent.chats.fork({
+			...operation('fork-codex-chat', 'e'),
+			session: fixtureSession,
+			chat: forkedChat,
+			source: { chat: fixtureChat, turn: fixtureTurn },
+		});
+		assert.equal(forked.chat, forkedChat);
+		assert.equal(client.requests.at(-1)?.method, 'thread/fork');
+		assert.deepEqual(client.requests.at(-1)?.params, {
+			threadId: 'codex-thread-1',
+			excludeTurns: true,
+		});
+
+		const behaviors = actions.flatMap(action => (
+			action.kind === 'turnProgress' && action.progress.kind === 'behavior'
+				? [action.progress.behavior]
+				: []
+		));
+		assert.deepEqual(behaviors.map(behavior => behavior.kind), [
+			'nativeTool',
+			'terminal',
+			'nativeTool',
+			'plan',
+			'usage',
+			'context',
+			'task',
+			'task',
+			'task',
+			'task',
+			'task',
+			'text',
+		]);
+		assert.equal(agent.descriptor.get().capabilities.supportsForkChat, true);
+		assert.equal(agent.descriptor.get().capabilities.supportsSteering, true);
+	} finally {
+		listener.dispose();
+		agent.dispose();
+	}
+});
+
+test('Codex Agent cancels the exact pending native interaction before terminal Turn state', async () => {
+	const factory = new TestCodexFactory(modelPage, true);
+	const { agent, request, fixtureSession, fixtureChat, fixtureTurn } = await createCodexTurnFixture(factory, 'interaction-cancel');
+	const actions: IAgentAction[] = [];
+	const listener = agent.onDidEmitAction(action => actions.push(action));
+	try {
+		const send = agent.chats.send(request);
+		const client = await factory.waitForAuthenticatedClient();
+		await client.waitForTurnStart();
+		const approval = client.requestFromServer('item/fileChange/requestApproval', 'file-approval-1', {
+			threadId: 'codex-thread-1',
+			turnId: 'codex-turn-1',
+			itemId: 'native-file-change-1',
+			startedAtMs: 1,
+			reason: 'Apply the requested patch.',
+			grantRoot: null,
+		});
+
+		await agent.chats.cancel({
+			...operation('cancel-codex-interaction-turn', 'f'),
+			session: fixtureSession,
+			chat: fixtureChat,
+			turn: fixtureTurn,
+		});
+		assert.deepEqual(await approval, { decision: 'cancel' });
+		client.releaseTurnStart();
+		await send;
+
+		assert.deepEqual(actions.map(action => action.kind), [
+			'turnProgress',
+			'chatResumeStateChanged',
+			'interactionRequested',
+			'interactionCompleted',
+			'turnTerminal',
+		]);
+		const completed = actions[3];
+		assert.deepEqual(
+			completed.kind === 'interactionCompleted' ? completed.response : undefined,
+			{ kind: 'cancelled' },
+		);
 	} finally {
 		listener.dispose();
 		agent.dispose();

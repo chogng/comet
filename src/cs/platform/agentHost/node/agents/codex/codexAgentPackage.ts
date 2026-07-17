@@ -31,10 +31,12 @@ import {
 } from './codexAgentDefinition.js';
 import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
 import type { ILocalHostAgentPackageProduct } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
+import { CODEX_GENERATED_PROTOCOL_SDK_VERSION } from './protocol/protocolMetadata.js';
 
-export const CODEX_AGENT_SDK_VERSION = '0.142.0';
+export const CODEX_AGENT_SDK_VERSION = CODEX_GENERATED_PROTOCOL_SDK_VERSION;
 export const CODEX_AGENT_SDK_EXECUTABLE_TARGET = 'vendor/codex-sdk/codex';
 export const CODEX_AGENT_SDK_EXECUTABLE_WINDOWS_TARGET = 'vendor/codex-sdk/codex.exe';
+export const CODEX_AGENT_SDK_PROTOCOL_TARGET = 'vendor/codex-sdk/protocol.json';
 
 export interface ICodexAgentPackageArtifact {
 	readonly source: string;
@@ -44,6 +46,7 @@ export interface ICodexAgentPackageArtifact {
 export interface ICodexAgentPackageArtifacts {
 	readonly contentDigest: AgentPackageContentDigest;
 	readonly executable: ICodexAgentPackageArtifact;
+	readonly protocol: ICodexAgentPackageArtifact;
 }
 
 export interface ICodexAgentPackageProduct extends ILocalHostAgentPackageProduct {
@@ -71,14 +74,24 @@ export function createCodexAgentPackageProduct(
 		`codex.app-server.${CODEX_AGENT_SDK_VERSION}.${target.operatingSystem}.${target.architecture}`,
 	);
 	const executableTarget = codexAgentSdkExecutableTarget(target);
-	const dependencies = Object.freeze([Object.freeze({
-		id: 'codex-sdk-executable',
-		source: artifacts.executable.source,
-		target: executableTarget,
-		digest: artifacts.executable.contentDigest,
-		license: 'Apache-2.0',
-		executable: true,
-	})]);
+	const dependencies = Object.freeze([
+		Object.freeze({
+			id: 'codex-sdk-executable',
+			source: artifacts.executable.source,
+			target: executableTarget,
+			digest: artifacts.executable.contentDigest,
+			license: 'Apache-2.0',
+			executable: true,
+		}),
+		Object.freeze({
+			id: 'codex-app-server-protocol',
+			source: artifacts.protocol.source,
+			target: CODEX_AGENT_SDK_PROTOCOL_TARGET,
+			digest: artifacts.protocol.contentDigest,
+			license: 'Apache-2.0',
+			executable: false,
+		}),
+	]);
 	const privileges = Object.freeze([
 		Object.freeze({ kind: 'network' as const, value: CODEX_AGENT_NETWORK_PRIVILEGE }),
 		Object.freeze({ kind: 'network' as const, value: CODEX_AGENT_CATALOG_NETWORK_PRIVILEGE }),

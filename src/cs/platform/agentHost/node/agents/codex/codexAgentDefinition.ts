@@ -108,7 +108,7 @@ export const CODEX_AGENT_SESSION_CONFIGURATION_SCHEMA = validateAndFreezeAgentCo
 	revision: createAgentConfigurationSchemaRevision('codex.app-server.session.v1'),
 });
 
-export const CODEX_AGENT_CAPABILITY_REVISION = createAgentCapabilityRevision('codex.app-server.capabilities.v1');
+export const CODEX_AGENT_CAPABILITY_REVISION = createAgentCapabilityRevision('codex.app-server.capabilities.v2');
 
 export function createCodexAgentRegistrationRevision(descriptorRevision: AgentDescriptorRevision) {
 	return createAgentRuntimeRegistrationRevision(`codex.app-server.host.v1.${descriptorRevision}`);
@@ -197,9 +197,9 @@ export function createCodexAgentDescriptor(
 			supportsEmptySession: true,
 			supportsCreateChat: true,
 			maximumChatCount: 64,
-			supportsForkChat: false,
+			supportsForkChat: true,
 			supportsQueue: false,
-			supportsSteering: false,
+			supportsSteering: true,
 			supportsCancellation: true,
 			supportsReleaseSession: true,
 			supportsReleaseChat: true,
@@ -245,7 +245,7 @@ export function createCodexAgentSessionType(descriptor: IAgentDescriptor): IAgen
 			supportsInitialTurn: true,
 			supportsCreateChat: true,
 			maximumChatCount: 64,
-			supportsForkChat: false,
+			supportsForkChat: true,
 		}),
 		models: Object.freeze(descriptor.models.map(model => model.id)),
 		executionPresets: Object.freeze([]),

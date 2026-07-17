@@ -9,6 +9,11 @@ import { isAbsolute } from 'node:path';
 
 import { Emitter, type Event } from 'cs/base/common/event';
 import { Disposable, toDisposable, type IDisposable } from 'cs/base/common/lifecycle';
+import type { ClientNotification } from './protocol/generated/ClientNotification.js';
+import type { ClientRequest } from './protocol/generated/ClientRequest.js';
+import type { RequestId } from './protocol/generated/RequestId.js';
+import type { ServerNotification } from './protocol/generated/ServerNotification.js';
+import type { ServerRequest } from './protocol/generated/ServerRequest.js';
 
 interface IPendingRequest {
 	resolve(value: unknown): void;
@@ -21,12 +26,35 @@ interface IWireError {
 	readonly data?: unknown;
 }
 
+type MethodOf<TMessage> = TMessage extends { readonly method: infer TMethod } ? TMethod : never;
+type ParamsOf<TMessage, TMethod> = TMessage extends {
+	readonly method: TMethod;
+	readonly params: infer TParams;
+} ? TParams : never;
+
+export type CodexClientRequestMethod = MethodOf<ClientRequest>;
+export type CodexServerNotificationMethod = MethodOf<ServerNotification>;
+export type CodexServerRequestMethod = MethodOf<ServerRequest>;
+export type CodexClientRequestParams<TMethod extends CodexClientRequestMethod> = ParamsOf<ClientRequest, TMethod>;
+export type CodexServerNotificationParams<TMethod extends CodexServerNotificationMethod> = ParamsOf<ServerNotification, TMethod>;
+export type CodexServerRequestParams<TMethod extends CodexServerRequestMethod> = ParamsOf<ServerRequest, TMethod>;
+
 export interface ICodexAppServerClient extends IDisposable {
 	readonly onDidExit: Event<{ readonly code: number | null; readonly signal: NodeJS.Signals | null }>;
-	request(method: string, params: unknown): Promise<unknown>;
-	notify(method: string, params: unknown): void;
-	onNotification(method: string, handler: (params: unknown) => void): IDisposable;
-	onRequest(method: string, handler: (params: unknown) => Promise<unknown>): IDisposable;
+	request<TMethod extends CodexClientRequestMethod>(
+		method: TMethod,
+		params: CodexClientRequestParams<TMethod>,
+	): Promise<unknown>;
+	notify(notification: ClientNotification): void;
+	onNotification<TMethod extends CodexServerNotificationMethod>(
+		method: TMethod,
+		handler: (params: CodexServerNotificationParams<TMethod>) => void,
+	): IDisposable;
+	onUnhandledNotification(handler: (method: string, params: unknown) => void): IDisposable;
+	onRequest<TMethod extends CodexServerRequestMethod>(
+		method: TMethod,
+		handler: (id: RequestId, params: CodexServerRequestParams<TMethod>) => Promise<unknown>,
+	): IDisposable;
 }
 
 export interface ICodexAppServerFactory {
@@ -45,7 +73,8 @@ class CodexAppServerClient extends Disposable implements ICodexAppServerClient {
 
 	private readonly pending = new Map<number, IPendingRequest>();
 	private readonly notificationHandlers = new Map<string, (params: unknown) => void>();
-	private readonly requestHandlers = new Map<string, (params: unknown) => Promise<unknown>>();
+	private readonly requestHandlers = new Map<string, (id: RequestId, params: unknown) => Promise<unknown>>();
+	private unhandledNotificationHandler: ((method: string, params: unknown) => void) | undefined;
 	private nextRequest = 1;
 	private buffer = '';
 	private exited = false;
@@ -63,7 +92,10 @@ class CodexAppServerClient extends Disposable implements ICodexAppServerClient {
 		this._register(toDisposable(() => child.stdin.off('error', stdinErrorListener)));
 	}
 
-	request(method: string, params: unknown): Promise<unknown> {
+	request<TMethod extends CodexClientRequestMethod>(
+		method: TMethod,
+		params: CodexClientRequestParams<TMethod>,
+	): Promise<unknown> {
 		if (this.exited) {
 			return Promise.reject(new Error('Codex app-server has exited.'));
 		}
@@ -74,25 +106,46 @@ class CodexAppServerClient extends Disposable implements ICodexAppServerClient {
 		});
 	}
 
-	notify(method: string, params: unknown): void {
+	notify(notification: ClientNotification): void {
 		if (!this.exited) {
-			this.write({ method, params });
+			this.write(notification);
 		}
 	}
 
-	onNotification(method: string, handler: (params: unknown) => void): IDisposable {
+	onNotification<TMethod extends CodexServerNotificationMethod>(
+		method: TMethod,
+		handler: (params: CodexServerNotificationParams<TMethod>) => void,
+	): IDisposable {
 		if (this.notificationHandlers.has(method)) {
 			throw new Error(`Codex app-server notification '${method}' already has a handler.`);
 		}
-		this.notificationHandlers.set(method, handler);
+		this.notificationHandlers.set(method, params => handler(params as CodexServerNotificationParams<TMethod>));
 		return toDisposable(() => this.notificationHandlers.delete(method));
 	}
 
-	onRequest(method: string, handler: (params: unknown) => Promise<unknown>): IDisposable {
+	onUnhandledNotification(handler: (method: string, params: unknown) => void): IDisposable {
+		if (this.unhandledNotificationHandler !== undefined) {
+			throw new Error('Codex app-server already has an unhandled notification handler.');
+		}
+		this.unhandledNotificationHandler = handler;
+		return toDisposable(() => {
+			if (this.unhandledNotificationHandler === handler) {
+				this.unhandledNotificationHandler = undefined;
+			}
+		});
+	}
+
+	onRequest<TMethod extends CodexServerRequestMethod>(
+		method: TMethod,
+		handler: (id: RequestId, params: CodexServerRequestParams<TMethod>) => Promise<unknown>,
+	): IDisposable {
 		if (this.requestHandlers.has(method)) {
 			throw new Error(`Codex app-server request '${method}' already has a handler.`);
 		}
-		this.requestHandlers.set(method, handler);
+		this.requestHandlers.set(
+			method,
+			(id, params) => handler(id, params as CodexServerRequestParams<TMethod>),
+		);
 		return toDisposable(() => this.requestHandlers.delete(method));
 	}
 
@@ -158,17 +211,25 @@ class CodexAppServerClient extends Disposable implements ICodexAppServerClient {
 			} catch {
 				this.failProtocol(`Codex app-server notification '${record.method}' is invalid.`);
 			}
+		} else if (this.unhandledNotificationHandler !== undefined) {
+			try {
+				this.unhandledNotificationHandler(record.method, record.params);
+			} catch {
+				this.failProtocol(`Codex app-server notification '${record.method}' is unsupported.`);
+			}
+		} else {
+			this.failProtocol(`Codex app-server notification '${record.method}' has no handler.`);
 		}
 	}
 
-	private async dispatchRequest(id: string | number, method: string, params: unknown): Promise<void> {
+	private async dispatchRequest(id: RequestId, method: string, params: unknown): Promise<void> {
 		const handler = this.requestHandlers.get(method);
 		if (handler === undefined) {
 			this.write({ id, error: { code: -32601, message: `Method not found: ${method}` } });
 			return;
 		}
 		try {
-			this.write({ id, result: await handler(params) });
+			this.write({ id, result: await handler(id, params) });
 		} catch (error) {
 			this.write({
 				id,
@@ -272,11 +333,11 @@ export class CodexAppServerProcessFactory implements ICodexAppServerFactory {
 		child.stderr.resume();
 		const client = new CodexAppServerClient(child);
 		try {
-			await client.request('initialize', {
-				clientInfo: { name: 'comet', title: 'Comet', version: '0.1.0' },
-				capabilities: { experimentalApi: true },
-			});
-			client.notify('initialized', {});
+				await client.request('initialize', {
+					clientInfo: { name: 'comet', title: 'Comet', version: '0.1.0' },
+					capabilities: { experimentalApi: true, requestAttestation: false },
+				});
+				client.notify({ method: 'initialized' });
 			return client;
 		} catch (error) {
 			client.dispose();

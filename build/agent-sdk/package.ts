@@ -6,6 +6,7 @@ import path from 'node:path';
 import * as esbuild from 'esbuild';
 
 import { projectRoot, resolveProjectPath } from '../lib/util.ts';
+import { verifyCodexProtocolSources } from './codexProtocol.ts';
 
 const agentSdkRoot = resolveProjectPath('build', 'agent-sdk', 'agents');
 const outputRoot = resolveProjectPath('dist-agent-sdk');
@@ -127,6 +128,10 @@ async function packageCodexAgentSdk(): Promise<void> {
 		throw new Error('Codex SDK build must use an exact version pin.');
 	}
 	await runNpmCi(codexPackageRoot, 'Codex');
+	const protocol = await verifyCodexProtocolSources();
+	if (protocol.sdkVersion !== version) {
+		throw new Error('Codex SDK artifact version does not match its generated protocol.');
+	}
 	const target = sdkTarget('Codex');
 	const executableName = process.platform === 'win32' ? 'codex.exe' : 'codex';
 	const source = path.join(
@@ -150,11 +155,20 @@ async function packageCodexAgentSdk(): Promise<void> {
 	await fs.mkdir(targetRoot, { recursive: true });
 	await fs.writeFile(destination, bytes, { mode: 0o500 });
 	await fs.chmod(destination, 0o500);
+	const protocolManifestBytes = Buffer.from(`${JSON.stringify({
+		schema: 1,
+		name: 'codex-app-server-protocol',
+		sdkVersion: protocol.sdkVersion,
+		sourceDigest: protocol.sourceDigest,
+		fileCount: protocol.fileCount,
+	}, null, 2)}\n`);
+	await fs.writeFile(path.join(targetRoot, 'protocol.json'), protocolManifestBytes);
 	await fs.writeFile(path.join(targetRoot, 'artifact.json'), `${JSON.stringify({
 		name: '@openai/codex',
 		version,
 		target,
 		executableSha256: createHash('sha256').update(bytes).digest('hex'),
+		protocolManifestSha256: createHash('sha256').update(protocolManifestBytes).digest('hex'),
 	}, null, 2)}\n`);
 	console.log(`[agent-sdk] packaged Codex ${version} for ${target} from ${path.relative(projectRoot, source)}`);
 }
