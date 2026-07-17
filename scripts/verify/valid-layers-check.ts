@@ -121,6 +121,21 @@ function isLegacyEditorTextTarget(target: string): boolean {
 		|| target === 'cs/editor/common/writingEditorDocument';
 }
 
+function isAllowedManuscriptAuthorityImporter(relativeFile: string, target: string): boolean {
+	switch (target) {
+		case 'cs/editor/common/model/operationReducer':
+			return relativeFile === 'editor/common/model/manuscriptDraft.ts'
+				|| relativeFile === 'editor/common/model/revisionMerkleUpdater.ts';
+		case 'cs/editor/common/model/revisionMerkleUpdater':
+			return relativeFile === 'editor/common/model/manuscriptDraft.ts';
+		case 'cs/editor/common/model/revisionMerkleStateInternal':
+			return relativeFile === 'editor/common/model/revisionMerkleState.ts'
+				|| relativeFile === 'editor/common/model/revisionMerkleUpdater.ts';
+		default:
+			return true;
+	}
+}
+
 export function findLayerViolations(options: ILayerCheckOptions): readonly string[] {
 	const sourceRoot = path.resolve(options.sourceRoot);
 	const compilerOptions = options.compilerOptions;
@@ -203,6 +218,13 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 					relativeFile,
 					imported,
 					'the native Editor pipeline must not import the legacy ProseMirror surface',
+				);
+			}
+			if (!isAllowedManuscriptAuthorityImporter(relativeFile, target)) {
+				report(
+					relativeFile,
+					imported,
+					'only manuscript authority owners may import reducer and Merkle internals',
 				);
 			}
 			if (relativeFile.startsWith('sessions/common/')
