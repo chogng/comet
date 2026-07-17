@@ -45,13 +45,15 @@ Execution kind is explicit:
 
 | `manifest.execution.kind` | Meaning |
 |---|---|
-| `host` | Product-authorized factory constructs an `IAgent` inside Agent Host Node |
+| `host` | A product-authorized App-compiled factory constructs an `IAgent` inside Agent Host Node |
 | `connected` | A genuinely external process negotiates the Agent Runtime Protocol |
 
-Product-maintained Claude and Codex SDK integrations use `host`. Their Agent
-implementations live under `src/cs/platform/agentHost/node/agents/<agent>/`.
-They do not add provider runtime processes. The connected form remains for an
-implementation whose process boundary is part of its actual design.
+Product-maintained SDK integrations use `host`. Their behavior mappings and
+generated protocol types compile with the App, while each installed package
+contains the exact SDK modules, executables, native protocol receipts, helpers,
+and native assets consumed by that mapping. They do not add provider runtime
+processes. The connected form remains for an implementation whose process
+boundary is part of its actual design.
 
 Installing Claude on the local Host does not install it on a Remote Server or
 Remote Tunnel Host. Each Host owns its own package state.
@@ -152,15 +154,15 @@ A product-maintained SDK package has no Agent Runtime Protocol entry point:
 execution: Object.freeze({ kind: 'host' }),
 dependencies: Object.freeze([
 	Object.freeze({
-		id: 'claude.agent-sdk-module',
-		target: 'vendor/claude-agent-sdk/sdk.js',
-		executable: false,
+		id: 'codex-sdk-executable',
+		target: 'vendor/codex-sdk/codex',
+		executable: true,
 		// source, digest, and license omitted here only for readability
 	}),
 	Object.freeze({
-		id: 'claude.agent-sdk-executable',
-		target: 'vendor/claude-agent-sdk/claude',
-		executable: true,
+		id: 'codex-app-server-protocol',
+		target: 'vendor/codex-sdk/protocol.json',
+		executable: false,
 		// source, digest, and license omitted here only for readability
 	}),
 ]),
@@ -323,11 +325,13 @@ src/cs/platform/agentHost/
 └── node/
     ├── agents/
     │   ├── comet/
-    │   └── claude/
-    │       ├── claudeAgent.ts
-    │       ├── claudeAgentDefinition.ts
-    │       ├── claudeAgentPackage.ts
-    │       └── claudeAgentSessionStore.ts
+    │   ├── claude/
+    │   └── codex/
+    │       ├── codexAgent.ts
+    │       ├── codexAgentDefinition.ts
+    │       ├── codexAgentPackage.ts
+    │       ├── codexAppServer.ts
+    │       └── protocol/
     ├── packages/
     │   ├── agentPackageActivationRegistry.ts
     │   ├── agentPackageLifecycle.ts

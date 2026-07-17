@@ -33,12 +33,14 @@ binding, target-backed Tools, or lazy Feature operations.
   scope. Installable catalog entries are not installed packages or Agent
   registrations. Session creation, restore, send, model selection, and Agent
   discovery never install or download a package. Product-maintained SDK
-  packages use direct Host Agents; genuinely external packages use connected
-  Agents. The manifest declares that execution kind explicitly.
-- Treat one installed revision as the complete verified executable dependency
-  closure. Package installation or update must stage every SDK, module, helper,
-  and native asset before activation. Session, Turn, authentication, and
-  Agent-activation paths never download or replace executable dependencies.
+  packages use App-compiled direct Host Agents; genuinely external packages use
+  connected Agents. The manifest declares that execution kind explicitly.
+- Treat one installed revision as the complete verified SDK dependency
+  closure. Package installation or update must stage every SDK module,
+  executable, native protocol receipt, helper, and native asset before
+  activation. SDK-specific behavior mappings and generated protocol types
+  compile with the App. Session, Turn, authentication, and Agent-activation
+  paths never download or replace executable dependencies.
 - Launch connected Agents under the exact sandbox and authority derived
   from their verified manifest and Host policy. They receive no ambient Host
   service objects or credential environment; filesystem, network, secret, and

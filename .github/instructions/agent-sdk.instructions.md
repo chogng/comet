@@ -39,9 +39,11 @@ is not a template for reconstructing Claude, Codex, or another SDK harness.
 ```text
 build/agent-sdk/agents/<agent>/{package.json,package-lock.json}
     → target SDK module and/or executable artifacts
+        + generated native protocol receipt when applicable
         → verified package offering
             → generic install/update/uninstall
                 → Agent Host Node resolves the installed SDK bindings
+                    → App-compiled SDK behavior mapping
                     → <Agent> implements IAgent directly
                         → canonical descriptor, models, config, Sessions, Chats
                             → Host snapshot
@@ -179,15 +181,16 @@ and its target executable:
 }
 ```
 
-Codex uses the installed native executable as its complete SDK dependency. Its
-artifact receipt is correspondingly smaller:
+Codex binds its native executable to the exact generated app-server protocol
+receipt used by the App-compiled behavior mapping:
 
 ```json
 {
   "name": "@openai/codex",
   "version": "0.142.0",
   "target": "darwin-arm64",
-  "executableSha256": "<sha256>"
+  "executableSha256": "<sha256>",
+  "protocolManifestSha256": "<sha256>"
 }
 ```
 
@@ -202,30 +205,23 @@ use Host execution:
 ```typescript
 const manifest: IAgentPackageManifest = Object.freeze({
 	schema: 1,
-	packageId: CLAUDE_AGENT_PACKAGE_ID,
+	packageId: CODEX_AGENT_PACKAGE_ID,
 	revision,
 	contentDigest,
 	publisher: 'Comet',
 	target: Object.freeze({ operatingSystem: 'darwin', architecture: 'arm64' }),
 	execution: Object.freeze({ kind: 'host' }),
-	agentIds: Object.freeze([CLAUDE_AGENT_ID]),
+	agentIds: Object.freeze([CODEX_AGENT_ID]),
 	dependencies: Object.freeze([
 		Object.freeze({
-			id: 'claude.agent-sdk-module',
-			source: 'file:///verified/sdk.js',
-			target: 'vendor/claude-agent-sdk/sdk.js',
-			digest: moduleDigest,
-			license: 'Anthropic Commercial Terms',
-			executable: false,
-		}),
-		Object.freeze({
-			id: 'claude.agent-sdk-executable',
-			source: 'file:///verified/claude',
-			target: 'vendor/claude-agent-sdk/claude',
+			id: 'codex-sdk-executable',
+			source: 'file:///verified/codex',
+			target: 'vendor/codex-sdk/codex',
 			digest: executableDigest,
-			license: 'Anthropic Commercial Terms',
+			license: 'Apache-2.0',
 			executable: true,
 		}),
+		// The exact generated protocol receipt is also required.
 	]),
 	privileges,
 });
@@ -241,8 +237,8 @@ execution: Object.freeze({
 ```
 
 Do not represent a provider SDK executable as a connected Agent entry point.
-The Claude executable is a private SDK dependency invoked by `ClaudeAgent`; it
-is not a Comet Agent Runtime Protocol endpoint.
+The provider executable is a private SDK dependency invoked by the
+App-compiled direct Agent; it is not a Comet Agent Runtime Protocol endpoint.
 
 ## Install, activate, and uninstall
 
