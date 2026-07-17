@@ -34,6 +34,9 @@ import type {
 	ReferenceSnapshot,
 } from 'cs/editor/common/model/academicGraph';
 import type { ActorRef } from 'cs/editor/common/model/actor';
+import {
+	manuscriptStructuralMerkleSequenceAlgorithm,
+} from 'cs/editor/common/model/merkleVector';
 import type {
 	BodyNode,
 	DocumentNode,
@@ -872,7 +875,14 @@ suite('Document Snapshot Merkle state', () => {
 			recordHashCalls(calls),
 		);
 
-		assert.equal(calls.length, 25);
+		assert.equal(calls.length, 39);
+		assert.equal(
+			calls.filter(call =>
+				canonicalRecord(call.payload)['algorithm']
+				=== manuscriptStructuralMerkleSequenceAlgorithm,
+			).length,
+			21,
+		);
 		assert.equal(state.nodeCount, 4);
 		assert.equal(state.entityCount, 3);
 		assert.equal(state.relationCount, 1);
@@ -1137,13 +1147,13 @@ suite('Document Snapshot Merkle state', () => {
 			authorHash: authorCall.hash,
 		}, {
 			documentHash:
-				'sha256:f9e80104b6c97c92681d195689a48486ffe91cb097b209e006727a65aded22db',
+				'sha256:ef893b52f8b75fe8b507444e4af081091ef6a7aadc5a750c6475a02b54c66579',
 			metadataHash:
 				'sha256:48d0153f2df2bc35fd432613a6564015f849af977abb8bc62dde7cee49cc2d82',
 			rootNodeHash:
-				'sha256:80be9c862c6e1c2ab80af03aa452b5c7b90b7df1ab93ca842fbca131affc854a',
+				'sha256:f2c9366bb437da5bd8fb4db9f32bf6314768120f5a8a562c94d9371bba00331a',
 			academicGraphHash:
-				'sha256:66503f97d6ed68a4a9c34b04f9a62a92a218c9295946a8960d79fd2307e8c82a',
+				'sha256:6140bc1b76f514013d3bc2e3ff34ecec91e62cc612999d80361302461df58bbd',
 			settingsHash:
 				'sha256:d934763791cd16287524d6b4ef6ffd569217cf618dc95285930ec6b0490981ba',
 			titleHash:
@@ -1380,6 +1390,45 @@ suite('Document Snapshot Merkle state', () => {
 		assert.equal(Object.hasOwn(first, 'snapshot'), false);
 		assert.equal(Object.hasOwn(first, 'cache'), false);
 		assert.equal(
+			Reflect.ownKeys(first).some(key =>
+				typeof key === 'string'
+				&& (
+					key.includes('Map')
+					|| key.includes('HashesById')
+					|| key.startsWith('#')
+				)),
+			false,
+		);
+		const prototype = Object.getPrototypeOf(first) as object;
+		assert.equal(Object.isFrozen(prototype), true);
+		assert.deepStrictEqual(
+			Object.getOwnPropertyDescriptor(prototype, 'constructor'),
+			{
+				value: undefined,
+				writable: false,
+				enumerable: false,
+				configurable: false,
+			},
+		);
+		assert.throws(
+			() => Reflect.construct(
+				(prototype as { readonly constructor?: Function })
+					.constructor as Function,
+				[Object.freeze({})],
+			),
+			TypeError,
+		);
+		assert.throws(
+			() => new Proxy(first, {}).getNodeHash(firstFixture.root.id),
+			TypeError,
+		);
+		assert.throws(
+			() => (
+				Object.create(prototype) as RevisionMerkleState
+			).getNodeHash(firstFixture.root.id),
+			TypeError,
+		);
+		assert.equal(
 			firstCalls.filter(call => call.domain === manuscriptHashDomains.node).length,
 			4,
 		);
@@ -1393,7 +1442,7 @@ suite('Document Snapshot Merkle state', () => {
 			firstCalls.filter(
 				call => call.domain === manuscriptHashDomains.documentContent,
 			).length,
-			17,
+			31,
 		);
 	});
 });

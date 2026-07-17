@@ -125,6 +125,8 @@ type NodeTraversalFrame =
 		readonly node: DocumentNode;
 	};
 
+const immutableRevisionMerkleStateConstructionToken = Object.freeze({});
+
 class ImmutableRevisionMerkleState implements RevisionMerkleState {
 	readonly documentHash: ContentHash;
 	readonly metadataHash: ContentHash;
@@ -143,19 +145,28 @@ class ImmutableRevisionMerkleState implements RevisionMerkleState {
 	readonly academicClaimsVector: ManuscriptMerkleVector;
 	readonly academicClaimEvidenceRelationsVector: ManuscriptMerkleVector;
 
-	private readonly nodeHashesById: ReadonlyMap<NodeId, ContentHash>;
-	private readonly nodeChildVectorsById: ReadonlyMap<NodeId, ManuscriptMerkleVector>;
-	private readonly entityHashesById: ReadonlyMap<EntityId, ContentHash>;
-	private readonly relationHashesByKey: ReadonlyMap<string, ContentHash>;
+	readonly #nodeHashesById: ReadonlyMap<NodeId, ContentHash>;
+	readonly #nodeChildVectorsById:
+		ReadonlyMap<NodeId, ManuscriptMerkleVector>;
+	readonly #entityHashesById: ReadonlyMap<EntityId, ContentHash>;
+	readonly #relationHashesByKey: ReadonlyMap<string, ContentHash>;
 
-	constructor(options: {
-		readonly documentHash: ContentHash;
-		readonly metadata: IMetadataMerkleBuild;
-		readonly nodes: INodeMerkleBuild;
-		readonly academicGraph: IAcademicGraphMerkleBuild;
-		readonly settingsHash: ContentHash;
-		readonly entityHashesById: ReadonlyMap<EntityId, ContentHash>;
-	}) {
+	constructor(
+		constructionToken: object,
+		options: {
+			readonly documentHash: ContentHash;
+			readonly metadata: IMetadataMerkleBuild;
+			readonly nodes: INodeMerkleBuild;
+			readonly academicGraph: IAcademicGraphMerkleBuild;
+			readonly settingsHash: ContentHash;
+			readonly entityHashesById: ReadonlyMap<EntityId, ContentHash>;
+		},
+	) {
+		if (constructionToken !== immutableRevisionMerkleStateConstructionToken) {
+			throw new TypeError(
+				'Revision Merkle states can only be constructed by the rebuild owner.',
+			);
+		}
 		this.documentHash = options.documentHash;
 		this.metadataHash = options.metadata.hash;
 		this.rootNodeHash = options.nodes.rootHash;
@@ -171,43 +182,51 @@ class ImmutableRevisionMerkleState implements RevisionMerkleState {
 		this.academicClaimsVector = options.academicGraph.claimsVector;
 		this.academicClaimEvidenceRelationsVector =
 			options.academicGraph.claimEvidenceRelationsVector;
-		this.nodeHashesById = new Map(options.nodes.hashesById);
-		this.nodeChildVectorsById = new Map(options.nodes.childVectorsById);
-		this.entityHashesById = new Map(options.entityHashesById);
-		this.relationHashesByKey = new Map(
+		this.#nodeHashesById = new Map(options.nodes.hashesById);
+		this.#nodeChildVectorsById = new Map(options.nodes.childVectorsById);
+		this.#entityHashesById = new Map(options.entityHashesById);
+		this.#relationHashesByKey = new Map(
 			options.academicGraph.relationHashesByKey,
 		);
-		this.nodeCount = this.nodeHashesById.size;
-		this.entityCount = this.entityHashesById.size;
-		this.relationCount = this.relationHashesByKey.size;
+		this.nodeCount = this.#nodeHashesById.size;
+		this.entityCount = this.#entityHashesById.size;
+		this.relationCount = this.#relationHashesByKey.size;
 		Object.freeze(this);
 	}
 
 	getNodeHash(nodeId: NodeId): ContentHash | undefined {
-		return this.nodeHashesById.get(nodeId);
+		return this.#nodeHashesById.get(nodeId);
 	}
 
 	getNodeChildrenVector(nodeId: NodeId): ManuscriptMerkleVector | undefined {
-		return this.nodeChildVectorsById.get(nodeId);
+		return this.#nodeChildVectorsById.get(nodeId);
 	}
 
 	getEntityHash(entityId: EntityId): ContentHash | undefined {
-		return this.entityHashesById.get(entityId);
+		return this.#entityHashesById.get(entityId);
 	}
 
 	getRelationHash(
 		claimId: EntityId,
 		evidenceId: EntityId,
 	): ContentHash | undefined {
-		return this.relationHashesByKey.get(relationKey(claimId, evidenceId));
+		return this.#relationHashesByKey.get(relationKey(claimId, evidenceId));
 	}
 }
+
+Object.defineProperty(ImmutableRevisionMerkleState.prototype, 'constructor', {
+	value: undefined,
+	writable: false,
+	configurable: false,
+});
+Object.freeze(ImmutableRevisionMerkleState.prototype);
+Object.freeze(ImmutableRevisionMerkleState);
 
 /**
  * Independently rebuilds every Merkle layer from canonical document content.
  *
- * The rebuild never consumes an external hash cache and does not retain whole-tree
- * canonical text or object-identity trust markers.
+ * The rebuild never consumes an external hash cache and does not retain
+ * canonical text or caller-owned content as a trust marker.
  */
 export function rebuildRevisionMerkleState(
 	content: DocumentContent,
@@ -240,14 +259,17 @@ export function rebuildRevisionMerkleState(
 		observer,
 	);
 
-	return new ImmutableRevisionMerkleState({
-		documentHash,
-		metadata,
-		nodes,
-		academicGraph,
-		settingsHash,
-		entityHashesById,
-	});
+	return new ImmutableRevisionMerkleState(
+		immutableRevisionMerkleStateConstructionToken,
+		{
+			documentHash,
+			metadata,
+			nodes,
+			academicGraph,
+			settingsHash,
+			entityHashesById,
+		},
+	);
 }
 
 function rebuildNodeMerkleState(
@@ -300,12 +322,15 @@ function rebuildNodeMerkleState(
 				if (hash === undefined) {
 					throw new Error(`Missing subtree hash for child Node ${child.id}.`);
 				}
-				return hash;
+				return Object.freeze({
+					item: child,
+					hash,
+				});
 			});
-			childVector = ManuscriptMerkleVector.create(
+			childVector = ManuscriptMerkleVector.createStructural(
 				manuscriptMerkleVectorRoles.nodeChildren,
 				childHashes,
-				toMerkleObserver(observer),
+				{ onHashCall: toMerkleObserver(observer) },
 			);
 			childVectorsById.set(frame.node.id, childVector);
 		}
@@ -436,12 +461,12 @@ function rebuildAcademicGraphMerkleState(
 			observer,
 		);
 		setEntityHash(entityHashesById, reference.id, hash);
-		return hash;
+		return Object.freeze({ item: reference, hash });
 	});
-	const referenceSnapshotsVector = ManuscriptMerkleVector.create(
+	const referenceSnapshotsVector = ManuscriptMerkleVector.createStructural(
 		manuscriptMerkleVectorRoles.academicReferenceSnapshots,
 		referenceSnapshotHashes,
-		toMerkleObserver(observer),
+		{ onHashCall: toMerkleObserver(observer) },
 	);
 
 	const evidenceLinkHashes = graph.evidenceLinks.map(evidenceLink => {
@@ -450,12 +475,12 @@ function rebuildAcademicGraphMerkleState(
 			observer,
 		);
 		setEntityHash(entityHashesById, evidenceLink.id, hash);
-		return hash;
+		return Object.freeze({ item: evidenceLink, hash });
 	});
-	const evidenceLinksVector = ManuscriptMerkleVector.create(
+	const evidenceLinksVector = ManuscriptMerkleVector.createStructural(
 		manuscriptMerkleVectorRoles.academicEvidenceLinks,
 		evidenceLinkHashes,
-		toMerkleObserver(observer),
+		{ onHashCall: toMerkleObserver(observer) },
 	);
 
 	const claimHashes = graph.claims.map(claim => {
@@ -464,12 +489,12 @@ function rebuildAcademicGraphMerkleState(
 			observer,
 		);
 		setEntityHash(entityHashesById, claim.id, hash);
-		return hash;
+		return Object.freeze({ item: claim, hash });
 	});
-	const claimsVector = ManuscriptMerkleVector.create(
+	const claimsVector = ManuscriptMerkleVector.createStructural(
 		manuscriptMerkleVectorRoles.academicClaims,
 		claimHashes,
-		toMerkleObserver(observer),
+		{ onHashCall: toMerkleObserver(observer) },
 	);
 
 	const relationHashesByKey = new Map<string, ContentHash>();
@@ -485,13 +510,14 @@ function rebuildAcademicGraphMerkleState(
 			observer,
 		);
 		relationHashesByKey.set(key, hash);
-		return hash;
+		return Object.freeze({ item: relation, hash });
 	});
-	const claimEvidenceRelationsVector = ManuscriptMerkleVector.create(
+	const claimEvidenceRelationsVector =
+		ManuscriptMerkleVector.createStructural(
 		manuscriptMerkleVectorRoles.academicClaimEvidenceRelations,
 		relationHashes,
-		toMerkleObserver(observer),
-	);
+		{ onHashCall: toMerkleObserver(observer) },
+		);
 
 	const payload = createAcademicGraphHashPayload(
 		createMerkleVectorDescriptor(referenceSnapshotsVector),

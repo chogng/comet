@@ -271,12 +271,13 @@ Hash domain、prefix、canonical JSON profile、URI serialization 和 payload sh
 
 - `nireco.node.v1`：完整 node subtree；
 - `nireco.academic-entity.v1`：Reference Snapshot、Evidence Link、Claim 和 Claim–Evidence relation item；
-- `nireco.document-content.v1`：ordered Merkle vector、metadata、settings、Academic Graph aggregate 和 document root；
+- `nireco.document-content.v1`：metadata positional Merkle vector、keyed structural Merkle sequence、metadata、settings、Academic Graph aggregate 和 document root；
 - 其余三个 domain 只用于 Transaction、Semantic Diff 和 Change Group。
 
 同一 domain 内的每个 payload 都包含 exact、带版本的 `algorithm` 以及 `kind`、`role` 或 `type` discriminator，禁止不同语义对象替换。
 
-Ordered Merkle vector 的 fanout 固定为 32，使用 `nireco.document-content.v1`：
+Metadata positional Merkle vector 的 fanout 固定为 32，使用
+`nireco.document-content.v1`：
 
 ```typescript
 type MerkleVectorPayload =
@@ -284,14 +285,14 @@ type MerkleVectorPayload =
 		readonly algorithm: 'nireco-merkle-vector-1';
 		readonly fanout: 32;
 		readonly kind: 'empty';
-		readonly role: MerkleVectorRole;
+		readonly role: PositionalMerkleRole;
 		readonly count: 0;
 	}
 	| {
 		readonly algorithm: 'nireco-merkle-vector-1';
 		readonly fanout: 32;
 		readonly kind: 'leaf';
-		readonly role: MerkleVectorRole;
+		readonly role: PositionalMerkleRole;
 		readonly level: 0;
 		readonly count: number;
 		readonly items: readonly ContentHash[];
@@ -300,7 +301,7 @@ type MerkleVectorPayload =
 		readonly algorithm: 'nireco-merkle-vector-1';
 		readonly fanout: 32;
 		readonly kind: 'branch';
-		readonly role: MerkleVectorRole;
+		readonly role: PositionalMerkleRole;
 		readonly level: number;
 		readonly count: number;
 		readonly children: readonly {
@@ -310,23 +311,114 @@ type MerkleVectorPayload =
 	};
 ```
 
-Exact role 只有：
+Positional exact role 只有：
+
+```text
+metadata-authors
+metadata-keywords
+```
+
+非空输入从左到右每 32 个 item hash 形成 `level: 0` leaf；每 32 个相邻
+child descriptor 形成高一层 branch，直到只剩一个 root。Leaf 的 `count`
+等于 `items.length`，branch 的 `count` 等于 child count 之和。空 vector
+使用唯一 empty payload。不补空节点、不按编辑历史平衡、不静默排序。同长
+单项替换只重算一个 leaf 和每层一个 branch；count 或 semantic order 改变时
+按实际 positional rebuild 计量。
+
+Node children 与四个 Academic collection 使用 keyed structural Merkle
+sequence，同样复用 `nireco.document-content.v1`，不得增加新 hash domain：
+
+```typescript
+type StructuralMerkleRole =
+	| 'manuscript-node-children'
+	| 'academic-reference-snapshots'
+	| 'academic-evidence-links'
+	| 'academic-claims'
+	| 'academic-claim-evidence-relations';
+
+type StructuralMerkleKey =
+	| { readonly kind: 'node'; readonly nodeId: NodeId }
+	| { readonly kind: 'academic-entity'; readonly entityId: EntityId }
+	| {
+		readonly kind: 'academic-relation';
+		readonly claimId: EntityId;
+		readonly evidenceId: EntityId;
+	};
+
+type StructuralMerklePayload =
+	| {
+		readonly algorithm: 'nireco-structural-merkle-sequence-1';
+		readonly kind: 'entry';
+		readonly role: StructuralMerkleRole;
+		readonly key: StructuralMerkleKey;
+		readonly itemHash: ContentHash;
+		readonly nextKey: StructuralMerkleKey | null;
+	}
+	| {
+		readonly algorithm: 'nireco-structural-merkle-sequence-1';
+		readonly kind: 'patricia-leaf';
+		readonly role: StructuralMerkleRole;
+		readonly pathSuffix: string;
+		readonly key: StructuralMerkleKey;
+		readonly entryHash: ContentHash;
+	}
+	| {
+		readonly algorithm: 'nireco-structural-merkle-sequence-1';
+		readonly kind: 'patricia-branch';
+		readonly role: StructuralMerkleRole;
+		readonly prefix: string;
+		readonly children: readonly {
+			readonly edge: number;
+			readonly hash: ContentHash;
+		}[];
+	}
+	| {
+		readonly algorithm: 'nireco-structural-merkle-sequence-1';
+		readonly kind: 'root';
+		readonly role: StructuralMerkleRole;
+		readonly count: number;
+		readonly headKey: StructuralMerkleKey | null;
+		readonly patriciaRootHash: ContentHash | null;
+	};
+```
+
+Formal key 由 role 唯一约束。Node 和 Academic Entity path 是 canonical
+lowercase UUID 去掉 `-` 后的 32 个 hex nibble；relation path 是
+`claimId + evidenceId` 的 64 个 nibble。`prefix` 和 `pathSuffix` 只含
+lowercase hex，允许空串。Branch 有 2..16 个 child；edge 是 0..15 的唯一
+升序 nibble，每层 edge 恰好消费一个 nibble。Singleton root 直接指向 leaf；
+删除产生单 child 时必须合并 prefix。
+
+空 root 精确为 `count: 0`、`headKey: null`、`patriciaRootHash: null`。
+非空时 `headKey`、Patricia size 和 `count` 必须一致。从 `headKey` 沿每个
+entry 的 `nextKey` 必须恰好访问全部唯一 entry 后以 `null` 结束，因此
+key set、item hash 和 semantic order 都被提交。Patricia shape 只由 key set
+决定；相同 key/hash/order 无论编辑历史如何都必须与独立 full rebuild 得到
+相同 root。输入顺序变化是 semantic order 变化，应改变 sequence root。
+
+Structural insert/remove/move 只修改常数个 linked entry 和各自最多 32/64
+nibble 的 Patricia path；禁止 ordinal rebuild、generic set、parent-wide
+membership scan 或按编辑历史决定 tree shape。Node children 保留 schema
+semantic order，不排序；Academic collection 的 canonical order 仍由 decoder
+严格验证。Structural exact role 只有：
 
 ```text
 manuscript-node-children
-metadata-authors
-metadata-keywords
 academic-reference-snapshots
 academic-evidence-links
 academic-claims
 academic-claim-evidence-relations
 ```
 
-非空输入从左到右每 32 个 item hash 形成 `level: 0` leaf；每 32 个相邻 child descriptor 形成高一层 branch，直到只剩一个 root。Leaf 的 `count` 等于 `items.length`，branch 的 `count` 等于 child count 之和。空 vector 使用唯一 empty payload。不补空节点、不按编辑历史平衡、不静默排序。等长单项替换只重算一个 leaf 和每层一个 branch；结构插入允许后续 chunk 改变。
+Node payload 使用 `nireco.node.v1` 和 `algorithm: 'nireco-manuscript-node-1'`。Text payload 精确包含 `id`、`type: 'text'`、`value` 和 canonical marks。非 Text node 精确包含 `id`、`type`、closed `attrs`；schema 定义拥有 children 的 node 还包含 `{ count, hash }` keyed child-sequence descriptor，即使 children 为空。URI attr 先编码为 canonical string，optional 字段缺失时省略。Node hash 是 subtree hash：child sequence item 是 child subtree hash，任一 descendant 变化只沿父路径更新到 manuscript root。
 
-Node payload 使用 `nireco.node.v1` 和 `algorithm: 'nireco-manuscript-node-1'`。Text payload 精确包含 `id`、`type: 'text'`、`value` 和 canonical marks。非 Text node 精确包含 `id`、`type`、closed `attrs`；schema 定义拥有 children 的 node 还包含 `{ count, hash }` child-vector descriptor，即使 children 为空。URI attr 先编码为 canonical string，optional 字段缺失时省略。Node hash 是 subtree hash：child vector item 是 child subtree hash，任一 descendant 变化只沿父路径更新到 manuscript root。
+用于判断 node 本地字段是否变化的 comparison payload 与正式 Node hash
+payload 是两个不同的 closed type。Comparison payload 不含 hash algorithm，
+也不能传给 Revision hash helper；正式 container payload 缺少 keyed
+child-sequence descriptor、Text 或 leaf payload 多出该 descriptor 都在类型和
+运行时边界拒绝。
 
-Academic entity payload 使用 `nireco.academic-entity.v1` 和 `algorithm: 'nireco-academic-entity-1'`。Reference Snapshot、Evidence Link、Claim 和 relation 分别使用 exact `type`。Snapshot 不保存可派生的 `metadataHash`、`textHash` 或 `excerptHash`；Evidence 的 `sourceContentHash` 是 Source-owned identity，必须保留。Reference、Evidence 和 Claim 数组按 canonical lowercase `EntityId` 严格升序；relation 按 `(claimId, evidenceId)` 严格升序且 pair 唯一。Decoder 遇到乱序直接拒绝。四个 collection 各自进入 exact-role vector，Academic Graph root payload 固定为：
+Academic entity payload 使用 `nireco.academic-entity.v1` 和 `algorithm: 'nireco-academic-entity-1'`。Reference Snapshot、Evidence Link、Claim 和 relation 分别使用 exact `type`。Snapshot 不保存可派生的 `metadataHash`、`textHash` 或 `excerptHash`；Evidence 的 `sourceContentHash` 是 Source-owned identity，必须保留。Reference、Evidence 和 Claim 数组按 canonical lowercase `EntityId` 严格升序；relation 按 `(claimId, evidenceId)` 严格升序且 pair 唯一。Decoder 遇到乱序直接拒绝。四个 collection 各自进入 exact-role keyed structural sequence，Academic Graph root payload 固定为：
 
 ```typescript
 interface AcademicGraphHashPayload {
@@ -338,7 +430,7 @@ interface AcademicGraphHashPayload {
 }
 ```
 
-Metadata 使用 `nireco.document-content.v1` 和 `algorithm: 'nireco-manuscript-metadata-1'`。Title 与 abstract 各自是带 exact `field` 的 `text-field` payload；每个 author 和 keyword 各自有 closed payload；root 只聚合 `titleHash`、authors vector、`abstractHash` 和 keywords vector。Author 顺序保留署名语义；author affiliations 和 keywords 是 set-like，必须按 Unicode code point 严格升序且唯一。
+Metadata 使用 `nireco.document-content.v1` 和 `algorithm: 'nireco-manuscript-metadata-1'`。Title 与 abstract 各自是带 exact `field` 的 `text-field` payload；每个 author 和 keyword 各自有 closed payload；root 只聚合 `titleHash`、authors positional vector、`abstractHash` 和 keywords positional vector。Author 顺序保留署名语义；author affiliations 和 keywords 是 set-like，必须按 Unicode code point 严格升序且唯一。
 
 Settings payload 使用 `algorithm: 'nireco-manuscript-settings-1'`，精确包含 language、citation style、heading numbering 和 bibliography enabled。最终 document root payload 使用 `nireco.document-content.v1`：
 
@@ -356,21 +448,29 @@ interface DocumentMerklePayload {
 
 `format`、`formatVersion`、`revisionId`、顶层 manuscript resource、`documentHash` 自身、durability、index 和 cache 不进入 document root。Claim anchor 内显式绑定的 resource/revision 属于 Claim 内容，不是顶层模型身份。
 
-每个 Revision 的私有 `RevisionMerkleState` 与 Snapshot 原子安装，持有 aggregate roots、`NodeId → subtree hash`、`EntityId → entity hash` 和 immutable vector levels。它以领域 ID、Revision 和 vector ordinal 为键，不以 object identity 作为可信依据，不进入 Snapshot、WAL、manifest、Tool result 或公共模型 API。Revision 淘汰时一并释放。
+每个 Revision 的私有 `RevisionMerkleState` 与 Snapshot 原子安装，持有
+aggregate roots、`NodeId → subtree hash`、`EntityId → entity hash`、
+positional metadata vectors 和 keyed structural sequences。内容 lookup
+始终以领域 ID、Revision 或 formal relation key 为键，不以 object identity
+代替内容身份。状态不进入 Snapshot、WAL、manifest、Tool result 或公共模型
+API，Revision 淘汰时一并释放。
 
 Snapshot decoder 不信任外部 cache，必须独立执行：
 
 ```text
 strict decode
-→ post-order node hashes and child vectors
-→ entity hashes and ordered collection vectors
+→ post-order node hashes and keyed child sequences
+→ entity hashes and keyed structural collection sequences
 → Academic Graph root
 → metadata and settings roots
 → document root
 → compare declared documentHash
 ```
 
-Reducer 只从已完整验证的 base Revision state copy-on-write 更新明确 changed ID、vector path 和 ancestor path。Read service 的 `nodeHash` 直接读取该 Revision state。禁止 Snapshot trust marker、object-identity WeakMap、整份 canonical string substring patch 或完整 Snapshot UTF-8 cache。
+Reducer 只从已完整验证的 base Revision state copy-on-write 更新明确 changed
+ID 和 ancestor path。Read service 的 `nodeHash` 直接读取该 Revision state。
+禁止 Snapshot trust marker、整份 canonical string substring patch 或完整
+Snapshot UTF-8 cache。
 
 ### Change Group identity
 
@@ -1096,7 +1196,20 @@ Snapshot、WAL、clipboard、import、Agent input、Source metadata 和 URI payl
 - 大读取显式分页并报告 approximate bytes 和 truncation；
 - L profile 可以异步完成非输入关键派生工作，但结果必须标明 Revision 和 stale 状态。
 
-首次 Snapshot strict decode 和独立 hash rebuild 是 `O(nodes + academic entities + canonical content bytes)`。当前 Snapshot 的正文和 Academic Graph collection 使用 immutable array；局部变化的内容 copy 成本因此按 changed ancestor path 或 changed collection 实际浅拷贝的 slot 总数计算，不伪装成 persistent-vector 对数更新。独立的 Merkle vector 更新才是每条 changed vector path 的 `O(log32(collectionCount))`，再加受影响 node ancestor hash 与常数个 document aggregate hash。性能 instrumentation 分别报告 visited node/entity、shallow-copied content slots、Merkle vector copied slots 和 hash calls，并证明不遍历、不 serialize、不 rehash unrelated subtree、metadata、settings 或 academic entity；wall-clock 只与这些结构证据和 raw samples 一起解释。
+首次 Snapshot strict decode 和独立 hash rebuild 是
+`O(W × structuralItems + metadataItems + canonical content bytes)`，其中
+formal key width `W` 对 node/entity 固定为 32、对 relation 固定为 64，因此
+相对 item count 仍为线性。Structural lookup/replace/insert/remove 最多访问
+32 或 64 个 Patricia nibble 层，每层 branching 最大为 16；这是 fixed-width
+bound，不表述为 `O(log32 N)`。Move 是有界 remove+insert，只更新常数个
+linked entry/path。Metadata 同长单项 replacement 才使用 fanout-32 positional
+path update；结构改变或完整 replacement 按实际 positional rebuild 计。
+
+当前 Snapshot 的正文、Academic Graph collection 和 metadata 使用 immutable
+array；parent children、collection 或 metadata array 的浅拷贝仍可能对对应
+array length 线性，绝不能算作 Patricia 对数更新。Full rebuild 的性能证据
+分别报告 structural item reads、Patricia visits/copies 和 hash calls；
+wall-clock 只与这些结构证据及 raw samples 一起解释。
 
 性能结论只来自被测 Comet commit、真实 Model Service、真实 projection、固定 reference environment、raw samples 和 profile identity。
 
@@ -1107,8 +1220,7 @@ Snapshot、WAL、clipboard、import、Agent input、Source metadata 和 URI payl
 | 证据 | 最终位置与宿主 |
 |---|---|
 | core/model/service unit | `src/cs/editor/test/common/**`，Node host |
-| Editor browser core | `src/cs/editor/test/browser/**`，真实 Browser host |
-| Editor contribution | `src/cs/editor/contrib/<feature>/test/browser/**`，真实 Browser host |
+| Editor browser core 与 contribution 跨 runtime 证据 | `src/cs/editor/test/browser/**`，真实 Browser host；feature-local 测试不能替代该中央镜像 |
 | Workbench Draft/Tool integration | `src/cs/workbench/contrib/draftEditor/test/**`，其真实所属 host |
 | desktop durable storage/IPC | `test/unit/electron/editor/**`，真实 Electron host |
 | platform durable byte store | `src/cs/platform/storage/test/**`，对应真实实现 host |
@@ -1117,8 +1229,15 @@ JSDOM 可以测试纯 DOM helper，但不能作为 IME、Selection、beforeinput
 
 ### 必须证明的行为
 
-- canonical JSON 和 SHA-256 golden vectors 在 Browser 与 Node oracle 一致；
-- incremental Merkle root 与每个新 Snapshot 的独立完整复算逐 Revision 完全一致，且局部编辑 hash-call 只覆盖 changed path；
+- canonical JSON、portable SHA-256、positional Merkle 和 structural Merkle
+  exact payload golden 在 Browser 与 Node oracle 一致；真实 Browser 证据位于
+  `src/cs/editor/test/browser/**`；
+- structural empty/singleton、32/64 nibble、long prefix、last nibble、
+  split/merge、order sensitivity、move-back 和 history convergence；
+- 20k structural full rebuild 证明每项只读取一次，且 fixed-width Patricia
+  visits/copies/hash calls 有界；
+- incremental Merkle root 必须与每个新 Snapshot 的独立完整复算逐 Revision
+  完全一致，且局部编辑的 visits/copies/hash calls 只覆盖 changed paths；
 - UUIDv7 parser/allocator、clock rollback、sequence exhaustion、UUIDv8 derivation和 Change Group exact payload；
 - Operation ID 在 compile、hash、WAL、replay 和 diff 中保持同一身份；
 - Transaction atomicity、inverse、PositionMap compose、normalization 和 deterministic replay；
@@ -1136,7 +1255,7 @@ JSDOM 可以测试纯 DOM helper，但不能作为 IME、Selection、beforeinput
 
 ```text
 npm run test:unit -- --runtime node --run <focused-test>
-npm run test:unit -- --runtime browser --glob "src/cs/editor/{test/browser,contrib/**/test/browser}/**/*.test.ts"
+npm run test:unit -- --runtime browser --glob "src/cs/editor/test/browser/**/*.test.ts"
 npm run test:unit -- --runtime electron --glob "test/unit/electron/editor/**/*.test.ts"
 npm run typecheck:tests
 npm run test:coverage
