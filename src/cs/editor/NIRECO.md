@@ -17,7 +17,7 @@ URI resource
 
 1. `IManuscriptModel` 是正文、学术图、Revision 和 durability 状态的唯一运行时权威。
 2. 同一资源比较键在一个 `IManuscriptModelService` 中最多对应一个活动模型。
-3. ProseMirror、DOM、`EditorPane`、`EditorInput`、Selection、Agent Task 和存储镜像都不是文档权威。
+3. Browser View、DOM、输入缓冲、`EditorPane`、`EditorInput`、Selection、Agent Task 和存储镜像都不是文档权威。
 4. 所有编辑都通过针对明确 `baseRevisionId` 的 Transaction 原子提交。
 5. 所有异步读取、Proposal、诊断、保存和 Agent 操作都绑定明确 Revision；不存在隐式“当前活动 Editor”替代。
 6. Selection 和 composition 属于具体浏览器 View；多个 View 可以共享一个模型并保持独立 Selection。
@@ -36,7 +36,7 @@ Editor common
   identifiers / model / transaction / revision / proposal / services
                               ↓
 Editor browser
-  ProseMirror projection / input / selection / composition / rendering
+  view model / rendering / input / hit testing / selection / composition
                               ↓
 Workbench draftEditor
   EditorInput / EditorPane / save-revert / Agent tools / review surfaces
@@ -93,13 +93,23 @@ src/cs/editor/
 │       ├── documentReadService.ts
 │       └── proposalService.ts
 ├── browser/
-│   ├── text/
-│   │   ├── schema.ts
-│   │   ├── projection.ts
-│   │   ├── stepTranslator.ts
-│   │   ├── editor.ts
-│   │   └── input.ts
+│   ├── services/
+│   ├── controller/
+│   │   ├── editorController.ts
+│   │   ├── commandController.ts
+│   │   └── compositionController.ts
+│   ├── input/
+│   │   ├── textInput.ts
+│   │   ├── clipboard.ts
+│   │   └── inputEvent.ts
 │   ├── view/
+│   │   ├── editorView.ts
+│   │   ├── viewModel.ts
+│   │   ├── documentProjection.ts
+│   │   ├── selectionController.ts
+│   │   └── viewState.ts
+│   ├── widget/
+│   │   └── manuscriptEditorWidget.ts
 │   └── pdf/
 ├── contrib/
 │   ├── formatting/browser/
@@ -123,7 +133,7 @@ src/cs/editor/
 - 当前没有独立发布的 Comet standalone editor，因此不创建空的 `standalone`、API facade 或打包入口；将来只有真实 standalone distribution 才能拥有该目录，且其他目录不得依赖它；
 - 测试镜像被测层：环境无关测试在 `test/common`，真实 DOM、Selection、IME 和 input 测试在 `test/browser`，contribution 测试随 feature 放置。
 
-现有 `browser/text` 中只有 schema、projection、step translation、view/model synchronization 和原始 input 属于 core。Formatting toolbar、style presets、figure resize handles 等可移除能力迁入对应 `contrib`，不会继续扩大 `browser/text`。
+现有 `browser/text` 是待删除的旧 Writing Editor/ProseMirror 实现，不是目标基座。新实现直接进入 `browser/controller`、`browser/input`、`browser/view` 和 `browser/widget`；迁移完成时删除旧目录及全部 ProseMirror 依赖。Formatting toolbar、style presets、figure resize handles 等可移除能力迁入对应 `contrib`，不会进入 browser core。
 
 不增加 `index.ts`、公共 barrel、`nireco.ts` facade、兼容 re-export 或内部包入口。调用方直接导入拥有该契约的具体模块。
 
@@ -133,7 +143,7 @@ src/cs/editor/
 |---|---|
 | `src/cs/platform/storage/common/durableStorage.ts` | 与 Editor 无关的 fenced durable byte-storage contract |
 | `src/cs/editor/common/**` | 文稿模型、事务、Revision、Proposal 和环境无关服务 |
-| `src/cs/editor/browser/**` | DOM/ProseMirror 投影与真实浏览器输入 |
+| `src/cs/editor/browser/**` | Editor-owned view model、DOM rendering、输入、命中测试、Selection 与 composition |
 | `src/cs/editor/contrib/**` | 可移除且仍属于 Editor 的 browser feature |
 | `src/cs/workbench/contrib/draftEditor/**` | typed input/pane、保存与恢复、Agent session/grant/cursor、Tool 和审阅产品面 |
 | `src/cs/platform/agentHost/**` | Feature-neutral Agent、Tool、内容资源和连接协议 |
@@ -209,7 +219,7 @@ Revision、Transaction、Operation、Node、Entity 和 Proposal ID 使用 canoni
   `IDENTITY_SEQUENCE_EXHAUSTED`；
 - reducer、normalizer、replay、schema 和 view projection 都不生成 ID；
 - Operation ID 在 Transaction 或 Proposal 编译时分配一次，并与 Operation 一起持久化；
-- ProseMirror schema/plugin 不补 ID；
+- Browser view、input 和 command controller 不补 ID；
 - Agent 模型输入只能使用临时 `clientRef`，正式 ID 由 Workbench 的受信 Tool executor 请求 identity service 后注入。
 
 ## Canonical JSON、SHA-256 与哈希前像
@@ -462,7 +472,7 @@ type InlineNode =
 	| HardBreakNode;
 ```
 
-Citation、CrossReference 和 InlineEquation 是原子 inline node，不使用占位字符或普通文本降级。不存在并行的 `text` 字段、`TextSpan[]`、ProseMirror JSON 正文和结构化 children 权威。
+Citation、CrossReference 和 InlineEquation 是原子 inline node，不使用占位字符或普通文本降级。不存在并行的 `text` 字段、`TextSpan[]`、browser-local JSON/DOM 正文和结构化 children 权威。
 
 内置 Manuscript schema 至少表达：
 
@@ -822,7 +832,7 @@ interface Revision {
 
 Revision immutable，ID 不等于 content hash。相同内容可以产生不同 Revision。顺序由唯一 authority 的 `sequence` 和 parent 决定，不依赖墙上时间。主分支不会因 undo、rebase 或 compaction 被重写。
 
-Undo/redo 提交 inverse Transaction 并产生新 Revision；它不删除历史。多个 View 共享文档历史，Selection 恢复数据留在各自 View history metadata。ProseMirror `history()` 不参与文档 undo/redo。
+Undo/redo 提交 inverse Transaction 并产生新 Revision；它不删除历史。多个 View 共享文档历史，Selection 恢复数据留在各自 View history metadata。Browser View 不维护第二套文档 undo/redo stack。
 
 ## Authority 与 durability
 
@@ -947,32 +957,35 @@ Semantic Diff 是可持久、可重复计算的领域结果，不是字符 UI di
 
 ## 浏览器 Editor
 
-ProseMirror 是 `src/cs/editor/browser/text` 的投影和输入实现：
+Browser Editor 是 Editor-owned model/view/controller 管线，不使用 ProseMirror、contenteditable 文档模型或第三方 step/history authority：
 
 ```text
 DocumentSnapshot
-→ ProseMirror projection
-→ DOM
-→ browser input / ProseMirror steps
+→ revision-bound ViewModel
+→ view parts / read-only DOM projection
+→ Editor-owned text input surface
+→ typed command / semantic Operation compilation
 → revision-bound Editor Transaction
 → IManuscriptModel commit
-→ projection update in every attached View
+→ PositionMap-driven ViewModel update in every attached View
 ```
 
-ProseMirror document、plugin state 和 DOM 不持有 durable identity、Revision、Transaction、Proposal 或 history authority。`schema.ts` 只表达完整 Manuscript schema 的浏览器投影；它不随机补 ID，不把未知节点压平，也不在解析失败时返回空文稿。
+`browser/view` 从 Snapshot 构建 revision-bound `ViewModel`，按稳定 Node ID 生成 view parts，并只 patch 受影响的 DOM 区域。渲染 DOM 是只读投影，不通过 MutationObserver、DOM 顺序或 `innerHTML` 反推正文。结构、marks、原子 inline node 和学术实体的合法性只由 common schema 与 transaction kernel 决定。
 
-本地输入的 ProseMirror steps 必须在当前 view base Revision 上翻译为 Editor Operation。只有模型 commit 成功后才确认投影状态。外部 commit 通过 PositionMap 更新每个 View 的 projection 和 Selection。
+每个 View 拥有一个 Editor-controlled text input surface，用于键盘、IME、clipboard 和 accessibility 输入；正文渲染树不是 browser editing host。Pointer hit testing、键盘导航和 DOM Selection projection 映射为 `SemanticPosition`。Controller 只从当前 View base Revision 编译 typed command/Operation；只有模型 commit 成功后才更新 authoritative projection。外部 commit 通过 PositionMap 更新每个 View 的 ViewModel 和 Selection。
 
 禁止：
 
-- `history()` 或另一个文档 undo stack；
-- 将整份 ProseMirror JSON 回写到 `DraftEditorInput`；
+- ProseMirror package、schema、state、view、step、plugin 或 history；
+- `contenteditable`/`execCommand` 作为正文编辑或 history authority；
+- browser-local 文档 undo stack；
+- 将整份 DOM 或 browser-local JSON 回写到 `DraftEditorInput`；
 - prop-echo `sync.ts` 形成双向正文 authority；
 - `Math.random`、短 ID 或 DOM 顺序作为 node identity；
 - MutationObserver 把任意 DOM mutation 当成正文；
 - invalid-to-empty、unsupported-to-text 或 stale-revision retry fallback。
 
-Composition 是显式 View 状态。一次 composition 对应一个 Transaction 和一个 undo group。模型发生外部 commit 时，View 通过 PositionMap 延迟或映射 projection；无法安全映射时取消 composition、恢复模型投影并报告 typed diagnostic。
+Composition 是显式 View 状态。composition buffer 只属于当前 View，并作为 decoration 投影；一次 composition 对应一个 Transaction 和一个 undo group。模型发生外部 commit 时，View 通过 PositionMap 延迟或映射 composition；无法安全映射时取消 composition、恢复模型投影并报告 typed diagnostic。
 
 `beforeinput` 至少覆盖 insert text/composition/paragraph/line break、grapheme-aware delete、paste/cut/drop、history undo/redo 和 formatting command。Clipboard HTML 先 sanitize、parse、schema adaptation 和 validation，再构造一个原子 Transaction；不直接插入 DOM。
 
@@ -1114,7 +1127,7 @@ JSDOM 可以测试纯 DOM helper，但不能作为 IME、Selection、beforeinput
 - Snapshot temporary write、verify、manifest switch、orphan、retry和 conditional truncate；
 - 完整 WAL、尾部截断、中间损坏、hash mismatch、sequence gap和 parent mismatch recovery；
 - Proposal state machine、rebase、Change Group identity、dependency closure和 Agent proposal-only；
-- ProseMirror 无第二 authority、无 history、无随机 ID，两个 View共享模型并独立 Selection；
+- Editor-owned browser pipeline 无第二 authority、无 browser-local history、无随机 ID，两个 View 共享模型并独立 Selection；
 - 中文/日文/韩文 IME、Emoji、grapheme delete、paste、split/join、marks、list、figure、citation和 undo/redo；
 - Draft Editor Tool endpoint直接调用 Editor service，Platform Agent Host不导入 Editor/Workbench；
 - S/M/L profile identity和性能预算不漂移。

@@ -149,6 +149,16 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 					'Workbench must load Editor registrations through editor.all',
 				);
 			}
+			if (
+				/^(?:editor\/common\/(?:core|model|services)\/|editor\/browser\/(?:controller|input|services|view|widget)\/|editor\/contrib\/)/u.test(relativeFile)
+				&& /^prosemirror(?:-|$)/u.test(target)
+			) {
+				report(
+					relativeFile,
+					imported,
+					'the native Editor pipeline must not import ProseMirror',
+				);
+			}
 			if (relativeFile.startsWith('sessions/common/')
 				&& target.startsWith('cs/sessions/')
 				&& !target.startsWith('cs/sessions/common/')) {
