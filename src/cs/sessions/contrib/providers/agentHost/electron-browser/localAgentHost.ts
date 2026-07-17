@@ -24,6 +24,7 @@ import { ClientAgentToolChannel } from 'cs/platform/agentHost/electron-browser/c
 import { ClientContentResourceChannel } from 'cs/platform/agentHost/electron-browser/clientContentResourceChannel';
 import { LocalAgentHostConnection } from 'cs/platform/agentHost/electron-browser/localAgentHostConnection';
 import { IMainProcessService } from 'cs/platform/ipc/common/mainProcessService';
+import { IProgressService, type IProgressService as ProgressService } from 'cs/platform/progress/common/progress';
 import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import {
 	getWorkbenchInstantiationService,
@@ -35,6 +36,7 @@ import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/comm
 import { ISessionsProvidersService } from 'cs/sessions/services/sessions/browser/sessionsProvidersService';
 import { AgentHostSessionsProvider } from '../browser/agentHostSessionsProvider.js';
 import { resolveAgentHostDisplayText } from '../browser/agentHostSessionProjection.js';
+import { AgentHostOperationProgress } from '../browser/agentHostOperationProgress.js';
 
 export interface ILocalAgentHostSessionsContributionOptions {
 	readonly maximumClientToolCallRecords: number;
@@ -53,6 +55,7 @@ class LocalAgentHostSessionsContribution extends Disposable {
 		@IAgentHostManagementService private readonly agentHostManagementService: AgentHostManagementService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+		@IProgressService private readonly progressService: ProgressService,
 	) {
 		super();
 	}
@@ -67,6 +70,8 @@ class LocalAgentHostSessionsContribution extends Disposable {
 			this.mainProcessService.getChannel(localAgentHostConnectionChannelName),
 			this.options.maximumClientToolCallRecords,
 		);
+		const operationProgress = this._register(new AgentHostOperationProgress(this.progressService));
+		this._register(connection.onDidProgress(progress => operationProgress.handle(progress)));
 		const provider = this._register(await AgentHostSessionsProvider.create(
 			connection,
 			this.chatService,

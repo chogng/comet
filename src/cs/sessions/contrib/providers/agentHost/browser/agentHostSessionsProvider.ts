@@ -535,7 +535,7 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		]);
 	}
 
-	async prepareSessionType(sessionType: SessionTypeId): Promise<void> {
+	private async activateBuiltInSessionType(sessionType: SessionTypeId): Promise<void> {
 		this.assertNotDisposed();
 		await this.sequencer.queue(async () => {
 			const root = this.requireRootState();
@@ -691,8 +691,12 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		);
 	}
 
-	createSessionDraft(options: ISessionDraftOptions): ISession {
+	async createSessionDraft(options: ISessionDraftOptions): Promise<ISession> {
 		this.assertNotDisposed();
+		if (this.draft) {
+			throw new Error(`Agent Host provider '${this.id}' already owns a Session draft.`);
+		}
+		await this.activateBuiltInSessionType(options.sessionType);
 		if (this.draft) {
 			throw new Error(`Agent Host provider '${this.id}' already owns a Session draft.`);
 		}
@@ -1002,13 +1006,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		const sessionsChannel = getAgentHostSessionsChannelId();
 		const result = await this.connection.initialize({
 			connection: this.connection.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('4')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('5')]),
 			capabilities: Object.freeze([]),
 			locale: this.options.locale,
 			implementation: this.options.implementation,
 			subscriptions: Object.freeze([rootChannel, sessionsChannel]),
 		});
-		if (result.protocolVersion !== '4') {
+		if (result.protocolVersion !== '5') {
 			throw new Error(`Agent Host selected unsupported protocol version '${result.protocolVersion}'.`);
 		}
 		this.assertNoMissingChannels(result.missingChannels);

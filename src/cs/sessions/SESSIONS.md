@@ -475,11 +475,10 @@ import `ChatWidget` or inspect its DOM.
 ```text
 new-session action
     → ISessionsService.openNewSession(options)
-    → management service asks the selected provider to prepare its Session type
-    → provider returns only after a cold built-in Agent has published its exact
-      active registration and model-backed Session type
-    → management service validates the prepared Agent selection and asks the
-      selected provider for a draft
+    → management service asks the selected provider to create a draft
+    → the Agent Host provider lazily activates a cold built-in Agent and returns
+      only after publishing its exact registration and model-backed Session type
+    → management service validates the resulting draft
     → view service activates the draft
     → user submits one captured composer revision
     → management service routes the submission to the owning provider
@@ -496,12 +495,15 @@ new-session action
 ```
 
 Only an Agent in the addressed Host's active Agent registry can own the draft.
-A cold product-built-in Session type is a valid selection but must complete its
-explicit preparation before the provider creates that draft. An
-installable-but-absent external package may be shown through a separate
-explicit install action, but it is not a valid Agent selection. Draft creation,
-Session commit, and first send never install a package. SDK download belongs
-only to the explicit preparation that precedes draft creation.
+A product-built-in Session type is a valid selection before its SDK cache is
+filled; the Agent Host provider completes lazy activation as part of its
+asynchronous draft creation. An installable-but-absent external package may be
+shown through a separate explicit install action, but it is not a valid Agent
+selection. Draft creation, Session commit, and first send never install an
+external package. Generic Sessions services neither expose SDK preparation
+state nor issue SDK lifecycle operations. Workbench presentation subscribes to
+the Agent Host's transient operation progress independently from Session
+catalog state.
 
 A draft-to-committed transition is explicit. Session selection, input history,
 view state, and provider ownership move with that transition in one operation.
@@ -639,9 +641,9 @@ its visual contract.
 - Comet, Claude, and Codex are product-built-in Agent integrations with stable
   Agent IDs. Their availability is product state, not external package
   installation state.
-- A cold built-in Agent becomes executable only after explicit preparation has
-  atomically published its exact active registration. SDK cache presence is
-  not Agent availability or installation.
+- A cold built-in Agent becomes executable when provider-owned first-draft
+  activation atomically publishes its exact active registration. SDK cache
+  presence is not Agent availability or installation.
 - External Agents appear as executable selections only after an explicit
   per-Host user install operation has atomically activated their package.
   Installable catalog entries are not Agent registrations.

@@ -44,6 +44,7 @@ import {
 	remoteAgentHostClientContentResourceChannelName,
 	remoteAgentHostClientToolChannelName,
 	remoteAgentHostProtocolActionEvent,
+	remoteAgentHostProtocolProgressEvent,
 	RemoteAgentHostProtocolCommand,
 	remoteServerAgentHostChannelName,
 } from 'cs/platform/agentHost/common/remoteProtocol.js';
@@ -386,12 +387,20 @@ export class RemoteServerAgentHostBinding extends Disposable implements IRemoteC
 		argument: RemoteValue | undefined,
 	): EventType<RemoteValue> {
 		this.assertContext(context);
-		if (event !== remoteAgentHostProtocolActionEvent || argument !== undefined) {
+		if (argument !== undefined) {
 			throw new RemoteError(RemoteErrorCode.EventMissing, 'Remote Agent Host event is not registered', {
 				event: event.slice(0, 128),
 			});
 		}
-		return Event.map(this.protocol.onDidReceiveAction, action => encodeRemoteAgentHostAction(action));
+		if (event === remoteAgentHostProtocolActionEvent) {
+			return Event.map(this.protocol.onDidReceiveAction, action => encodeRemoteAgentHostAction(action));
+		}
+		if (event === remoteAgentHostProtocolProgressEvent) {
+			return Event.map(this.protocol.onDidProgress, progress => encodeRemoteAgentHostProtocolPayload(progress));
+		}
+		throw new RemoteError(RemoteErrorCode.EventMissing, 'Remote Agent Host event is not registered', {
+			event: event.slice(0, 128),
+		});
 	}
 
 	private assertContext(context: IRemoteChannelContext): void {

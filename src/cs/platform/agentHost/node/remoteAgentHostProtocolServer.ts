@@ -23,6 +23,7 @@ import {
 	type AgentHostReconnectResult,
 	type IAgentHostInitializeRequest,
 	type IAgentHostMutationRequest,
+	type IAgentHostOperationProgress,
 	type IAgentHostOperationOutcomeRequest,
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostReconnectRequest,
@@ -50,6 +51,7 @@ export interface IRemoteAgentHostClientToolPublication {
 /** Dispatches the common Agent Host protocol to one exact Host logical connection. */
 export class RemoteAgentHostProtocolServer extends Disposable {
 	readonly onDidReceiveAction: Event<AgentHostChannelAction>;
+	readonly onDidProgress: Event<IAgentHostOperationProgress>;
 
 	constructor(
 		private readonly connection: IAgentHostConnection,
@@ -58,6 +60,7 @@ export class RemoteAgentHostProtocolServer extends Disposable {
 		super();
 		this._register(connection);
 		this.onDidReceiveAction = connection.onDidReceiveAction;
+		this.onDidProgress = connection.onDidProgress;
 	}
 
 	async call(

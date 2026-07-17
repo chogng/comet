@@ -123,11 +123,14 @@ replace one another after failure.
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
 Comet, Claude, and Codex are product-built-in Agent orchestration layers.
 Claude and Codex resolve exact SDK bytes through the Agent SDK download cache
-only after explicit preparation. Genuinely external Agents retain the package
+during provider-owned first-draft activation. Genuinely external Agents retain the package
 lifecycle. A package manifest declares `execution.kind: 'host'` for a direct
 external Host Agent or `execution.kind: 'connected'` for an external
 implementation in another process. Package ID, Agent ID, registration,
-authentication, SDK preparation, and materialization remain separate.
+authentication, SDK cache resolution, and materialization remain separate.
+Transient long-operation progress is defined under `cs/platform/progress` and
+presented under `cs/workbench/services/progress`. Feature and provider code
+reports addressed progress; it does not construct private progress-bar systems.
 
 Remote Server Agent Host composition lives under
 `cs/server/node/agentHost`. It constructs the shared Platform Node Host

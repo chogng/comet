@@ -11,6 +11,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 
 import type { CancellationToken } from 'cs/base/common/cancellation';
 import { CancellationError, onUnexpectedError } from 'cs/base/common/errors';
+import { Event } from 'cs/base/common/event';
 import { Disposable, type IDisposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import type { ElectronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
@@ -116,6 +117,10 @@ import type {
 	ILocalAgentPackageProduct,
 } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
 import { AgentSdkDownloader, type IAgentSdkProductConfiguration } from 'cs/platform/agentHost/node/agentSdkDownloader';
+import {
+	CLAUDE_AGENT_SDK_PACKAGE,
+	CODEX_AGENT_SDK_PACKAGE,
+} from 'cs/platform/agentHost/node/agents/agentSdkProducts';
 import { BuiltInAgentRegistry } from 'cs/platform/agentHost/node/agents/builtInAgentRegistry';
 import { createClaudeBuiltInAgent } from 'cs/platform/agentHost/node/agents/claude/claudeBuiltInAgent';
 import {
@@ -135,7 +140,7 @@ import {
 } from 'cs/platform/agentHost/node/agents/codex/codexAgentDefinition';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('4');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('5');
 const localAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('3');
 const cometSessionType = createAgentSessionTypeId('comet');
 const maximumPreparedToolSets = 4_096;
@@ -507,6 +512,18 @@ export class LocalAgentHostMain extends Disposable {
 		const builtInAgents = this._register(new BuiltInAgentRegistry(Object.freeze([
 			Object.freeze({
 				availability: CLAUDE_AGENT_AVAILABILITY,
+				onDidProgress: Event.map(
+					Event.filter(
+						sdkDownloader.onDidDownloadProgress,
+						progress => progress.packageId === CLAUDE_AGENT_SDK_PACKAGE.id,
+					),
+					progress => Object.freeze({
+						progress: progress.receivedBytes,
+						total: progress.totalBytes,
+						terminal: progress.phase === 'completed' || progress.phase === 'failed',
+						message: localize('agentHost.download.agentSdkTitle', "Downloading {0} agent", progress.displayName),
+					}),
+				),
 				create: async () => {
 					const agent = await createClaudeBuiltInAgent({
 						downloader: sdkDownloader,
@@ -519,6 +536,18 @@ export class LocalAgentHostMain extends Disposable {
 			}),
 			Object.freeze({
 				availability: CODEX_AGENT_AVAILABILITY,
+				onDidProgress: Event.map(
+					Event.filter(
+						sdkDownloader.onDidDownloadProgress,
+						progress => progress.packageId === CODEX_AGENT_SDK_PACKAGE.id,
+					),
+					progress => Object.freeze({
+						progress: progress.receivedBytes,
+						total: progress.totalBytes,
+						terminal: progress.phase === 'completed' || progress.phase === 'failed',
+						message: localize('agentHost.download.agentSdkTitle', "Downloading {0} agent", progress.displayName),
+					}),
+				),
 				create: async () => {
 					const agent = await createCodexBuiltInAgent({
 						downloader: sdkDownloader,

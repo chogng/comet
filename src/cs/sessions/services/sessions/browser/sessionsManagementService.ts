@@ -215,10 +215,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			throw new Error(`Session type '${sessionType.id}' does not support workspace-less drafts.`);
 		}
 
-		await provider.prepareSessionType(options.sessionType);
+		const draftSession = await provider.createSessionDraft(options);
 		this.assertProviderSnapshotMatchesTracked(provider);
 		this.assertProviderSessionTypesMatchTracked(provider);
-		const draftSession = provider.createSessionDraft(options);
 		try {
 			this.assertProviderOwnsSession(provider, draftSession);
 			assertSessionInvariants(draftSession);

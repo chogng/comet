@@ -36,6 +36,7 @@ import {
 	AgentHostReconnectResult,
 	IAgentHostRootState,
 	assertAgentHostChatState,
+	assertAgentHostOperationProgress,
 	assertAgentHostReconnectResult,
 	assertAgentHostSetSubscriptionsResult,
 	getAgentHostRootChannelId,
@@ -459,5 +460,29 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 
 	test('keeps product-client and Agent-runtime connections as distinct contracts', () => {
 		assert.equal(connectionsRemainSeparate, true);
+	});
+
+	test('accepts only exact bounded operation progress frames', () => {
+		assert.doesNotThrow(() => assertAgentHostOperationProgress({
+			operation: createAgentHostOperationId('download'),
+			progress: 5,
+			total: 10,
+			message: 'Downloading Agent',
+		}));
+		assert.throws(() => assertAgentHostOperationProgress({
+			operation: createAgentHostOperationId('download'),
+			progress: 11,
+			total: 10,
+		}));
+		assert.throws(() => assertAgentHostOperationProgress({
+			operation: createAgentHostOperationId('download'),
+			progress: 5,
+			unexpected: true,
+		}));
+		assert.throws(() => assertAgentHostOperationProgress({
+			operation: createAgentHostOperationId('download'),
+			progress: 5,
+			message: 1,
+		}));
 	});
 });

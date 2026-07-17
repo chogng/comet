@@ -157,11 +157,11 @@ client-local URI assumptions, or permissive handling that can leave required
 state actions unapplied.
 
 The target treats product-configured Claude and Codex as available before their
-SDK bytes are local. An explicit preparation operation after user selection
-fills a cold version-and-target cache, discovers exact native models, and
-publishes the active registration before draft or Session creation. Startup,
-passive discovery, restoration, Settings, and Turn execution do not trigger
-the download. Clearing the cache does not uninstall a built-in Agent.
+SDK bytes are local. Provider-owned first-draft activation fills a cold
+version-and-target cache, discovers exact native models, and publishes the
+active registration before returning the draft. Startup, passive discovery,
+restoration, Settings, and unrelated Agent operations do not trigger the
+download. Clearing the cache does not uninstall a built-in Agent.
 
 The Claude and Codex direct `IAgent` implementations live under
 `src/cs/platform/agentHost/node/agents/<agent>`. Their exact SDK pins and
@@ -222,9 +222,9 @@ Agent Host Protocol over each route without introducing a second Agent API.
 
 - Comet, Claude, and Codex own product-built-in Agent registrations and
   implement `IAgent` directly.
-- Agent Host publishes built-in availability separately from exact prepared
-  registrations. Claude and Codex preparation resolves a product-owned SDK
-  cache and native model snapshot before Session creation.
+- Agent Host publishes built-in availability separately from exact active
+  registrations. Claude and Codex first-draft activation resolves a
+  product-owned SDK cache and native model snapshot.
 - Agent Host owns separate installable-package, installed-package, and active
   registration catalogs for genuinely external Agents.
 - One installed external revision records a fully staged and verified
@@ -330,7 +330,7 @@ The naming cutover is direct:
 | `DefaultSessionsProvider` | `AgentHostSessionsProvider` |
 | `DefaultSession` and `DefaultChat` | Host-identified provider models implementing `ISession` and `IChat` |
 | `mainAgent` and `run_main_agent_turn` | one `CometAgent` integration registered as `comet` through the Agent Runtime Port |
-| product-configured or first-use SDK download | explicit built-in Agent preparation before draft creation |
+| product-configured or first-use SDK download | provider-owned first-draft activation |
 | `defaultChat` and `mainChat` roles | no durable role; address the exact Chat ID |
 | `sessions.providers.default` | one-time migration input, then deleted; Host catalog and Comet Agent resume state are authoritative |
 
@@ -420,9 +420,10 @@ names. No target registration imports or dispatches through the legacy path.
    to be an immutable content snapshot.
 5. Register Comet, Claude, and Codex as product-built-in direct `IAgent`
    integrations. Publish Claude and Codex availability from exact product SDK
-   configuration without downloading at startup. Add explicit preparation
-   after user selection, version-and-target SDK caching, progress, native model
-   discovery, and atomic active registration before draft creation. Keep
+   configuration without downloading at startup. Add provider-owned
+   first-draft activation, version-and-target SDK caching,
+   operation-correlated Workbench progress, native model discovery, and atomic
+   active registration. Keep
    genuinely external Agents behind explicit package installation for the
    addressed Host. Persist the opaque resume-schema ID with Agent backing and
    retain the owning package ID and Agent ID on every Session and Chat record.
@@ -569,8 +570,8 @@ names. No target registration imports or dispatches through the legacy path.
     reconciliation, retained package-and-Agent attribution, rejection of a
     different package claiming the same Agent ID, user-installed
     connected-runtime isolation, complete dependency-closure verification,
-    rejection of hidden startup or Turn-time SDK downloads, cold built-in
-    preparation, cache reuse and deletion, reinstall with retained external
+    rejection of hidden startup SDK downloads, cold built-in activation, cache
+    reuse and deletion, reinstall with retained external
     state, incompatible retained-state rejection, explicit preinstall purge,
     lazy target-backed reads, and connected-executor disconnect and effect
     reconciliation. Cover typed Article item identity and

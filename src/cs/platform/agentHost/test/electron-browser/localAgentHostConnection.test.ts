@@ -15,7 +15,7 @@ import {
 	CancellationTokenNone,
 	isCancellationError,
 } from 'cs/base/common/cancellation';
-import { Emitter, type Event } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import type { IChannel, IServerChannel } from 'cs/base/parts/ipc/common/ipc';
 import { AppError } from 'cs/base/parts/sandbox/common/appError';
@@ -81,6 +81,7 @@ import type {
 	IAgentHostInitializeRequest,
 	IAgentHostInitializeResult,
 	IAgentHostMutationRequest,
+	IAgentHostOperationProgress,
 	IAgentHostOperationOutcomeRequest,
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostReconnectRequest,
@@ -115,7 +116,7 @@ import { AgentToolRegistry } from 'cs/platform/agentHost/node/tools/agentToolReg
 
 const authority = createAgentHostAuthorityId('local');
 const connectionId = createAgentHostClientConnectionId('desktop-renderer');
-const protocolVersion = createAgentHostProtocolVersion('4');
+const protocolVersion = createAgentHostProtocolVersion('5');
 const sessionsChannel = createAgentHostChannelId('sessions');
 const sessionType = createAgentSessionTypeId('comet');
 const sessionId = createAgentSessionId('session-1');
@@ -435,6 +436,8 @@ class TestAgentHostConnection extends Disposable implements IAgentHostConnection
 	readonly authority = authority;
 	private readonly actionEmitter = this._register(new Emitter<AgentHostChannelAction>());
 	readonly onDidReceiveAction: Event<AgentHostChannelAction> = this.actionEmitter.event;
+	private readonly progressEmitter = this._register(new Emitter<IAgentHostOperationProgress>());
+	readonly onDidProgress = this.progressEmitter.event;
 
 	readonly initializeRequests: IAgentHostInitializeRequest[] = [];
 	readonly reconnectRequests: IAgentHostReconnectRequest[] = [];
@@ -516,6 +519,10 @@ class TestAgentHostConnection extends Disposable implements IAgentHostConnection
 
 	fireAction(action: AgentHostChannelAction): void {
 		this.actionEmitter.fire(action);
+	}
+
+	fireProgress(progress: IAgentHostOperationProgress): void {
+		this.progressEmitter.fire(progress);
 	}
 
 	override dispose(): void {
@@ -627,7 +634,7 @@ async function createClient(
 }
 
 suite('local Agent Host connection channel', { concurrency: false }, () => {
-	test('forwards the complete connection contract and the action event', async () => {
+	test('forwards the complete connection contract, actions, and operation progress', async () => {
 		const host = new TestAgentHostConnection();
 		const server = createServer(host);
 		const sender = new TestWebContents(1);
@@ -667,6 +674,18 @@ suite('local Agent Host connection channel', { concurrency: false }, () => {
 			host.fireAction(channelAction);
 			assert.deepEqual(received, [channelAction]);
 			listener.dispose();
+
+			const progress = {
+				operation: createAgentHostOperationId('download-sdk'),
+				progress: 50,
+				total: 100,
+				message: 'Downloading Agent',
+			};
+			const receivedProgress: IAgentHostOperationProgress[] = [];
+			const progressListener = client.onDidProgress(frame => receivedProgress.push(frame));
+			host.fireProgress(progress);
+			assert.deepEqual(receivedProgress, [progress]);
+			progressListener.dispose();
 		} finally {
 			client.dispose();
 			server.dispose();

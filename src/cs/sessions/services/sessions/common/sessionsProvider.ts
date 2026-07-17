@@ -64,8 +64,7 @@ export interface ISessionsProvider extends IDisposable {
 	readonly onDidChangeModels: Event<void>;
 	getSessions(): readonly ISession[];
 	getModels(session: ISession, chat: IChat): readonly ISessionModel[];
-	prepareSessionType(sessionType: SessionTypeId): Promise<void>;
-	createSessionDraft(options: ISessionDraftOptions): ISession;
+	createSessionDraft(options: ISessionDraftOptions): Promise<ISession>;
 	discardSessionDraft(session: ISession): void;
 	sendRequest(session: ISession, chat: IChat): Promise<void>;
 	createChat(session: ISession): Promise<IChat>;

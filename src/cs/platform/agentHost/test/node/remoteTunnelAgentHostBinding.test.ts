@@ -228,6 +228,7 @@ class TestEndpointStream extends Disposable implements IRemoteTunnelEndpointStre
 class TestAgentHostConnection extends Disposable implements IAgentHostConnection {
 	readonly authority = createAgentHostAuthorityId('remote-tunnel-test');
 	readonly onDidReceiveAction = Event.None as IAgentHostConnection['onDidReceiveAction'];
+	readonly onDidProgress = Event.None as IAgentHostConnection['onDidProgress'];
 
 	constructor(readonly connection: AgentHostClientConnectionId) {
 		super();

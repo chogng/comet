@@ -37,6 +37,7 @@ import {
 } from '../common/identities.js';
 import {
 	remoteAgentHostProtocolActionEvent,
+	remoteAgentHostProtocolProgressEvent,
 	type RemoteAgentHostProtocolCommand,
 } from '../common/remoteProtocol.js';
 import {
@@ -657,6 +658,22 @@ class RemoteTunnelAgentHostServerConnection extends Disposable {
 					'host',
 					remoteAgentHostProtocolActionEvent,
 					protocolValue(action),
+				).catch(error => this.failProtocol(error));
+			}));
+			materialization.add(protocol.onDidProgress(progress => {
+				const stream = this.stream;
+				if (
+					stream === undefined
+					|| this.authenticationResponding
+					|| this.authenticatedGeneration !== stream.generation
+					|| peer.generation !== stream.generation
+				) {
+					return;
+				}
+				void peer.sendEvent(
+					'host',
+					remoteAgentHostProtocolProgressEvent,
+					protocolValue(progress),
 				).catch(error => this.failProtocol(error));
 			}));
 			materialization.add(peer.onDidProtocolError(error => this.failProtocol(error)));

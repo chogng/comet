@@ -103,7 +103,7 @@ import { ClientContentResourceChannelClient } from './clientContentResourceChann
 const localAgentHostErrorCode = 'AGENT_HOST_ERROR';
 const localAgentHostCancellationErrorCode = 'AGENT_HOST_CANCELLED';
 const localAgentHostChannelErrorCode = 'AGENT_HOST_CHANNEL_ERROR';
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('4');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('5');
 
 type ProtocolRecord = Readonly<Record<string, unknown>>;
 
@@ -891,13 +891,22 @@ export class AgentHostConnectionChannel extends Disposable implements IServerCha
 	listen<T = unknown>(context: IpcMainInvokeEvent, event: string, arg: unknown): Event<T> {
 		try {
 			this.bindContext(context);
-			if (event !== 'onDidReceiveAction' || arg !== undefined) {
+			if (arg !== undefined) {
 				throw appError(localAgentHostChannelErrorCode, { event });
 			}
-			return (listener, thisArgs, disposables) => this.connection.onDidReceiveAction(action => {
-				assertAgentHostProtocolValue(action);
-				listener.call(thisArgs, action as T);
-			}, undefined, disposables);
+			if (event === 'onDidReceiveAction') {
+				return (listener, thisArgs, disposables) => this.connection.onDidReceiveAction(action => {
+					assertAgentHostProtocolValue(action);
+					listener.call(thisArgs, action as T);
+				}, undefined, disposables);
+			}
+			if (event === 'onDidProgress') {
+				return (listener, thisArgs, disposables) => this.connection.onDidProgress(progress => {
+					assertAgentHostProtocolValue(progress);
+					listener.call(thisArgs, progress as T);
+				}, undefined, disposables);
+			}
+			throw appError(localAgentHostChannelErrorCode, { event });
 		} catch (error) {
 			throw toIpcError(error);
 		}

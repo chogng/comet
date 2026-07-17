@@ -31,6 +31,7 @@ export const RemoteAgentHostProtocolCommand = {
 export type RemoteAgentHostProtocolCommand = typeof RemoteAgentHostProtocolCommand[keyof typeof RemoteAgentHostProtocolCommand];
 
 export const remoteAgentHostProtocolActionEvent = 'onDidReceiveAction';
+export const remoteAgentHostProtocolProgressEvent = 'onDidProgress';
 export const remoteServerAgentHostChannelName = 'agentHost';
 export const remoteServerAgentHostCapability = createRemoteCapabilityId('agentHost');
 export const remoteAgentHostClientContentResourceChannelName = 'agentHost.contentResources';

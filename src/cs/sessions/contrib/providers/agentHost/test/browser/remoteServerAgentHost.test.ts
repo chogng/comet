@@ -19,9 +19,11 @@ import {
 	encodeRemoteAgentHostProtocolSuccess,
 	RemoteAgentHostProtocolCommand,
 	remoteAgentHostProtocolActionEvent,
+	remoteAgentHostProtocolProgressEvent,
 	remoteServerAgentHostCapability,
 	remoteServerAgentHostChannelName,
 } from 'cs/platform/agentHost/common/remoteProtocol';
+import { IProgressService } from 'cs/platform/progress/common/progress';
 import {
 	createAgentHostAuthorityId,
 	createAgentHostChannelRevision,
@@ -183,6 +185,7 @@ class TestAgentHostRemoteChannel implements IRemoteChannel {
 	readonly initializeRequests: IAgentHostInitializeRequest[] = [];
 	initializeFailure: Error | undefined;
 	private readonly actionListeners = new Set<TestRemoteChannelListener>();
+	private readonly progressListeners = new Set<TestRemoteChannelListener>();
 
 	constructor(blockInitialize: boolean) {
 		if (!blockInitialize) {
@@ -216,10 +219,10 @@ class TestAgentHostRemoteChannel implements IRemoteChannel {
 					throw this.initializeFailure;
 				}
 				assert.equal(request.connection, agentHostConnection);
-				assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('4')]);
+				assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('5')]);
 				assert.deepStrictEqual(request.subscriptions, [rootChannel, sessionsChannel]);
 				const result: IAgentHostInitializeResult = Object.freeze({
-					protocolVersion: createAgentHostProtocolVersion('4'),
+					protocolVersion: createAgentHostProtocolVersion('5'),
 					capabilities: Object.freeze([]),
 					implementation: Object.freeze({ name: 'remote-server-test-host', build: '1' }),
 					hostSequence,
@@ -246,14 +249,20 @@ class TestAgentHostRemoteChannel implements IRemoteChannel {
 	}
 
 	listen(event: string, argument?: RemoteValue): IRemoteChannelListener {
-		if (event !== remoteAgentHostProtocolActionEvent || argument !== undefined) {
+		if (
+			argument !== undefined
+			|| (event !== remoteAgentHostProtocolActionEvent && event !== remoteAgentHostProtocolProgressEvent)
+		) {
 			throw new RemoteError(RemoteErrorCode.EventMissing, 'Test Agent Host event is not registered', {
 				event,
 			});
 		}
+		const listeners = event === remoteAgentHostProtocolActionEvent
+			? this.actionListeners
+			: this.progressListeners;
 		let listener: TestRemoteChannelListener;
-		listener = new TestRemoteChannelListener(() => this.actionListeners.delete(listener));
-		this.actionListeners.add(listener);
+		listener = new TestRemoteChannelListener(() => listeners.delete(listener));
+		listeners.add(listener);
 		return listener;
 	}
 }
@@ -420,6 +429,10 @@ function registerSessionsFixture(): {
 	registerWorkbenchService(ISessionsProvidersService, providers);
 	registerWorkbenchService(IWorkbenchLocaleService, localeService);
 	registerWorkbenchService(IWorkbenchLanguageService, languageService);
+	registerWorkbenchService(IProgressService, {
+		_serviceBrand: undefined,
+		withProgress: (_options, task) => task({ report: () => {} }),
+	});
 	return {
 		providers,
 		dispose: () => {

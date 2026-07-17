@@ -29,11 +29,15 @@ binding, target-backed Tools, or lazy Feature operations.
   implements `IAgent` directly. Claude and Codex are peer product-built-in
   Agents whose App-compiled mappings implement `IAgent` directly.
 - Product configuration makes Claude and Codex available without SDK network
-  access. Explicit preparation after user selection resolves their exact
-  version-and-target SDK cache, downloads a cold cache, discovers native
-  models, and publishes the active registration and Session type before draft
-  or Session creation. Startup, passive discovery, Settings, restoration, and
-  Turn execution never hide a cold download.
+  access. Their owning Agent Host provider lazily resolves the exact
+  version-and-target SDK cache during first draft creation, discovers native
+  models, and publishes the active registration and Session type. Generic
+  Sessions contracts do not expose SDK preparation state. Startup, passive
+  discovery, Settings, restoration, and unrelated Agent operations never
+  trigger a cold download.
+- Long-running Host work emits transient progress correlated by operation ID.
+  Progress is neither channel state nor replay state. Workbench presenters own
+  notification and progress-bar lifecycle and close it on the terminal frame.
 - Built-in SDK cache state is not package installation state. Clearing cached
   bytes does not uninstall an Agent or change retained backing ownership.
   SDK versions change only with App product configuration.
@@ -47,7 +51,7 @@ binding, target-backed Tools, or lazy Feature operations.
   service objects or credential environment; filesystem, network, secret, and
   Tool-executor access never exceeds the committed grant.
 - Agent package ID, package revision, Agent ID, registration, authentication,
-  SDK cache identity, preparation, and materialization are separate.
+  SDK cache identity, lazy activation, and materialization are separate.
   Persist every Session and Chat backing with its owning package ID as well as
   its Agent ID. Restoration and resume migration require that same package and
   Agent; a different package that registers the same Agent ID must never claim

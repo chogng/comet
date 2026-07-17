@@ -32,10 +32,15 @@ import {
 	remoteAgentHostClientContentResourceChannelName,
 	remoteAgentHostClientToolChannelName,
 	remoteAgentHostProtocolActionEvent,
+	remoteAgentHostProtocolProgressEvent,
 	remoteServerAgentHostCapability,
 	remoteServerAgentHostChannelName,
 	type RemoteAgentHostProtocolCommand,
 } from '../common/remoteProtocol.js';
+import {
+	assertAgentHostOperationProgress,
+	type IAgentHostOperationProgress,
+} from '../common/protocol.js';
 import {
 	assertAgentHostProtocolValue,
 	type AgentHostProtocolValue,
@@ -279,6 +284,9 @@ export class RemoteServerAgentHostTransport extends Disposable implements IRemot
 	private readonly actionEmitter = this._register(new EventEmitter<ReturnType<typeof decodeRemoteAgentHostAction>>({
 		onListenerError: onUnexpectedError,
 	}));
+	private readonly progressEmitter = this._register(new EventEmitter<IAgentHostOperationProgress>({
+		onListenerError: onUnexpectedError,
+	}));
 	private readonly stateEmitter = this._register(new EventEmitter<IRemoteAgentHostTransportStateChange>({
 		onListenerError: onUnexpectedError,
 	}));
@@ -289,6 +297,7 @@ export class RemoteServerAgentHostTransport extends Disposable implements IRemot
 	private transportState: RemoteAgentHostTransportState = 'connected';
 
 	readonly onDidReceiveAction = this.actionEmitter.event;
+	readonly onDidProgress = this.progressEmitter.event;
 	readonly onDidChangeState = this.stateEmitter.event;
 
 	constructor(private readonly remoteConnection: IRemoteServerConnection) {
@@ -399,6 +408,26 @@ export class RemoteServerAgentHostTransport extends Disposable implements IRemot
 			}
 		}));
 		binding.add(listener.onDidError(error => {
+			if (!isTransportInterruption(error) && this.remoteConnection.state === 'connected') {
+				this.failProtocol(error);
+			}
+		}));
+		const progressListener = binding.add(this.remoteConnection.getChannel(remoteServerAgentHostChannelName).listen(
+			remoteAgentHostProtocolProgressEvent,
+		));
+		binding.add(progressListener.onDidReceive(value => {
+			try {
+				const progress = decodeRemoteAgentHostProtocolPayload(requireString(
+					value,
+					remoteAgentHostProtocolProgressEvent,
+				));
+				assertAgentHostOperationProgress(progress);
+				this.progressEmitter.fire(progress);
+			} catch (error) {
+				this.failProtocol(error);
+			}
+		}));
+		binding.add(progressListener.onDidError(error => {
 			if (!isTransportInterruption(error) && this.remoteConnection.state === 'connected') {
 				this.failProtocol(error);
 			}

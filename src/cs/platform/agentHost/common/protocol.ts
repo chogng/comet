@@ -352,6 +352,47 @@ export type AgentHostChannelAction =
 	| IAgentHostChannelAction<'session', IAgentHostSessionStateAction>
 	| IAgentHostChannelAction<'chat', IAgentHostChatStateAction>;
 
+/** One transient progress frame for an Agent Host operation. */
+export interface IAgentHostOperationProgress {
+	readonly operation: AgentHostOperationId;
+	readonly progress: number;
+	readonly total?: number;
+	readonly message?: string;
+}
+
+/** Strictly validates one transient Agent Host operation progress frame. */
+export function assertAgentHostOperationProgress(value: unknown): asserts value is IAgentHostOperationProgress {
+	assertAgentHostProtocolValue(value);
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+		throw new Error('Agent Host operation progress must be an object.');
+	}
+	const candidate = value as unknown as IAgentHostOperationProgress;
+	const keys = Object.keys(value);
+	if (
+		!keys.every(key => ['operation', 'progress', 'total', 'message'].includes(key))
+		|| !keys.includes('operation')
+		|| !keys.includes('progress')
+		|| typeof candidate.operation !== 'string'
+		|| candidate.operation.length === 0
+		|| !Number.isSafeInteger(candidate.progress)
+		|| candidate.progress < 0
+		|| (
+			candidate.total !== undefined
+			&& (!Number.isSafeInteger(candidate.total) || candidate.total < candidate.progress)
+		)
+		|| (
+			candidate.message !== undefined
+			&& (
+				typeof candidate.message !== 'string'
+				|| candidate.message.length === 0
+				|| candidate.message.length > 1_024
+			)
+		)
+	) {
+		throw new Error('Agent Host operation progress is invalid.');
+	}
+}
+
 export function reduceAgentHostRootState(_state: IAgentHostRootState, action: IAgentHostRootStateAction): IAgentHostRootState {
 	return action.state;
 }

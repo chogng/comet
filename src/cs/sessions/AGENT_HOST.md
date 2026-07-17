@@ -38,11 +38,18 @@ placement and composition are defined in
 
 Comet, Claude, and Codex are product-built-in orchestration layers. Their
 `IAgent` behavior mappings compile with the App. Claude and Codex are available
-from product configuration before SDK bytes are local; explicit preparation
-after user selection resolves an exact version-and-target cache, discovers
-native models, and publishes the active registration and Session type.
-Startup, passive discovery, restoration, and Turn execution do not hide a cold
-download.
+from product configuration before SDK bytes are local. Their first draft
+creation lazily resolves an exact version-and-target cache, discovers native
+models, and publishes the active registration and Session type. Startup,
+passive discovery, restoration, and unrelated Agent operations do not trigger
+that download. SDK cache lifecycle is private Agent Host work rather than
+provider-independent Session type state.
+
+Long-running Host operations publish transient progress frames addressed by
+operation ID. These frames are not catalog state and are not replayed. The
+Workbench progress service presents them through notification progress bars,
+using determinate byte progress when a total is known and received-byte
+progress otherwise.
 
 Agent packages add a separate installation dimension for external Agents.
 External direct Host and connected Agents are absent until the user explicitly
@@ -197,7 +204,7 @@ An Agent that uses an SDK additionally owns its SDK bindings, exhaustive
 request, event, and interaction mapping, native control calls, contributed
 Tool projection, native Tool activity mapping, aliases, callbacks, caches, and
 SDK resume data. A built-in Agent resolves its exact product SDK cache during
-explicit preparation; an external Agent resolves dependencies only from its
+provider-owned first-draft activation; an external Agent resolves dependencies only from its
 activated package. External package discovery, verification, installation,
 update, and uninstall belong to Agent Host rather than the Agent. SDK types
 never escape the Agent. Direct or connected execution does not change its

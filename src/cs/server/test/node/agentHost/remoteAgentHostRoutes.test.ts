@@ -8,7 +8,7 @@ import { suite, test } from 'node:test';
 
 import { DeferredPromise } from 'cs/base/common/async';
 import { CancellationError, CancellationTokenNone, type CancellationToken } from 'cs/base/common/cancellation';
-import { Emitter, type Event } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import { Disposable, toDisposable } from 'cs/base/common/lifecycle';
 import { ClientAgentToolService } from 'cs/platform/agentHost/browser/clientAgentTools';
 import { ClientContentResourceService } from 'cs/platform/agentHost/browser/clientContentResources';
@@ -37,6 +37,7 @@ import {
 	createAgentHostChannelId,
 	createAgentHostChannelRevision,
 	createAgentHostClientConnectionId,
+	createAgentHostOperationId,
 	createAgentHostProtocolVersion,
 	createAgentHostSequence,
 	createAgentId,
@@ -66,6 +67,7 @@ import type {
 	IAgentHostInitializeRequest,
 	IAgentHostInitializeResult,
 	IAgentHostMutationRequest,
+	IAgentHostOperationProgress,
 	IAgentHostOperationOutcomeRequest,
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostReconnectRequest,
@@ -131,7 +133,7 @@ import {
 
 const authority = createAgentHostAuthorityId('remote-test');
 const agentHostConnectionId = createAgentHostClientConnectionId('remote-client');
-const protocolVersion = createAgentHostProtocolVersion('4');
+const protocolVersion = createAgentHostProtocolVersion('5');
 const sessionsChannel = createAgentHostChannelId('sessions');
 const session = createAgentSessionId('session');
 const chat = createAgentChatId('chat');
@@ -301,8 +303,10 @@ class TestClientToolEndpoint implements IAgentToolExecutorEndpoint {
 
 class TestAgentHostConnection extends Disposable implements IAgentHostConnection {
 	private readonly actionEmitter = this._register(new Emitter<AgentHostChannelAction>());
+	private readonly progressEmitter = this._register(new Emitter<IAgentHostOperationProgress>());
 	readonly authority = authority;
 	readonly onDidReceiveAction: Event<AgentHostChannelAction> = this.actionEmitter.event;
+	readonly onDidProgress = this.progressEmitter.event;
 	readonly reconnectRequests: IAgentHostReconnectRequest[] = [];
 
 	constructor(readonly connection: AgentHostClientConnectionId = agentHostConnectionId) {
@@ -377,6 +381,10 @@ class TestAgentHostConnection extends Disposable implements IAgentHostConnection
 	fireAction(action: AgentHostChannelAction): void {
 		this.actionEmitter.fire(action);
 	}
+
+	fireProgress(progress: IAgentHostOperationProgress): void {
+		this.progressEmitter.fire(progress);
+	}
 }
 
 class TestContentResourceRouter implements IAgentContentResourceClientRouter {
@@ -420,6 +428,18 @@ async function exerciseRoute(
 	host.fireAction(channelAction);
 	assert.deepEqual(await action.p, channelAction);
 	actionListener.dispose();
+
+	const operationProgress = new DeferredPromise<IAgentHostOperationProgress>();
+	const progressListener = connection.onDidProgress(value => operationProgress.complete(value));
+	const progressFrame = {
+		operation: createAgentHostOperationId('remote-sdk-download'),
+		progress: 25,
+		total: 100,
+		message: 'Downloading Agent',
+	};
+	host.fireProgress(progressFrame);
+	assert.deepEqual(await operationProgress.p, progressFrame);
+	progressListener.dispose();
 
 	assert.equal(contentRouter.connection, agentHostConnectionId);
 	const publication = await connection.contentResources.publishBlob({

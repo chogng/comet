@@ -186,8 +186,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 	private readonly modelsEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeModels = this.modelsEmitter.event;
 
-	createSessionDraftHandler: (options: ISessionDraftOptions) => ISession = unexpectedOperation;
-	prepareSessionTypeHandler: (sessionType: string) => Promise<void> = async () => {};
+	createSessionDraftHandler: (options: ISessionDraftOptions) => ISession | Promise<ISession> = unexpectedOperation;
 	discardSessionDraftHandler: (session: ISession) => void = unexpectedOperation;
 	sendRequestHandler: (session: ISession, chat: IChat) => Promise<void> = async () => unexpectedOperation();
 	createChatHandler: (session: ISession) => Promise<IChat> = async () => unexpectedOperation();
@@ -225,11 +224,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 		return this.models;
 	}
 
-	prepareSessionType(sessionType: string): Promise<void> {
-		return this.prepareSessionTypeHandler(sessionType);
-	}
-
-	createSessionDraft(options: ISessionDraftOptions): ISession {
+	async createSessionDraft(options: ISessionDraftOptions): Promise<ISession> {
 		return this.createSessionDraftHandler(options);
 	}
 
@@ -852,7 +847,7 @@ test('Session draft replacement is atomic, explicit, and preserves the addressed
 	}
 });
 
-test('Session draft creation waits for exact provider preparation', async () => {
+test('Session draft creation waits for the provider-owned asynchronous creation', async () => {
 	const provider = new TestSessionsProvider('provider.prepared-draft');
 	const draft = createSession(provider.id, URI.parse('test-session:/prepared-draft'), {
 		status: SessionStatus.Draft,
@@ -863,12 +858,10 @@ test('Session draft creation waits for exact provider preparation', async () => 
 	});
 	let prepared = false;
 	let created = false;
-	provider.prepareSessionTypeHandler = async sessionType => {
-		assert.equal(sessionType, `${provider.id}.default`);
+	provider.createSessionDraftHandler = async options => {
+		assert.equal(options.sessionType, `${provider.id}.default`);
 		await preparation;
 		prepared = true;
-	};
-	provider.createSessionDraftHandler = () => {
 		assert.equal(prepared, true);
 		created = true;
 		return draft.model;

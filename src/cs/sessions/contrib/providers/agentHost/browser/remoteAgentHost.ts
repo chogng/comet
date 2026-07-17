@@ -17,6 +17,7 @@ import {
 	type IRemoteAgentHostProtocolTransport,
 } from 'cs/platform/agentHost/browser/remoteAgentHostConnection';
 import type { AgentHostDisplayText, IAgentHostImplementationIdentity } from 'cs/platform/agentHost/common/protocol';
+import { IProgressService, type IProgressService as ProgressService } from 'cs/platform/progress/common/progress';
 import { IChatService } from 'cs/workbench/contrib/chat/common/chatService/chatService';
 import {
 	getWorkbenchInstantiationService,
@@ -28,6 +29,7 @@ import { IWorkbenchLocaleService } from 'cs/workbench/services/localization/comm
 import { ISessionsProvidersService } from 'cs/sessions/services/sessions/browser/sessionsProvidersService';
 import { AgentHostSessionsProvider } from './agentHostSessionsProvider.js';
 import { resolveAgentHostDisplayText } from './agentHostSessionProjection.js';
+import { AgentHostOperationProgress } from './agentHostOperationProgress.js';
 
 export interface IRemoteAgentHostSessionsContributionOptions extends IRemoteAgentHostConnectionOptions {
 	readonly implementation: IAgentHostImplementationIdentity;
@@ -45,6 +47,7 @@ export class RemoteAgentHostSessionsContribution extends Disposable {
 		@IAgentHostManagementService private readonly agentHostManagementService: AgentHostManagementService,
 		@IWorkbenchLocaleService private readonly localeService: IWorkbenchLocaleService,
 		@IWorkbenchLanguageService private readonly languageService: IWorkbenchLanguageService,
+		@IProgressService private readonly progressService: ProgressService,
 	) {
 		super();
 	}
@@ -56,6 +59,8 @@ export class RemoteAgentHostSessionsContribution extends Disposable {
 		this.started = true;
 
 		const connection = await RemoteAgentHostConnection.create(this.transport, this.options);
+		const operationProgress = this._register(new AgentHostOperationProgress(this.progressService));
+		this._register(connection.onDidProgress(progress => operationProgress.handle(progress)));
 		const provider = this._register(await AgentHostSessionsProvider.create(
 			connection,
 			this.chatService,
@@ -74,6 +79,7 @@ export class RemoteAgentHostSessionsContribution extends Disposable {
 		registerWorkbenchService(IClientAgentToolService, connection.clientTools);
 		this._register(connection.onDidChangeState(change => {
 			if (change.state === 'restoring') {
+				operationProgress.clear();
 				provider.beginConnectionRecovery(change.generation);
 				return;
 			}

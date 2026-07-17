@@ -299,7 +299,7 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		const identity = await channel.call<{ readonly connection: string }>(context, 'identity', undefined);
 		const initialized = await channel.call<IAgentHostInitializeResult>(context, 'initialize', {
 			connection: identity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('4')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('5')]),
 			capabilities: Object.freeze([]),
 			locale: 'en',
 			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),

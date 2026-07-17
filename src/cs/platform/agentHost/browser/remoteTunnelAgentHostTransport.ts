@@ -33,8 +33,13 @@ import {
 	decodeRemoteAgentHostAction,
 	encodeRemoteAgentHostProtocolPayload,
 	remoteAgentHostProtocolActionEvent,
+	remoteAgentHostProtocolProgressEvent,
 	type RemoteAgentHostProtocolCommand,
 } from '../common/remoteProtocol.js';
+import {
+	assertAgentHostOperationProgress,
+	type IAgentHostOperationProgress,
+} from '../common/protocol.js';
 import {
 	RemoteAgentHostTunnelProtocolPeer,
 	type IRemoteAgentHostTunnelEvent,
@@ -174,6 +179,9 @@ export class RemoteTunnelAgentHostTransport extends Disposable implements IRemot
 	private readonly actionEmitter = this._register(new EventEmitter<ReturnType<typeof decodeRemoteAgentHostAction>>({
 		onListenerError: error => this.failProtocol(error),
 	}));
+	private readonly progressEmitter = this._register(new EventEmitter<IAgentHostOperationProgress>({
+		onListenerError: error => this.failProtocol(error),
+	}));
 	private readonly stateEmitter = this._register(new EventEmitter<IRemoteAgentHostTransportStateChange>({
 		onListenerError: error => this.failProtocol(error),
 	}));
@@ -195,6 +203,7 @@ export class RemoteTunnelAgentHostTransport extends Disposable implements IRemot
 	private readonly options: IRemoteTunnelAgentHostTransportOptions;
 
 	readonly onDidReceiveAction = this.actionEmitter.event;
+	readonly onDidProgress = this.progressEmitter.event;
 	readonly onDidChangeState = this.stateEmitter.event;
 
 	private constructor(
@@ -723,6 +732,15 @@ export class RemoteTunnelAgentHostTransport extends Disposable implements IRemot
 				this.actionEmitter.fire(decodeRemoteAgentHostAction(
 					encodeRemoteAgentHostProtocolPayload(event.value),
 				));
+			} catch (error) {
+				this.failProtocol(error);
+			}
+			return;
+		}
+		if (event.target === 'host' && event.name === remoteAgentHostProtocolProgressEvent) {
+			try {
+				assertAgentHostOperationProgress(event.value);
+				this.progressEmitter.fire(event.value);
 			} catch (error) {
 				this.failProtocol(error);
 			}

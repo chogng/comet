@@ -39,6 +39,7 @@ import {
 	encodeRemoteAgentHostProtocolSuccess,
 	RemoteAgentHostProtocolCommand,
 } from 'cs/platform/agentHost/common/remoteProtocol';
+import { IProgressService } from 'cs/platform/progress/common/progress';
 import { remoteAgentHostTunnelProtocolRevision } from 'cs/platform/agentHost/common/remoteTunnelProtocol';
 import {
 	decodeRemoteAgentHostTunnelMessage,
@@ -381,10 +382,10 @@ class TestTunnelConnection extends Disposable implements IRemoteTunnelConnection
 			return encodeRemoteAgentHostProtocolError(this.initializeFailure);
 		}
 		assert.equal(request.connection, agentHostConnection);
-		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('4')]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('5')]);
 		assert.deepStrictEqual(request.subscriptions, [rootChannel, sessionsChannel]);
 		const result: IAgentHostInitializeResult = Object.freeze({
-			protocolVersion: createAgentHostProtocolVersion('4'),
+			protocolVersion: createAgentHostProtocolVersion('5'),
 			capabilities: Object.freeze([]),
 			implementation: Object.freeze({ name: 'remote-tunnel-test-host', build: '1' }),
 			hostSequence,
@@ -497,6 +498,10 @@ function registerSessionsFixture(): {
 	registerWorkbenchService(ISessionsProvidersService, providers);
 	registerWorkbenchService(IWorkbenchLocaleService, localeService);
 	registerWorkbenchService(IWorkbenchLanguageService, languageService);
+	registerWorkbenchService(IProgressService, {
+		_serviceBrand: undefined,
+		withProgress: (_options, task) => task({ report: () => {} }),
+	});
 	return {
 		providers,
 		dispose: () => {

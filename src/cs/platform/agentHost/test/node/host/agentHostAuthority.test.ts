@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'node:test';
 
-import { Emitter } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import { constObservable } from 'cs/base/common/observable';
 import type { IAgent, IAgentAction, IAgentCancelTurnRequest, IAgentChatRequest, IAgentDescriptor, IAgentRuntimeRegistration, IAgentSteerRequest } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostAttachment } from 'cs/platform/agentHost/common/attachments';
@@ -71,6 +71,7 @@ import type {
 	AgentHostMutationOutcome,
 	AgentHostSubmissionTarget,
 	IAgentHostPreparedSubmission,
+	IAgentHostOperationProgress,
 	IAgentHostSessionTypeDescriptor,
 } from 'cs/platform/agentHost/common/protocol';
 import type {
@@ -100,7 +101,11 @@ import {
 import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
 import type { IAgentToolTurnAuthorityPort, IAgentToolTurnBinding } from 'cs/platform/agentHost/node/tools/agentToolCallAuthority';
 import { COMET_AGENT_RESUME_SCHEMA } from 'cs/platform/agentHost/node/agents/comet/cometResume';
-import { AgentHostAuthority, type IAgentHostAuthorityOptions } from 'cs/platform/agentHost/node/host/agentHostAuthority';
+import {
+	AgentHostAuthority,
+	type IAgentHostAuthorityOptions,
+	type IAgentHostBuiltInAgentProgress,
+} from 'cs/platform/agentHost/node/host/agentHostAuthority';
 import {
 	createEmptyAgentHostCatalog,
 	maximumRetainedAgentHostSessionConfigurationFinalizations,
@@ -122,7 +127,7 @@ const modelId = createAgentModelId('model-a');
 const modelRevision = createAgentModelDescriptorRevision('model-a.v1');
 const toolSchema = createAgentToolSchemaProfileId('comet.tools.v1');
 const presetId = createAgentExecutionPresetId('automatic');
-const protocolVersion = createAgentHostProtocolVersion('4');
+const protocolVersion = createAgentHostProtocolVersion('5');
 const authorityId = createAgentHostAuthorityId('local');
 const optionalPackageId = createAgentPackageId('optional-agent');
 const optionalAgentId = createAgentId('optional-agent');
@@ -910,6 +915,7 @@ async function createAuthority(
 	sessionTypeCatalog: IAgentHostAuthorityOptions['sessionTypeCatalog'] = createSessionTypeCatalog(),
 	builtInAgents: IAgentHostAuthorityOptions['builtInAgents'] = {
 		availability: Object.freeze([]),
+		onDidProgress: Event.None,
 		prepare: async requested => { throw new Error(`Unexpected built-in Agent preparation '${requested}'.`); },
 		owns: () => false,
 	},
@@ -1045,6 +1051,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		let createCount = 0;
 		let commitCount = 0;
 		let rollbackCount = 0;
+		const progressEmitter = new Emitter<IAgentHostBuiltInAgentProgress>();
 		const builtInAgents: IAgentHostAuthorityOptions['builtInAgents'] = {
 			availability: Object.freeze([Object.freeze({
 				packageId: optionalSessionType.packageId,
@@ -1058,10 +1065,32 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 					capabilities: optionalSessionType.capabilities,
 				}),
 			})]),
+			onDidProgress: progressEmitter.event,
 			owns: (owner, agent) => owner === optionalSessionType.packageId && agent === optionalAgentId,
 			prepare: async requested => {
 				assert.equal(requested, optionalAgentId);
 				createCount += 1;
+				progressEmitter.fire({
+					agent: optionalAgentId,
+					progress: 0,
+					total: 100,
+					terminal: false,
+					message: 'Downloading Optional agent',
+				});
+				progressEmitter.fire({
+					agent: optionalAgentId,
+					progress: 40,
+					total: 100,
+					terminal: false,
+					message: 'Downloading Optional agent',
+				});
+				progressEmitter.fire({
+					agent: optionalAgentId,
+					progress: 100,
+					total: 100,
+					terminal: true,
+					message: 'Downloading Optional agent',
+				});
 				return Object.freeze({
 					agent: optionalAgent,
 					commit: () => { commitCount += 1; },
@@ -1082,6 +1111,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			builtInAgents,
 		);
 		const connection = await initialize(authority, 'built-in-client', [getAgentHostRootChannelId()]);
+		const progress: IAgentHostOperationProgress[] = [];
+		const progressListener = connection.onDidProgress(frame => progress.push(frame));
 		try {
 			const initial = await connection.setSubscriptions({
 				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
@@ -1102,6 +1133,26 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			assert.equal(createCount, 1);
 			assert.equal(commitCount, 1);
 			assert.equal(rollbackCount, 0);
+			assert.deepStrictEqual(progress, [
+				{
+					operation: createAgentHostOperationId('prepare-built-in'),
+					progress: 0,
+					total: 100,
+					message: 'Downloading Optional agent',
+				},
+				{
+					operation: createAgentHostOperationId('prepare-built-in'),
+					progress: 40,
+					total: 100,
+					message: 'Downloading Optional agent',
+				},
+				{
+					operation: createAgentHostOperationId('prepare-built-in'),
+					progress: 100,
+					total: 100,
+					message: 'Downloading Optional agent',
+				},
+			]);
 
 			const ready = await connection.setSubscriptions({
 				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
@@ -1122,6 +1173,8 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 			assert.equal(repeated.outcome.kind, 'succeeded');
 			assert.equal(createCount, 1);
 		} finally {
+			progressListener.dispose();
+			progressEmitter.dispose();
 			await authority.close({
 				operation: createAgentHostOperationId('close-built-in-test'),
 				payloadDigest: createAgentHostPayloadDigest(`sha256:${'9'.repeat(64)}`),

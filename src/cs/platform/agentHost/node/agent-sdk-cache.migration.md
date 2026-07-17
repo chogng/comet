@@ -39,9 +39,9 @@ one deduplicated download
     → SDK-specific module or executable resolution
 ```
 
-Deleting cached bytes does not uninstall the built-in Agent. The next explicit preparation downloads the same App-selected version again. SDK version selection changes only with an App update.
+Deleting cached bytes does not uninstall the built-in Agent. The next provider-owned first-draft activation downloads the same App-selected version again. SDK version selection changes only with an App update.
 
-The Agent Host publishes built-in Agent availability without loading SDK bytes. Selecting a cold Claude or Codex Session type invokes an explicit preparation operation, forwards download progress, loads the native SDK, obtains its exact model snapshot, and atomically publishes the active Agent registration and model-backed Session type. Startup, passive catalog reads, restoration scans, and Settings rendering never trigger a cold download.
+The Agent Host publishes built-in Agent availability without loading SDK bytes. Creating the first draft for a cold Claude or Codex Session type activates the SDK inside the Agent Host provider, loads the native SDK, obtains its exact model snapshot, and atomically publishes the active Agent registration and model-backed Session type. Startup, passive catalog reads, restoration scans, and Settings rendering never trigger a cold download.
 
 External Agent packages retain the generic install, update, activation, and uninstall lifecycle. They do not use the built-in SDK cache.
 
@@ -51,8 +51,8 @@ External Agent packages retain the generic install, update, activation, and unin
 2. Change `build/agent-sdk` output from App resources to target-specific SDK tarballs and product configuration inputs.
 3. Remove Claude and Codex offerings, manifests, artifact staging, install, update, and uninstall from the generic Agent package catalog.
 4. Construct Claude and Codex as built-in Agent definitions whose SDK bindings resolve only through the downloader.
-5. Add an explicit built-in Agent preparation operation and publish availability separately from active Agent registrations and Session types.
-6. Make Sessions await preparation after the user selects a cold built-in Session type and before creating its draft. Publish progress and the resulting exact model snapshot through the existing Host state channels.
+5. Publish built-in availability separately from active Agent registrations and Session types, and keep lazy activation inside the Agent Host provider.
+6. Make provider draft creation await cold activation without adding SDK preparation to generic Sessions contracts. Publish operation-correlated progress through the generic Agent Host progress channel and Workbench progress service.
 7. Migrate persisted Claude and Codex installed-package records to built-in ownership without changing their Agent IDs, Session IDs, Chat IDs, normalized history, or opaque resume state.
 8. Remove the old product package factories and all Settings install or uninstall actions for Claude and Codex.
 
@@ -62,9 +62,10 @@ Call sites migrate directly. No package alias, compatibility factory, placeholde
 
 - The desktop Host publishes cold Claude and Codex availability without
   reading or downloading SDK bytes.
-- Sessions awaits explicit preparation before creating a draft.
-- Preparation resolves the exact product SDK, discovers native models, and
-  atomically activates the direct `IAgent`.
+- The Agent Host provider owns asynchronous first-draft activation; generic
+  Sessions contracts expose no SDK preparation operation or state.
+- First-draft activation resolves the exact product SDK, discovers native
+  models, and atomically activates the direct `IAgent`.
 - Claude and Codex are excluded from external package persistence, catalog,
   installation, activation, and uninstall.
 - Existing external-package records for those built-in IDs are removed from
@@ -75,8 +76,6 @@ Call sites migrate directly. No package alias, compatibility factory, placeholde
 
 ## Remaining work in scope
 
-- Carry bounded SDK download progress and cancellation across the Agent Host
-  protocol.
 - Exercise cache deletion and retained backing restoration through composed
   desktop and remote Host tests.
 - Complete the exhaustive Claude and Codex native behavior mappings described
@@ -96,7 +95,7 @@ Call sites migrate directly. No package alias, compatibility factory, placeholde
 
 - Claude and Codex never appear in installable or installed external Agent package catalogs.
 - Product startup and passive catalog reads perform no SDK download.
-- Selecting a cold built-in Agent prepares its exact SDK and publishes its model-backed Session type before draft creation.
+- Creating a draft for a cold built-in Agent resolves its exact SDK and publishes its model-backed Session type before returning the draft.
 - A completed cache is reused without network access; a deleted cache is downloaded again without changing Agent installation state.
 - SDK downloads are exact-version, exact-target, deduplicated, cancellable, safely extracted, and atomically published.
 - SDK download progress crosses the Agent Host protocol.

@@ -36,6 +36,7 @@ import {
 } from 'cs/platform/agentHost/common/identities';
 import {
 	assertAgentHostReconnectResult,
+	assertAgentHostOperationProgress,
 	assertAgentHostSetSubscriptionsResult,
 	type AgentHostChannelAction,
 	type AgentHostMutationOutcome,
@@ -44,6 +45,7 @@ import {
 	type IAgentHostInitializeRequest,
 	type IAgentHostInitializeResult,
 	type IAgentHostMutationRequest,
+	type IAgentHostOperationProgress,
 	type IAgentHostOperationOutcomeRequest,
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostReconnectRequest,
@@ -70,7 +72,7 @@ import type { IAgentClientToolPublicationSnapshot } from 'cs/platform/agentHost/
 
 const localAgentHostErrorCode = 'AGENT_HOST_ERROR';
 const localAgentHostCancellationErrorCode = 'AGENT_HOST_CANCELLED';
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('4');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('5');
 
 type ErrorRecord = Readonly<Record<string, unknown>>;
 
@@ -349,6 +351,8 @@ export class LocalAgentHostConnection extends Disposable implements IAgentHostCo
 	private readonly lifetimeCancellation = this._register(new CancellationTokenSource());
 	private readonly actionEmitter = this._register(new Emitter<AgentHostChannelAction>({ onListenerError: onUnexpectedError }));
 	readonly onDidReceiveAction: Event<AgentHostChannelAction> = this.actionEmitter.event;
+	private readonly progressEmitter = this._register(new Emitter<IAgentHostOperationProgress>({ onListenerError: onUnexpectedError }));
+	readonly onDidProgress: Event<IAgentHostOperationProgress> = this.progressEmitter.event;
 	readonly clientTools: ClientAgentToolService;
 
 	private constructor(
@@ -366,6 +370,14 @@ export class LocalAgentHostConnection extends Disposable implements IAgentHostCo
 			try {
 				assertAgentHostProtocolValue(action);
 				this.actionEmitter.fire(action as unknown as AgentHostChannelAction);
+			} catch (error) {
+				onUnexpectedError(error);
+			}
+		}));
+		this._register(this.channel.listen<unknown>('onDidProgress')(progress => {
+			try {
+				assertAgentHostOperationProgress(progress);
+				this.progressEmitter.fire(progress);
 			} catch (error) {
 				onUnexpectedError(error);
 			}

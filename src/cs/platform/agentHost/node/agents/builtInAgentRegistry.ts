@@ -4,20 +4,30 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable, type IDisposable } from 'cs/base/common/lifecycle';
+import { Emitter, type Event } from 'cs/base/common/event';
 import type { IAgent } from 'cs/platform/agentHost/common/agent';
 import type { AgentId, AgentPackageId } from 'cs/platform/agentHost/common/identities';
 import type { IAgentHostBuiltInAgentAvailability } from 'cs/platform/agentHost/common/protocol';
 import type {
 	IAgentHostBuiltInAgentRegistry,
+	IAgentHostBuiltInAgentProgress,
 	IPreparedBuiltInAgent,
 } from 'cs/platform/agentHost/node/host/agentHostAuthority';
 
 export interface IBuiltInAgentDefinition {
 	readonly availability: Omit<IAgentHostBuiltInAgentAvailability, 'state'>;
+	readonly onDidProgress: Event<IBuiltInAgentProgress>;
 	create(): Promise<{
 		readonly agent: IAgent;
 		readonly lifetime: IDisposable;
 	}>;
+}
+
+export interface IBuiltInAgentProgress {
+	readonly progress: number;
+	readonly total?: number;
+	readonly terminal: boolean;
+	readonly message?: string;
 }
 
 interface IActiveBuiltInAgent {
@@ -32,6 +42,8 @@ function builtInKey(packageId: AgentPackageId | string, agentId: AgentId): strin
 /** Owns cold product Agent construction and publishes only explicitly committed runtimes. */
 export class BuiltInAgentRegistry extends Disposable implements IAgentHostBuiltInAgentRegistry {
 	readonly availability: readonly Omit<IAgentHostBuiltInAgentAvailability, 'state'>[];
+	private readonly progressEmitter = this._register(new Emitter<IAgentHostBuiltInAgentProgress>());
+	readonly onDidProgress: Event<IAgentHostBuiltInAgentProgress> = this.progressEmitter.event;
 	private readonly definitions: ReadonlyMap<AgentId, IBuiltInAgentDefinition>;
 	private readonly ownership: ReadonlySet<string>;
 	private readonly active = new Map<AgentId, IActiveBuiltInAgent>();
@@ -53,6 +65,12 @@ export class BuiltInAgentRegistry extends Disposable implements IAgentHostBuiltI
 			}
 			byAgent.set(availability.agentId, definition);
 			ownership.add(key);
+			this._register(definition.onDidProgress(progress => {
+				this.progressEmitter.fire(Object.freeze({
+					agent: availability.agentId,
+					...progress,
+				}));
+			}));
 		}
 		this.definitions = byAgent;
 		this.ownership = ownership;

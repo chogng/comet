@@ -105,6 +105,7 @@ import {
 	IAgentHostMissingChannel,
 	IAgentHostMutationRequest,
 	IAgentHostOperationFailure,
+	IAgentHostOperationProgress,
 	IAgentHostOperationOutcomeRequest,
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostPreparedSubmission,
@@ -200,9 +201,18 @@ export interface IPreparedBuiltInAgent {
 	rollback(): void;
 }
 
+export interface IAgentHostBuiltInAgentProgress {
+	readonly agent: AgentId;
+	readonly progress: number;
+	readonly total?: number;
+	readonly terminal: boolean;
+	readonly message?: string;
+}
+
 /** Owns product-built-in Agent availability and exact cold runtime preparation. */
 export interface IAgentHostBuiltInAgentRegistry {
 	readonly availability: readonly Omit<IAgentHostBuiltInAgentAvailability, 'state'>[];
+	readonly onDidProgress: Event<IAgentHostBuiltInAgentProgress>;
 	prepare(agent: AgentId): Promise<IPreparedBuiltInAgent>;
 	owns(packageId: string, agent: AgentId): boolean;
 }
@@ -553,6 +563,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	private readonly connectionStates = new Map<AgentHostClientConnectionId, IAgentHostConnectionState>();
 	private readonly operations = new AgentHostOperationOutcomeRegistry<AgentHostOperationId, AgentHostMutationOutcome>();
 	private readonly operationOwners = new Map<AgentHostOperationId, AgentHostClientConnectionId>();
+	private readonly builtInPreparationOperations = new Map<AgentId, Set<AgentHostOperationId>>();
 	private readonly packageOperationOwners = new Map<AgentPackageOperationId, AgentHostClientConnectionId>();
 	private readonly preparations = new Map<AgentSubmissionId, IPreparedSubmissionRecord>();
 	private readonly pendingSessionConfigurationFinalizations = new Map<AgentHostOperationId, IPendingSessionConfigurationFinalization>();
@@ -600,6 +611,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		for (const agent of this.agents.values()) {
 			this.subscribeAgentActions(agent);
 		}
+		this._register(this.options.builtInAgents.onDidProgress(progress => {
+			this.publishBuiltInAgentProgress(progress);
+		}));
 		this._register(toDisposable(() => {
 			for (const subscription of this.agentActionSubscriptions.values()) {
 				subscription.dispose();
@@ -2514,7 +2528,21 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			});
 		}
 
-		const prepared = await this.options.builtInAgents.prepare(payload.agent);
+		let operations = this.builtInPreparationOperations.get(payload.agent);
+		if (operations === undefined) {
+			operations = new Set();
+			this.builtInPreparationOperations.set(payload.agent, operations);
+		}
+		operations.add(request.operation);
+		let prepared: IPreparedBuiltInAgent;
+		try {
+			prepared = await this.options.builtInAgents.prepare(payload.agent);
+		} finally {
+			operations.delete(request.operation);
+			if (operations.size === 0) {
+				this.builtInPreparationOperations.delete(payload.agent);
+			}
+		}
 		let committed = false;
 		try {
 			const agent = prepared.agent;
@@ -2567,6 +2595,27 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			if (!committed) {
 				prepared.rollback();
 			}
+		}
+	}
+
+	private publishBuiltInAgentProgress(progress: IAgentHostBuiltInAgentProgress): void {
+		const operations = this.builtInPreparationOperations.get(progress.agent);
+		if (operations === undefined) {
+			return;
+		}
+		for (const operation of operations) {
+			const owner = this.operationOwners.get(operation);
+			const connection = owner === undefined ? undefined : this.connections.get(owner);
+			if (connection === undefined) {
+				continue;
+			}
+			const total = progress.terminal ? progress.progress : progress.total;
+			connection.acceptProgress(Object.freeze({
+				operation,
+				progress: progress.progress,
+				...(total === undefined ? {} : { total }),
+				...(progress.message === undefined ? {} : { message: progress.message }),
+			}));
 		}
 	}
 
@@ -5050,6 +5099,8 @@ class AgentHostConnection extends Disposable implements IAgentHostConnection {
 	readonly authority: AgentHostAuthorityId;
 	private readonly _onDidReceiveAction: Emitter<AgentHostChannelAction>;
 	readonly onDidReceiveAction: Event<AgentHostChannelAction>;
+	private readonly _onDidProgress: Emitter<IAgentHostOperationProgress>;
+	readonly onDidProgress: Event<IAgentHostOperationProgress>;
 
 	constructor(
 		private readonly host: AgentHostAuthority,
@@ -5060,8 +5111,14 @@ class AgentHostConnection extends Disposable implements IAgentHostConnection {
 		this.authority = host.authority;
 		this._onDidReceiveAction = this._register(new Emitter<AgentHostChannelAction>({ onListenerError: reportUnexpectedError }));
 		this.onDidReceiveAction = this._onDidReceiveAction.event;
+		this._onDidProgress = this._register(new Emitter<IAgentHostOperationProgress>({ onListenerError: reportUnexpectedError }));
+		this.onDidProgress = this._onDidProgress.event;
 		this._register(this.host.onDidPublishAction(action => this.host.receiveAction(this.connection, action)));
 		this._register(toDisposable(() => this.host.removeConnection(this.connection)));
+	}
+
+	acceptProgress(progress: IAgentHostOperationProgress): void {
+		this._onDidProgress.fire(progress);
 	}
 
 	initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {

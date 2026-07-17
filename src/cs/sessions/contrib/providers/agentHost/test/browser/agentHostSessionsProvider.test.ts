@@ -8,7 +8,7 @@ import { suite, test } from 'node:test';
 
 import { DeferredPromise } from 'cs/base/common/async';
 import type { CancellationToken } from 'cs/base/common/cancellation';
-import { Emitter } from 'cs/base/common/event';
+import { Emitter, Event } from 'cs/base/common/event';
 import { toDisposable, type IDisposable } from 'cs/base/common/lifecycle';
 import { AgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
 import {
@@ -19,6 +19,7 @@ import {
 	type RemoteAgentHostTransportState,
 } from 'cs/platform/agentHost/browser/remoteAgentHostConnection';
 import type { IClientContentResourceService } from 'cs/platform/agentHost/browser/clientContentResources';
+import type { IProgressService } from 'cs/platform/progress/common/progress';
 import { createTestChatStorageService } from 'cs/workbench/contrib/chat/test/common/testChatStorage';
 import type { IAgentHostAttachment } from 'cs/platform/agentHost/common/attachments';
 import {
@@ -45,6 +46,7 @@ import {
 	createAgentHostAuthorityId,
 	createAgentHostChannelRevision,
 	createAgentHostClientConnectionId,
+	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentHostProtocolVersion,
 	createAgentHostSequence,
@@ -87,6 +89,7 @@ import {
 	type IAgentHostInitializeRequest,
 	type IAgentHostInitializeResult,
 	type IAgentHostMutationRequest,
+	type IAgentHostOperationProgress,
 	type IAgentHostOperationOutcomeRequest,
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostReconnectRequest,
@@ -379,6 +382,7 @@ class TestAgentHostConnection implements IAgentHostConnection {
 	readonly connection = createAgentHostClientConnectionId('test-connection');
 	private readonly actionEmitter = new Emitter<AgentHostChannelAction>();
 	readonly onDidReceiveAction = this.actionEmitter.event;
+	readonly onDidProgress = Event.None as IAgentHostConnection['onDidProgress'];
 	root = createRootState();
 	readonly sessions = new Map<AgentSessionId, IAgentHostSessionState>();
 	catalog: IAgentHostSessionCatalogState = { sessions: [] };
@@ -448,10 +452,10 @@ class TestAgentHostConnection implements IAgentHostConnection {
 
 	async initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {
 		assert.deepStrictEqual(request.subscriptions, [getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]);
-		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('4')]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('5')]);
 		this.replaceActiveSubscriptions(request.subscriptions);
 		return {
-			protocolVersion: createAgentHostProtocolVersion('4'),
+			protocolVersion: createAgentHostProtocolVersion('5'),
 			capabilities: [],
 			implementation: { name: 'test-host', build: '1' },
 			hostSequence: createAgentHostSequence(this.sequence),
@@ -601,6 +605,8 @@ class TestAgentHostConnection implements IAgentHostConnection {
 class TestRemoteAgentHostTransport implements IRemoteAgentHostProtocolTransport {
 	private readonly stateEmitter = new Emitter<IRemoteAgentHostTransportStateChange>();
 	private readonly actionEmitter = new Emitter<AgentHostChannelAction>();
+	private readonly progressEmitter = new Emitter<IAgentHostOperationProgress>();
+	readonly onDidProgress = this.progressEmitter.event;
 	private readonly hostActionListener: IDisposable;
 	private currentGeneration = 1;
 	readonly onDidChangeState = this.stateEmitter.event;
@@ -675,10 +681,15 @@ class TestRemoteAgentHostTransport implements IRemoteAgentHostProtocolTransport 
 		this.actionEmitter.fire(action);
 	}
 
+	emitProgress(progress: IAgentHostOperationProgress): void {
+		this.progressEmitter.fire(progress);
+	}
+
 	dispose(): void {
 		this.disposed = true;
 		this.hostActionListener.dispose();
 		this.actionEmitter.dispose();
+		this.progressEmitter.dispose();
 		this.stateEmitter.dispose();
 	}
 }
@@ -728,6 +739,10 @@ function createRemoteContribution(
 		getLocaleMessages,
 		toDocumentLang: () => 'en',
 	};
+	const progressService: IProgressService = {
+		_serviceBrand: undefined,
+		withProgress: (_options, task) => task({ report: () => {} }),
+	};
 	return new RemoteAgentHostSessionsContribution(
 		transport,
 		{
@@ -741,6 +756,7 @@ function createRemoteContribution(
 		new AgentHostManagementService(),
 		localeService,
 		languageService,
+		progressService,
 	);
 }
 
@@ -754,7 +770,7 @@ function waitForSessionsChange(provider: AgentHostSessionsProvider) {
 }
 
 suite('AgentHostSessionsProvider', { concurrency: false }, () => {
-	test('prepares a cold built-in Session type before exposing its active descriptor', async () => {
+	test('creates a draft only after activating a cold built-in Agent', async () => {
 		const { connection, chatService } = createFixture();
 		const readyRoot = connection.root;
 		const descriptor = readyRoot.sessionTypes[0];
@@ -803,11 +819,19 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 		const provider = await createProvider(connection, chatService);
 		try {
 			assert.deepStrictEqual(provider.sessionTypes.map(type => type.id), [sessionType]);
-			await provider.prepareSessionType(sessionType);
+			const draft = await provider.createSessionDraft({
+				sessionType,
+				workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
+			});
 			assert.equal(connection.mutationRequests.length, 1);
 			assert.deepStrictEqual(provider.sessionTypes.map(type => type.id), [sessionType]);
-			await provider.prepareSessionType(sessionType);
+			provider.discardSessionDraft(draft);
+			const secondDraft = await provider.createSessionDraft({
+				sessionType,
+				workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
+			});
 			assert.equal(connection.mutationRequests.length, 1);
+			provider.discardSessionDraft(secondDraft);
 		} finally {
 			provider.dispose();
 		}
@@ -1088,7 +1112,7 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 		try {
 			const providerId = provider.id;
 			const projectedTypeId = provider.sessionTypes[0].id;
-			const draft = provider.createSessionDraft({
+			const draft = await provider.createSessionDraft({
 				sessionType,
 				workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
 			});
@@ -1385,7 +1409,7 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 		const { connection, chatService } = createFixture();
 		const provider = await createProvider(connection, chatService);
 		try {
-			const draft = provider.createSessionDraft({
+			const draft = await provider.createSessionDraft({
 				sessionType,
 				workspace: { kind: SessionWorkspaceKind.WorkspaceLess },
 			});
@@ -2106,6 +2130,33 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 			assert.equal(connection.state, 'terminal');
 			assert.equal(transport.disposed, true);
 			assert.equal(deliveredActions, 0);
+		} finally {
+			connection.dispose();
+			host.dispose();
+		}
+	});
+
+	test('forwards remote operation progress only while the connection is live', async () => {
+		const host = new TestAgentHostConnection();
+		const transport = new TestRemoteAgentHostTransport(host);
+		const connection = await RemoteAgentHostConnection.create(transport, {
+			maximumClientToolCallRecords: 4,
+			maximumBufferedActions: 4,
+			contentResourceLimits: remoteContentResourceLimits,
+		});
+		try {
+			const frames: IAgentHostOperationProgress[] = [];
+			connection.onDidProgress(progress => frames.push(progress));
+			const progress = {
+				operation: createAgentHostOperationId('remote-download'),
+				progress: 20,
+				total: 100,
+				message: 'Downloading Agent',
+			};
+			transport.emitProgress(progress);
+			transport.interrupt();
+			transport.emitProgress({ ...progress, progress: 40 });
+			assert.deepStrictEqual(frames, [progress]);
 		} finally {
 			connection.dispose();
 			host.dispose();

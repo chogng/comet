@@ -173,7 +173,7 @@ Built-in SDK caching is defined by [Agent Host architecture](AGENT_HOST.md) and 
 App-selected SDK version and target
     → completed cache hit
     or
-explicit preparation downloads one immutable tarball
+provider-owned first-draft activation downloads one immutable tarball
     → bounded safe extraction
     → atomic cache publication
     → built-in Agent resolves its private SDK bindings
@@ -210,8 +210,8 @@ For a product-built-in SDK Agent:
 1. Pin its exact SDK and lockfile under `build/agent-sdk/agents/<agent>/`.
 2. Produce target tarballs and product-stamping metadata.
 3. Implement the direct `IAgent` and exhaustive native mapping under `node/agents/<agent>/`.
-4. Add its product SDK definition and explicit preparation path.
-5. Test cold preparation, cache reuse, cache deletion, model discovery, native behavior mapping, cancellation, and version mismatch.
+4. Add its product SDK definition and first-use activation path.
+5. Test cold activation, cache reuse, cache deletion, model discovery, native behavior mapping, cancellation, and version mismatch.
 
 For an external Agent package:
 

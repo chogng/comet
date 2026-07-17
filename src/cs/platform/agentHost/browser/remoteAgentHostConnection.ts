@@ -56,6 +56,7 @@ import {
 	type IAgentHostInitializeRequest,
 	type IAgentHostInitializeResult,
 	type IAgentHostMutationRequest,
+	type IAgentHostOperationProgress,
 	type IAgentHostOperationOutcomeRequest,
 	type IAgentHostPrepareSubmissionRequest,
 	type IAgentHostReconnectRequest,
@@ -75,7 +76,7 @@ import {
 } from '../common/protocolValues.js';
 import type { IAgentClientToolPublicationSnapshot, IAgentToolExecutorEndpoint } from '../common/tools.js';
 
-const currentAgentHostProtocolVersion = createAgentHostProtocolVersion('4');
+const currentAgentHostProtocolVersion = createAgentHostProtocolVersion('5');
 const maximumRemoteAgentHostBufferedActions = 65_536;
 
 type ProtocolRecord = Readonly<Record<string, AgentHostProtocolValue>>;
@@ -100,6 +101,7 @@ export interface IRemoteAgentHostProtocolTransport extends IDisposable {
 	readonly state: RemoteAgentHostTransportState;
 	readonly generation: number;
 	readonly onDidReceiveAction: Event<AgentHostChannelAction>;
+	readonly onDidProgress: Event<IAgentHostOperationProgress>;
 	readonly onDidChangeState: Event<IRemoteAgentHostTransportStateChange>;
 	call(
 		command: RemoteAgentHostProtocolCommand,
@@ -249,6 +251,9 @@ export class RemoteAgentHostConnection extends Disposable implements IAgentHostC
 	private readonly actionEmitter = this._register(new EventEmitter<AgentHostChannelAction>({
 		onListenerError: onUnexpectedError,
 	}));
+	private readonly progressEmitter = this._register(new EventEmitter<IAgentHostOperationProgress>({
+		onListenerError: onUnexpectedError,
+	}));
 	private readonly stateEmitter = this._register(new EventEmitter<IRemoteAgentHostTransportStateChange>({
 		onListenerError: onUnexpectedError,
 	}));
@@ -256,6 +261,7 @@ export class RemoteAgentHostConnection extends Disposable implements IAgentHostC
 		onListenerError: onUnexpectedError,
 	}));
 	readonly onDidReceiveAction = this.actionEmitter.event;
+	readonly onDidProgress = this.progressEmitter.event;
 	readonly onDidChangeState = this.stateEmitter.event;
 	readonly onDidRequireRecovery = this.recoveryEmitter.event;
 	readonly clientTools: ClientAgentToolService;
@@ -289,6 +295,11 @@ export class RemoteAgentHostConnection extends Disposable implements IAgentHostC
 		}));
 		this._register(transport.bindClientEndpoints(connection, this.contentResources, this.clientTools));
 		this._register(transport.onDidReceiveAction(action => this.receiveAction(action)));
+		this._register(transport.onDidProgress(progress => {
+			if (this.connectionState === 'connected') {
+				this.progressEmitter.fire(progress);
+			}
+		}));
 		this._register(transport.onDidChangeState(change => this.changeTransportState(change)));
 	}
 

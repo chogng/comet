@@ -30,16 +30,18 @@ Product-built-in Agent availability is independent from SDK cache presence:
 ```text
 App product configuration
     → built-in Agent availability without network access
-        → explicit Agent preparation
+        → provider-owned first-draft activation
             → development SDK root or exact version-and-target cache
                 → cold download when the cache is absent
                     → native model discovery
                         → exact active registration and Session type
 ```
 
-Startup, passive Agent discovery, Settings rendering, restoration scans, and unrelated Agent operations never trigger a cold SDK download. A user action that selects a cold built-in Agent prepares it before draft or Session creation. Turn execution never hides an SDK download.
+Startup, passive Agent discovery, Settings rendering, restoration scans, and unrelated Agent operations never trigger a cold SDK download. The owning Agent Host provider resolves a cold built-in Agent while asynchronously creating its first draft. Generic Sessions contracts do not expose a preparation state or SDK lifecycle operation.
 
-Deleting cached SDK bytes is not uninstalling an Agent. The product definition remains available and the next explicit preparation downloads the same App-selected version again. Users do not select arbitrary SDK versions, run package managers, or own SDK directories.
+SDK download samples cross the generic Agent Host operation-progress channel. The originating operation ID is the correlation identity; a terminal frame has `progress === total`. Workbench renders determinate byte progress when the total is known and received megabytes otherwise. Progress never becomes Session type state.
+
+Deleting cached SDK bytes is not uninstalling an Agent. The product definition remains available and the next first-use activation downloads the same App-selected version again. Users do not select arbitrary SDK versions, run package managers, or own SDK directories.
 
 Claude and Codex do not appear in installable or installed external Agent package catalogs. Generic package install, update, and uninstall remain only for genuinely external Agents.
 

@@ -64,6 +64,7 @@ import {
 	IAgentHostInitializeRequest,
 	IAgentHostInitializeResult,
 	IAgentHostMutationRequest,
+	IAgentHostOperationProgress,
 	IAgentHostOperationOutcomeRequest,
 	IAgentHostPrepareSubmissionRequest,
 	IAgentHostReconnectRequest,
@@ -102,6 +103,7 @@ export interface IAgentHostConnection extends IDisposable {
 	readonly authority: AgentHostAuthorityId;
 	readonly connection: AgentHostClientConnectionId;
 	readonly onDidReceiveAction: Event<AgentHostChannelAction>;
+	readonly onDidProgress: Event<IAgentHostOperationProgress>;
 	initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult>;
 	reconnect(request: IAgentHostReconnectRequest): Promise<AgentHostReconnectResult>;
 	setSubscriptions(request: IAgentHostSetSubscriptionsRequest): Promise<IAgentHostSetSubscriptionsResult>;
