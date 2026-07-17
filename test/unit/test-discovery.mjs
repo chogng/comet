@@ -23,6 +23,7 @@ export const unitRuntimeSourceRoots = Object.freeze({
 	browser: Object.freeze([
 		'test/unit/browser',
 		'src/cs/base/test/browser',
+		'src/cs/editor/test/browser',
 	]),
 	electron: Object.freeze(['test/unit/electron']),
 });

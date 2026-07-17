@@ -23,10 +23,12 @@ exist without starting that runtime.
 
 The aggregate entry point is `index.mjs`. It runs all three real hosts in
 sequence. The Node entry point discovers source tests under `src` and
-`scripts`; Browser and Electron entry points discover host tests from their
-explicit runtime roots. A source-layer directory alone never changes the
-host. All hosts use the same focused test API and strict assertions, while
-only Node owns source-mapped LCOV collection.
+`scripts`, excluding every explicit non-Node runtime root. The Browser entry
+point owns `test/unit/browser`, `src/cs/base/test/browser`, and
+`src/cs/editor/test/browser`; Electron owns `test/unit/electron`. A
+source-layer directory alone never changes the host unless it is one of these
+explicit runtime roots. All hosts use the same focused test API and strict
+assertions, while only Node owns source-mapped LCOV collection.
 
 There are no domain runners, source manifests, or import-only aggregation
 tests. A runtime directory is valid only when its entry point starts that

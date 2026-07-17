@@ -119,6 +119,10 @@ suite('test discovery', { concurrency: false }, () => {
 		assert.equal(testFiles.some(file => file.startsWith('test/unit/browser/')), false);
 		assert.equal(testFiles.some(file => file.startsWith('test/unit/electron/')), false);
 		assert.equal(testFiles.includes('src/cs/base/test/browser/ui/contextview/contextview.test.ts'), false);
+		assert.equal(
+			testFiles.includes('src/cs/editor/test/browser/services/editorDraftStyleService.test.ts'),
+			false,
+		);
 		await validateTestProjectOwnership(testFiles, repositoryRoot);
 	});
 
@@ -128,11 +132,13 @@ suite('test discovery', { concurrency: false }, () => {
 		assert.deepStrictEqual(unitRuntimeSourceRoots.browser, [
 			'test/unit/browser',
 			'src/cs/base/test/browser',
+			'src/cs/editor/test/browser',
 		]);
 		assert.deepStrictEqual(unitRuntimeSourceRoots.electron, ['test/unit/electron']);
 		assert.deepStrictEqual(browserTests, [
 			'src/cs/base/test/browser/actionbar.test.ts',
 			'src/cs/base/test/browser/ui/contextview/contextview.test.ts',
+			'src/cs/editor/test/browser/services/editorDraftStyleService.test.ts',
 			'test/unit/browser/runtime.test.ts',
 		]);
 		assert.deepStrictEqual(electronTests, ['test/unit/electron/runtime.test.ts']);
