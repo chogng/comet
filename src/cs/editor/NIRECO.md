@@ -686,6 +686,16 @@ type Operation =
 
 `InsertNode` 携带 step-local `expectedParentHash`，插入 subtree 的全部 Node ID 已预分配；修改已有 node/entity 的 operation 携带执行前 draft state 的 `expectedNodeHash` 或 `expectedEntityHash`。`SplitText` 显式携带预分配的右 Text ID；`JoinText` 保留左 ID 并记录右 ID alias/tombstone。Marks 属于完整 TextNode，范围格式化编译为 `SplitText + SetTextMarks`，不存在无法确定 ID 的 range add/remove mark。Academic entity 更新使用完整 typed replacement，不提供 arbitrary field patch 或 generic link/unlink relation。
 
+`ReplaceAcademicEntity` 保留同一个 `EntityId`，但允许 Reference Snapshot、
+Evidence Link 和 Claim 之间的 typed replacement。Reducer 从旧 canonical
+collection 移除并按 ID 插入新 collection；由此产生的临时 dangling relation
+只能存在于 Transaction 私有 draft，最终 academic invariant validation 失败时
+整个 Transaction 不得安装。`SetMetadata` 同样是完整 replacement，不是字段
+patch；authors 和 keywords 的完整读取、浅拷贝与 Merkle vector 重建属于该
+Operation 的真实受影响成本，必须计量。Count 不变的单 ordinal replacement
+可以更新 fanout-32 positional path；count 或 semantic order 改变以及完整
+replacement 按实际 rebuild item reads 和 immutable array copied slots 计量。
+
 `Transaction` 针对一个资源和一个明确 Base Revision：
 
 ```typescript
@@ -860,7 +870,14 @@ Compose 的状态规则固定为：
 - `orphaned` 永久保持 orphaned；
 - `ambiguous` 展平并稳定去重所有 candidate；全部 candidate 映射到同一值时才能收敛为 mapped，部分 candidate 删除或 orphan 时仍保持 ambiguous，全部删除时成为 deleted，无 surviving candidate 且存在 orphaned 时成为 orphaned。
 
-Normalization 只在所有 ordered Operations 后运行一次，只扫描 touched neighborhoods，不生成 ID。Operation 和 Snapshot codec 已要求 marks canonical；normalization 只验证整组 marks，不排序、不去重、不修复非法的 subscript/superscript 组合。它移除 schema 明确允许移除的空 Text，并合并相邻相同 marks Text（保留左 ID）；输出自己的 PositionMap fragments 和有界 reversible delta，且再次运行必须无变化。复杂度按 touched parent 的直接 child 扫描和 changed ancestor 的 child-slot 浅拷贝计；它不遍历或 rehash unrelated subtree，也不把当前数组结构描述成 persistent vector。
+Normalization 只在所有 ordered Operations 后运行一次，只扫描 touched
+neighborhoods，不生成 ID。Operation 和 Snapshot codec 已要求 marks
+canonical；normalization 只验证整组 marks，不排序、不去重、不修复非法的
+subscript/superscript 组合。它移除 schema 明确允许移除的空 Text，并合并
+相邻相同 marks Text（保留左 ID）；输出自己的 PositionMap fragments 和有界
+reversible delta，且再次运行必须无变化。复杂度按 touched parent 的直接
+child 扫描和 changed ancestor 的 child-slot 浅拷贝计；它不遍历或 rehash
+unrelated subtree，也不把当前数组结构描述成 persistent vector。
 
 Kernel 产生不含新 ID 的 `InverseDraft`。History boundary 创建 undo Transaction 时分配全新的 Transaction ID 和 Operation ID，并绑定 forward commit 的 Revision 和 post-document hash。Inverse 顺序固定为 normalization inverse，然后从最后一个 forward Operation 到第一个；undo/redo 都是普通的新 Transaction，永不复用 forward Operation ID。
 
@@ -939,6 +956,12 @@ interface Revision {
 
 Revision immutable，ID 不等于 content hash。相同内容可以产生不同 Revision。顺序由唯一 authority 的 `sequence` 和 parent 决定，不依赖墙上时间。主分支不会因 undo、rebase 或 compaction 被重写。
 
+初始 Revision 固定为 `sequence: 1` 且 `parentRevisionId: null`；所有后继
+Revision 固定为 `sequence >= 2` 且 parent 非空。普通 WAL record 只保存后继
+Revision；初始 Revision 随 current Snapshot/manifest 恢复。Generic Revision
+codec 与 WAL codec 都执行这一配对，不能把 parent/sequence 一致性全部推迟到
+stream recovery。
+
 Undo/redo 提交 inverse Transaction 并产生新 Revision；它不删除历史。多个 View 共享文档历史，Selection 恢复数据留在各自 View history metadata。Browser View 不维护第二套文档 undo/redo stack。
 
 ## Authority 与 durability
@@ -970,6 +993,33 @@ encode closed record
 ```
 
 在前一 Revision 达到 `wal` 前，不得把后一 Revision标记为 `wal`。WAL record 包含 format version、sequence、parent Revision、Transaction hash、Document hash 和 checksum。
+
+`common/model/revision.ts` 拥有 exact `nireco-revision@1` 与
+`nireco-revision-wal-record@1` codec。每个 WAL payload 精确包含完整 Revision
+envelope、重新计算并校验的 Transaction hash，以及完整 persisted Transaction
+envelope；Revision 的 resource、parent、Transaction ID、actor 和 `createdAt`
+必须与 Transaction context 一致。WAL 中的 Revision parent 非空，sequence 是
+正 safe integer；跨 record 的 sequence/parent/used-ID 连续性由 recovery 验证。
+
+每帧固定为 16-byte big-endian protected header：`uint32 magic` +
+`uint32 payloadLength` + `uint32 payload IEEE CRC-32` +
+`uint32 header IEEE CRC-32`；header checksum 覆盖前三个字段，随后是最多
+`maximumPersistedTransactionUtf8Bytes + 64 KiB` 的 exact canonical UTF-8
+payload。额外 64 KiB 是 Revision/WAL exact wrapper 的固定有界余量，确保任一
+通过 16 MiB Transaction codec 上限的 Transaction 都可被 WAL framing 表示。
+Length 不能只靠 payload checksum 间接保护，否则最终完整 frame 的 length bit
+flip 会伪装成 crash tail 并导致静默截断。
+Decoder 使用 fatal UTF-8，并要求 decoded value 重新 canonical serialize 后的
+bytes 与原 payload 完全相同；非 canonical 空白、键序、重复键、checksum、
+length 或领域 codec 错误都是 corruption。最后一帧不完整返回最后完整 offset；
+若不完整区域之后还能找到 checksum、canonical bytes 和领域 codec 全部有效的
+完整 frame，则判定中间 corruption，不能按 crash tail 截断。
+
+Stream decoder 在检查 chunk byte limit 前不得复制 caller bytes，空 chunk 必须
+是 `O(1)`。它至多保留一个按已验证 header 定长分配的 pending frame，不随
+append 次数反复复制已接收 bytes。Resynchronization 只在线性 magic scan 中
+检查 header checksum 有效的候选，并同时限制 scanned bytes、candidate count
+和 payload checksum work；零长度候选不能绕过预算。
 
 ### 故障语义
 
