@@ -31,9 +31,8 @@ import {
 } from './codexAgentDefinition.js';
 import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
 import type { ILocalHostAgentPackageProduct } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
-import { CODEX_GENERATED_PROTOCOL_SDK_VERSION } from './protocol/protocolMetadata.js';
+import { CODEX_AGENT_SDK_VERSION } from '../agentSdkProducts.js';
 
-export const CODEX_AGENT_SDK_VERSION = CODEX_GENERATED_PROTOCOL_SDK_VERSION;
 export const CODEX_AGENT_SDK_EXECUTABLE_TARGET = 'vendor/codex-sdk/codex';
 export const CODEX_AGENT_SDK_EXECUTABLE_WINDOWS_TARGET = 'vendor/codex-sdk/codex.exe';
 export const CODEX_AGENT_SDK_PROTOCOL_TARGET = 'vendor/codex-sdk/protocol.json';

@@ -121,13 +121,13 @@ replace one another after failure.
   `IAgent` behavior; Claude and Codex use this owner
 
 Agent Host is a Platform subsystem and never imports Workbench or Sessions.
-Comet is the only bundled and default-installed Agent package. Every optional
-Agent package is absent until an explicit user install operation commits for
-the addressed Host; Session creation and Turn execution never install or
-download it. A package manifest declares `execution.kind: 'host'` for a direct
-Host Agent or `execution.kind: 'connected'` for a genuinely external
-implementation. Package ID, Agent ID, registration, authentication, and
-materialization remain separate.
+Comet, Claude, and Codex are product-built-in Agent orchestration layers.
+Claude and Codex resolve exact SDK bytes through the Agent SDK download cache
+only after explicit preparation. Genuinely external Agents retain the package
+lifecycle. A package manifest declares `execution.kind: 'host'` for a direct
+external Host Agent or `execution.kind: 'connected'` for an external
+implementation in another process. Package ID, Agent ID, registration,
+authentication, SDK preparation, and materialization remain separate.
 
 Remote Server Agent Host composition lives under
 `cs/server/node/agentHost`. It constructs the shared Platform Node Host
@@ -153,11 +153,11 @@ parallel Tool conversion or execution layer exists in Feature contributions.
 Agent Host contracts, connected-runtime support, and the in-repository
 Host Agents belong in this subsystem rather than a parallel
 top-level `cs/agent` layer. SDK-specific TypeScript source remains under the
-owning `node/agents/<agent>` directory. Exact SDK pins and target artifact
-production live under `build/agent-sdk`; installed SDK bytes remain private to
-the Agent package. Product-maintained SDKs do not add provider runtime
-processes. Sessions contributions never import the package manager or an SDK
-implementation.
+owning `node/agents/<agent>` directory. Exact SDK pins and target tarball
+production live under `build/agent-sdk`; downloaded SDK bytes remain private
+to the built-in Agent cache. Product-maintained SDKs do not add provider
+runtime processes. Sessions contributions never import the package manager,
+downloader, or an SDK implementation.
 
 ## Sessions Organization
 

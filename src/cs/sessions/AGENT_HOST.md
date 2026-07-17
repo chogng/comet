@@ -23,9 +23,9 @@ Sessions application
 ```
 
 Local and remote describe Host placement and transport. `comet`, `copilot`,
-`claude`, and `codex` identify Agent behavior. Host and connected describe how
-a package activates that behavior. None of these dimensions is inferred from
-another.
+`claude`, and `codex` identify Agent behavior. Built-in, direct external Host,
+and connected external execution describe how that behavior enters Agent Host.
+None of these dimensions is inferred from another.
 
 Remote Agent Host uses one explicit Comet reachability route: a bidirectional
 Agent Host channel on the shared Remote Server management connection, or a
@@ -35,13 +35,17 @@ placement and composition are defined in
 [Remote foundation](../platform/remote/REMOTE.md), and
 [Remote Tunnel architecture](../platform/tunnel/REMOTE_TUNNEL.md).
 
-Agent packages add a separate installation dimension. Comet is the only
-bundled and default-installed package. Every other Agent is absent until the
-user explicitly installs its package for the addressed Host and authenticated
-user scope. Product-maintained SDK packages activate direct Host Agents;
-genuinely external packages activate connected Agents. The package manifest
-declares the execution kind.
-Session creation and Turn execution never install or download an Agent package.
+Comet, Claude, and Codex are product-built-in orchestration layers. Their
+`IAgent` behavior mappings compile with the App. Claude and Codex are available
+from product configuration before SDK bytes are local; explicit preparation
+after user selection resolves an exact version-and-target cache, discovers
+native models, and publishes the active registration and Session type.
+Startup, passive discovery, restoration, and Turn execution do not hide a cold
+download.
+
+Agent packages add a separate installation dimension for external Agents.
+External direct Host and connected Agents are absent until the user explicitly
+installs their package for the addressed Host and authenticated user scope.
 See [Agent package architecture](AGENT_PACKAGES.md).
 
 ## Identities
@@ -1136,13 +1140,14 @@ Agent's only Host-facing surface is the Agent Runtime Protocol.
 
 ## Invariants
 
-- `CometAgent` is the built-in Agent integration and has stable Agent ID
-  `comet`.
-- The bundled `comet` package is the only default-installed Agent package.
-  Every other Agent requires an explicit user install operation for the
-  addressed Host and user scope.
-- Installable, installed, activated, authenticated, and materialized are
-  distinct states. Session and Turn paths never install or download packages.
+- Comet, Claude, and Codex are product-built-in Agent integrations with stable
+  Agent IDs.
+- Built-in availability, SDK cache presence, preparation, active registration,
+  authentication, and materialization are distinct states.
+- Cold SDK download occurs only during explicit built-in Agent preparation and
+  completes before draft, Session, or Turn creation.
+- Installable, installed, activated, authenticated, and materialized remain
+  distinct states for external packages.
 - Product-maintained SDK Agents implement `IAgent` directly. Connected
   execution is reserved for genuinely external implementations.
 - Local and remote are Host placements, not Agent identities.

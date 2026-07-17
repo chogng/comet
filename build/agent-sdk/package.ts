@@ -4,12 +4,20 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import * as esbuild from 'esbuild';
+import { c as createTar } from 'tar';
 
 import { projectRoot, resolveProjectPath } from '../lib/util.ts';
 import { verifyCodexProtocolSources } from './codexProtocol.ts';
 
 const agentSdkRoot = resolveProjectPath('build', 'agent-sdk', 'agents');
 const outputRoot = resolveProjectPath('dist-agent-sdk');
+
+interface IAgentSdkBuildResult {
+	readonly id: 'claude' | 'codex';
+	readonly version: string;
+	readonly target: string;
+	readonly archive: string;
+}
 
 function sdkTarget(agent: 'Claude' | 'Codex'): string {
 	if (!['darwin', 'linux', 'win32'].includes(process.platform)) {
@@ -46,7 +54,7 @@ async function runNpmCi(packageRoot: string, displayName: string): Promise<void>
 	});
 }
 
-async function packageClaudeAgentSdk(): Promise<void> {
+async function packageClaudeAgentSdk(): Promise<IAgentSdkBuildResult> {
 	const claudePackageRoot = path.join(agentSdkRoot, 'claude');
 	const packageJson = JSON.parse(await fs.readFile(path.join(claudePackageRoot, 'package.json'), 'utf8')) as {
 		readonly dependencies: Readonly<Record<string, string>>;
@@ -103,7 +111,15 @@ async function packageClaudeAgentSdk(): Promise<void> {
 		executableSha256: createHash('sha256').update(bytes).digest('hex'),
 		moduleSha256: createHash('sha256').update(sdkModuleBytes).digest('hex'),
 	}, null, 2)}\n`);
+	const archive = path.join(agentOutputRoot, `claude-${target}.tgz`);
+	await createTar({
+		cwd: targetRoot,
+		file: archive,
+		gzip: true,
+		portable: true,
+	}, [executableName, 'sdk.js', 'artifact.json']);
 	console.log(`[agent-sdk] packaged Claude ${version} for ${target} from ${path.relative(projectRoot, source)}`);
+	return Object.freeze({ id: 'claude', version, target, archive });
 }
 
 function codexBinaryTriple(target: string): string {
@@ -118,7 +134,7 @@ function codexBinaryTriple(target: string): string {
 	throw new Error(`Codex SDK has no executable triple for ${target}.`);
 }
 
-async function packageCodexAgentSdk(): Promise<void> {
+async function packageCodexAgentSdk(): Promise<IAgentSdkBuildResult> {
 	const codexPackageRoot = path.join(agentSdkRoot, 'codex');
 	const packageJson = JSON.parse(await fs.readFile(path.join(codexPackageRoot, 'package.json'), 'utf8')) as {
 		readonly dependencies: Readonly<Record<string, string>>;
@@ -170,15 +186,35 @@ async function packageCodexAgentSdk(): Promise<void> {
 		executableSha256: createHash('sha256').update(bytes).digest('hex'),
 		protocolManifestSha256: createHash('sha256').update(protocolManifestBytes).digest('hex'),
 	}, null, 2)}\n`);
+	const archive = path.join(agentOutputRoot, `codex-${target}.tgz`);
+	await createTar({
+		cwd: targetRoot,
+		file: archive,
+		gzip: true,
+		portable: true,
+	}, [executableName, 'protocol.json', 'artifact.json']);
 	console.log(`[agent-sdk] packaged Codex ${version} for ${target} from ${path.relative(projectRoot, source)}`);
+	return Object.freeze({ id: 'codex', version, target, archive });
 }
 
-/** Produces every immutable SDK input consumed by the desktop Agent package catalog. */
+/** Produces every immutable target SDK archive and its product-stamping receipt. */
 export async function packageAgentSdks(): Promise<void> {
-	await Promise.all([
+	const results = await Promise.all([
 		packageClaudeAgentSdk(),
 		packageCodexAgentSdk(),
 	]);
+	const products = Object.fromEntries(results.map(result => [
+		result.id,
+		Object.freeze({
+			version: result.version,
+			target: result.target,
+			archive: path.relative(outputRoot, result.archive).replaceAll(path.sep, '/'),
+		}),
+	]));
+	await fs.writeFile(path.join(outputRoot, 'products.json'), `${JSON.stringify({
+		schema: 1,
+		products,
+	}, null, 2)}\n`);
 }
 
 if (import.meta.filename === process.argv[1]) {

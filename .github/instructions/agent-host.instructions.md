@@ -26,28 +26,28 @@ binding, target-backed Tools, or lazy Feature operations.
 
 - Agent Host is the single execution boundary for every Agent.
 - The `CometAgent` integration has stable Agent ID `comet`; its orchestration
-  implements `IAgent` directly. The bundled `comet` package is the only
-  default-installed Agent package.
-- Copilot, Claude, Codex, and every other optional Agent are absent until the
-  user explicitly installs their package for the addressed Host and user
-  scope. Installable catalog entries are not installed packages or Agent
-  registrations. Session creation, restore, send, model selection, and Agent
-  discovery never install or download a package. Product-maintained SDK
-  packages use App-compiled direct Host Agents; genuinely external packages use
-  connected Agents. The manifest declares that execution kind explicitly.
-- Treat one installed revision as the complete verified SDK dependency
-  closure. Package installation or update must stage every SDK module,
-  executable, native protocol receipt, helper, and native asset before
-  activation. SDK-specific behavior mappings and generated protocol types
-  compile with the App. Session, Turn, authentication, and Agent-activation
-  paths never download or replace executable dependencies.
+  implements `IAgent` directly. Claude and Codex are peer product-built-in
+  Agents whose App-compiled mappings implement `IAgent` directly.
+- Product configuration makes Claude and Codex available without SDK network
+  access. Explicit preparation after user selection resolves their exact
+  version-and-target SDK cache, downloads a cold cache, discovers native
+  models, and publishes the active registration and Session type before draft
+  or Session creation. Startup, passive discovery, Settings, restoration, and
+  Turn execution never hide a cold download.
+- Built-in SDK cache state is not package installation state. Clearing cached
+  bytes does not uninstall an Agent or change retained backing ownership.
+  SDK versions change only with App product configuration.
+- Genuinely external Agents use the generic install, update, activation, and
+  uninstall lifecycle. Installable catalog entries are not installed packages
+  or Agent registrations. Their manifest declares direct Host or connected
+  execution explicitly, and one installed revision contains its complete
+  verified dependency closure.
 - Launch connected Agents under the exact sandbox and authority derived
   from their verified manifest and Host policy. They receive no ambient Host
   service objects or credential environment; filesystem, network, secret, and
   Tool-executor access never exceeds the committed grant.
 - Agent package ID, package revision, Agent ID, registration, authentication,
-  and materialization are separate. Agent SDKs remain private package
-  dependencies and are not the product installation contract.
+  SDK cache identity, preparation, and materialization are separate.
   Persist every Session and Chat backing with its owning package ID as well as
   its Agent ID. Restoration and resume migration require that same package and
   Agent; a different package that registers the same Agent ID must never claim

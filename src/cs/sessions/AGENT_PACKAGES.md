@@ -2,391 +2,234 @@
 
 ## Boundary
 
-An Agent package is the Host-owned installation and activation unit for one or
-more Agents. An Agent SDK is a private dependency inside that package.
+Agent packages are the installation and isolation contract for genuinely external Agents. They are distinct from Comet's product-built-in Agent orchestration layers.
+
+Comet, Claude, and Codex are built into the product:
+
+- their `IAgent` implementations and behavior mappings compile with the App;
+- Claude and Codex resolve product-owned SDK bytes through the versioned Agent SDK cache;
+- they never appear in installable or installed external package catalogs;
+- deleting their cached SDK bytes is not uninstalling an Agent.
+
+External Agents enter one addressed Agent Host only through an explicit package install transaction:
 
 ```text
-Agent package
-├── product identity and revision
-├── target and content digest
-├── declared Agent IDs
-├── execution kind: host | connected
-├── verified SDK/module/executable dependency closure
-└── privilege grant
-
-IAgent
-├── descriptor and models
-├── execution profiles and configuration
-├── Sessions and Chats
-├── resume state
-└── actions
+product-authorized external package offering
+    → stage complete dependency closure
+    → verify identity, target, digests, privileges, and execution kind
+    → construct and validate exact Agent registrations
+    → atomically commit installed receipt and registrations
 ```
 
-Users install Agent packages. They do not install unqualified SDK directories,
-run provider package managers, or select arbitrary provider versions.
+Session creation, Turn execution, authentication, and passive discovery never install or update an external package.
 
-Package lifecycle belongs to the addressed Agent Host. Sessions, Workbench
-Chat, and Settings consume canonical Host snapshots and never inspect or load
-package files directly.
+## Distinct state
 
-## Distribution and execution
+These identities and states never substitute for one another:
 
-Every supported Host starts with exactly one bundled package:
-
-| Package ID | Agent ID | Distribution | Initial state | Execution |
-|---|---|---|---|---|
-| `comet` | `comet` | bundled | installed and active | direct Host `IAgent` |
-
-Claude, Codex, Copilot, and other optional packages are absent until the user
-installs them for one exact Host authority and user scope. Listing an offering
-does not install or activate it.
-
-Execution kind is explicit:
-
-| `manifest.execution.kind` | Meaning |
+| Concern | Authoritative state |
 |---|---|
-| `host` | A product-authorized App-compiled factory constructs an `IAgent` inside Agent Host Node |
-| `connected` | A genuinely external process negotiates the Agent Runtime Protocol |
+| Built-in Agent availability | App product definition |
+| Built-in SDK bytes | exact version-and-target cache |
+| Built-in active registration | completed Agent preparation and native model snapshot |
+| External package availability | installable package catalog |
+| External package installation | installed package receipt |
+| Agent execution | active runtime registration |
+| Agent credentials | typed Secret Storage reference and Turn-scoped grant |
+| Session or Chat restoration | owning Agent identity, retained backing, and resume schema |
 
-Product-maintained SDK integrations use `host`. Their behavior mappings and
-generated protocol types compile with the App, while each installed package
-contains the exact SDK modules, executables, native protocol receipts, helpers,
-and native assets consumed by that mapping. They do not add provider runtime
-processes. The connected form remains for an implementation whose process
-boundary is part of its actual design.
+Matching Agent IDs, files, credentials, product metadata, display names, or cache directories never prove installation or active registration.
 
-Installing Claude on the local Host does not install it on a Remote Server or
-Remote Tunnel Host. Each Host owns its own package state.
+## External package contracts
 
-## Repository and release ownership
-
-| Concern | Owner |
-|---|---|
-| Exact SDK version and lockfile | `build/agent-sdk/agents/<agent>/` |
-| Target SDK artifact production | `build/agent-sdk/` |
-| SDK-specific `IAgent` behavior | `src/cs/platform/agentHost/node/agents/<agent>/` |
-| Generic catalog, verification, activation, update, uninstall, and cleanup | `src/cs/platform/agentHost/node/packages/` |
-| SDK-neutral package and Agent contracts | `src/cs/platform/agentHost/common/` |
-| Package, model, and configuration UI | `src/cs/workbench/contrib/preferences/` |
-| Process startup | `src/cs/code/electron-main/main.ts` |
-
-Comet chooses, tests, and publishes an exact SDK revision. The build pin and
-lockfile produce target artifacts; a common package offering identifies those
-immutable bytes. Application startup consumes that product catalog and does not
-construct an offering from root `node_modules`.
-
-For example, product SDK build ownership is explicit:
-
-```text
-build/agent-sdk/agents/claude/
-├── entry.ts
-├── package.json
-└── package-lock.json
-
-build/agent-sdk/agents/codex/
-├── package.json
-└── package-lock.json
-```
-
-Updating the SDK is a Comet release change. The user authorizes a common Host
-update operation; the user does not maintain the dependency graph.
-
-## Identities and catalogs
-
-| Identity | Meaning |
-|---|---|
-| Agent package ID | Stable installation identity such as `claude` |
-| Agent package revision | Exact SDK version, target, manifest, and content revision |
-| Agent ID | Stable behavior identity registered with Host |
-| Agent registration revision | Exact descriptor, capabilities, schemas, Tools, and resume support |
-| Package operation ID | Retry-safe mutation identity |
-
-Package ID and Agent ID use separate namespaces even when both strings are
-`claude`. Historical Session and Chat records retain both owning IDs; another
-package that later claims the same Agent ID cannot receive that opaque state.
-
-Agent Host owns three distinct catalogs:
-
-1. `installablePackages` lists authorized offerings the user may install.
-2. `installedPackages` records exact verified package receipts.
-3. `activations` binds installed package revisions to active Agent
-   registrations.
-
-Only the installed catalog proves installation. Only activation proves that an
-Agent can execute. An SDK file, credential, environment variable, model name,
-or historical Session proves neither.
-
-## Manifest and dependency closure
-
-The common manifest is SDK-neutral:
+An offering identifies one immutable product-authorized external package revision:
 
 ```typescript
-export type AgentPackageExecution =
-	| { readonly kind: 'host' }
-	| { readonly kind: 'connected'; readonly entryPoint: string };
-
-export interface IAgentPackageDependency {
-	readonly id: string;
+interface IAgentPackageOffering {
+	readonly packageId: AgentPackageId;
+	readonly revision: AgentPackageRevision;
+	readonly contentDigest: AgentPackageContentDigest;
 	readonly source: string;
-	readonly target: string;
-	readonly digest: AgentPackageContentDigest;
-	readonly license: string;
-	readonly executable: boolean;
+	readonly distribution: 'bundled' | 'user';
 }
+```
 
-export interface IAgentPackageManifest {
-	readonly schema: number;
+A manifest declares exact execution ownership, Agent IDs, target, dependency closure, and privileges:
+
+```typescript
+interface IAgentPackageManifest {
+	readonly schema: 1;
 	readonly packageId: AgentPackageId;
 	readonly revision: AgentPackageRevision;
 	readonly contentDigest: AgentPackageContentDigest;
 	readonly publisher: string;
 	readonly target: IAgentPackageTarget;
-	readonly execution: AgentPackageExecution;
+	readonly execution:
+		| { readonly kind: 'host' }
+		| { readonly kind: 'connected'; readonly entryPoint: string };
 	readonly agentIds: readonly AgentId[];
 	readonly dependencies: readonly IAgentPackageDependency[];
 	readonly privileges: readonly IAgentPackagePrivilege[];
 }
 ```
 
-A product-maintained SDK package has no Agent Runtime Protocol entry point:
+Use `host` when an external package is authorized to construct a product-supported direct `IAgent` implementation inside Agent Host. Use `connected` when its implementation genuinely belongs in a separate sandboxed process speaking the Agent Runtime Protocol.
 
-```typescript
-execution: Object.freeze({ kind: 'host' }),
-dependencies: Object.freeze([
-	Object.freeze({
-		id: 'codex-sdk-executable',
-		target: 'vendor/codex-sdk/codex',
-		executable: true,
-		// source, digest, and license omitted here only for readability
-	}),
-	Object.freeze({
-		id: 'codex-app-server-protocol',
-		target: 'vendor/codex-sdk/protocol.json',
-		executable: false,
-		// source, digest, and license omitted here only for readability
-	}),
-]),
-```
+A provider executable spoken to by an App-compiled built-in Agent is not a connected Agent entry point.
 
-A connected package names exactly one entry point, and that entry point must be
-one executable dependency in its verified closure:
+## Complete immutable closure
 
-```typescript
-execution: Object.freeze({
-	kind: 'connected',
-	entryPoint: 'bin/external-agent.js',
-})
-```
+One installed external package revision contains every runtime byte it needs:
 
-The installed receipt carries the complete closure with a verified digest and
-`immutable: true` for every dependency. Missing, duplicate, mutable, digest-
-mismatched, or target-mismatched dependencies reject the package.
+- entry module or executable;
+- helper executables;
+- native protocol receipts;
+- native modules and libraries;
+- runtime assets.
 
-## Installation and activation
+Every dependency has one normalized target, digest, license, executable bit, and immutable verified source. Activation reads only that verified receipt directory.
+
+The verifier rejects:
+
+- missing, duplicate, or undeclared dependencies;
+- target escape, absolute targets, and target collisions;
+- links, special files, mutable sources, and digest mismatch;
+- target operating-system or architecture mismatch;
+- undeclared privilege or entry point;
+- incomplete connected runtime closure.
+
+No activation or runtime failure chooses another source, revision, execution kind, or package.
+
+## Installation
+
+Installation is one retry-safe operation:
 
 ```text
-install(packageId)
-    → address one exact offering and expected catalog revision
-    → stage every dependency under one operation ID
-    → verify manifest, target, closure, modes, digests, and privileges
-    → prepare one package activation
-        host      → product factory loads installed SDK bytes and creates IAgent
-        connected → sandbox launches exact connected entry point
-    → validate the complete Agent registration set
-    → commit installed receipt and activation atomically
-    → publish the new Host root snapshot
+record operation identity and request digest
+    → stage complete external package
+    → verify complete closure
+    → construct direct or connected Agent endpoint
+    → validate exact registrations and retained resume compatibility
+    → acquire package-wide Host mutation gate
+    → atomically commit installed receipt, registrations, and migrations
+    → retire staging state
 ```
 
-No Agent registration is visible before the package commit. A failed SDK load,
-model discovery, external handshake, retained-state validation, or registration
-validation leaves no partial installation.
+A repeated operation with the same identity and digest returns its recorded outcome. The same identity with a different digest reports a conflict. An uncertain outcome is reconciled under the same identity.
 
-The package operation request is idempotent:
+Install failure before commit leaves no installed receipt, active registration, migrated resume state, or published Session type.
 
-```typescript
-const request: IAgentPackageOperationRequest = Object.freeze({
-	operation,
-	digest,
-	expectedCatalogRevision,
-	payload: Object.freeze({ kind: 'install', packageId, offering }),
-});
-```
+## Activation
 
-Repeating the same operation and digest reconciles its recorded outcome.
-Repeating the operation with another digest reports a conflict. The caller does
-not create a new identity while the earlier outcome is uncertain.
+Activation validates:
 
-## Models and configuration after activation
+- every registration belongs to the installed package and one declared Agent ID;
+- Agent IDs are unique in the Host authority;
+- descriptor, capability, configuration, Tool-schema, and resume-schema revisions match the active endpoint;
+- retained backing is restorable or has an exact declared migration edge;
+- connected execution negotiated one supported protocol version and sandbox authority.
 
-Package metadata does not maintain the provider model list. The active Agent
-obtains native model facts from its installed SDK and publishes canonical
-descriptors through its registration.
+Direct Host Agents receive only explicit Host services. Connected Agents receive only the process, filesystem, network, secret, and Tool-executor grants committed by their manifest.
 
-```text
-installed SDK native model operation
-    ├── Claude query.supportedModels()
-    └── Codex model/list with exact pagination
-    → validate non-empty unique native snapshot and model capabilities
-    → map native IDs and capabilities
-    → content-derived Agent/model descriptor revisions
-    → Host snapshot
-    → Sessions model picker + Settings model rows
-```
-
-For Codex, `model/list` supplies the exact default and supported reasoning
-efforts used to build each model configuration schema. Product code does not
-copy model names or reasoning capabilities into a second catalog:
-
-```typescript
-do {
-	const page = await appServer.request('model/list', {
-		cursor,
-		limit: 100,
-		includeHidden: false,
-	});
-	models.push(...page.data);
-	cursor = page.nextCursor;
-} while (cursor !== null);
-```
-
-Configuration is also active Agent state. The package manifest grants required
-resources; the Agent publishes typed Host-default, Session, and model schemas.
-Raw SDK types and credentials do not enter package manifests or catalog state.
+An external package cannot claim retained state owned by another package merely by registering the same Agent ID.
 
 ## Update
 
 An update is one package-wide transaction:
 
 ```text
-gate every Agent ID in the package
-    → stop admitting lifecycle mutations and new Turns
+gate every affected Agent ID
+    → stop new lifecycle mutations and Turns
     → drain accepted non-terminal work
     → checkpoint and release materialized backing
-    → stage and verify the complete new artifact closure
-    → construct the new Agent activation
-    → validate every retained resume state
-    → migrate only declared schema edges
-    → atomically commit package, registrations, and migrated resume state
-    → retire the previous activation and artifacts
+    → stage and verify the new complete closure
+    → construct new endpoints
+    → validate every retained record
+    → run exact declared resume migrations
+    → atomically commit package, registrations, and migrated state
+    → retire previous endpoints and unreferenced artifacts
 ```
 
-If the new activation cannot restore or migrate every retained record, the
-update fails before commit. A committed update does not switch back to the
-previous revision after later failure.
+If any retained record cannot restore or migrate, the update fails before commit. A committed update does not switch back after later failure.
 
-## Uninstall and data ownership
+## Uninstall and retained data
 
-Uninstall removes the installed receipt, active registrations, and unreferenced
-SDK artifacts. It preserves Host Session history and credentials.
-
-These operations remain separate:
+Uninstall removes the external installed receipt, registrations, endpoints, and unreferenced artifacts. It preserves Host Session history, provider backing, and credentials.
 
 | Operation | Requires active Agent | Deletes Host history | Deletes provider backing |
 |---|---:|---:|---:|
-| Uninstall package | yes during quiescing | no | no |
-| Delete Agent-backed data | yes | commits matching catalog deletion | yes, through Agent contract |
+| Uninstall external package | yes during quiescing | no | no |
+| Delete Agent-backed data | yes | commits matching catalog deletion | yes, through `IAgent` |
 | Purge retained Host records | package and registrations must be absent | yes | no |
-| Delete credential | no | no | no; removes Secret Storage value only |
+| Delete credential | no | no | no |
 
-Reinstall validates retained resume state before activation. It does not infer
-compatibility from matching Agent IDs.
+Reinstall validates retained resume state before activation. It does not infer compatibility from matching Agent IDs.
 
-## Authority and isolation
+## Built-in SDK cache
 
-Every installed dependency is read from one immutable receipt directory. The
-Host verifies regular-file type, canonical location, digest, target uniqueness,
-and executable mode before use.
+Built-in SDK caching is defined by [Agent Host architecture](AGENT_HOST.md) and implemented by `AgentSdkDownloader`.
 
-Direct Host Agents receive only explicit Host services and installed SDK
-bindings:
-
-```typescript
-createAgent(installedPackage, {
-	toolExecution,
-	credentialResolver,
-});
+```text
+App-selected SDK version and target
+    → completed cache hit
+    or
+explicit preparation downloads one immutable tarball
+    → bounded safe extraction
+    → atomic cache publication
+    → built-in Agent resolves its private SDK bindings
 ```
 
-Connected Agents additionally receive a sandbox authority derived from their
-verified manifest. The sandbox starts only the declared entry point and never
-gains ambient Host service objects. Process, filesystem, network, secret, and
-Tool-executor access cannot exceed the committed grant.
+Cache clearing removes only reproducible SDK bytes. It does not remove Agent availability, normalized history, credentials, or retained backing. Startup and passive catalog reads do not fill a cold cache.
 
-SDK and helper updates always produce a new package revision. A cache fill,
-Session start, authentication request, or first Turn never replaces executable
-code.
-
-## Module layout
+## Ownership
 
 ```text
 src/cs/platform/agentHost/
 ├── common/
 │   └── package identities, manifests, catalogs, operations, and errors
 └── node/
+    ├── agentSdkDownloader.ts
     ├── agents/
     │   ├── comet/
     │   ├── claude/
     │   └── codex/
-    │       ├── codexAgent.ts
-    │       ├── codexAgentDefinition.ts
-    │       ├── codexAgentPackage.ts
-    │       ├── codexAppServer.ts
-    │       └── protocol/
     ├── packages/
     │   ├── agentPackageActivationRegistry.ts
     │   ├── agentPackageLifecycle.ts
-    │   ├── localAgentPackageArtifactPort.ts
-    │   └── productAgentPackageCatalog.ts
+    │   └── localAgentPackageArtifactPort.ts
     └── runtime/
-        └── generic connected-Agent negotiation only
+        └── connected external Agent negotiation
 ```
 
-Settings and Sessions provider code consume common snapshots. They do not
-import any file under `node/agents` or `node/packages`.
+Settings and Sessions consume common Host snapshots. They never import Node package management, the SDK downloader, or Agent implementations.
 
-## Adding an optional package
+## Adding an Agent
 
-For a product-maintained SDK:
+For a product-built-in SDK Agent:
 
-1. Add the exact build pin, lockfile, entry module, and target artifact output
-   under `build/agent-sdk/agents/<agent>/`.
-2. Implement `<Agent> implements IAgent` under
-   `src/cs/platform/agentHost/node/agents/<agent>/`.
-3. Publish a `host` package product with the complete SDK artifact closure.
-4. Add the offering to `productAgentPackageCatalog.ts`; do not install it by
-   default.
-5. Test artifact integrity, install, direct activation, SDK model discovery,
-   configuration, update, uninstall, and retained-state validation.
+1. Pin its exact SDK and lockfile under `build/agent-sdk/agents/<agent>/`.
+2. Produce target tarballs and product-stamping metadata.
+3. Implement the direct `IAgent` and exhaustive native mapping under `node/agents/<agent>/`.
+4. Add its product SDK definition and explicit preparation path.
+5. Test cold preparation, cache reuse, cache deletion, model discovery, native behavior mapping, cancellation, and version mismatch.
 
-For a genuinely external Agent:
+For an external Agent package:
 
-1. Publish a `connected` package with one verified executable entry point.
-2. Implement the Agent Runtime Protocol without a second semantic Agent API.
-3. Test sandbox authority, protocol negotiation, disconnect, reconciliation,
-   update, and uninstall.
+1. Publish a complete immutable package offering.
+2. Declare direct Host or connected execution explicitly.
+3. Use the generic install, activation, update, uninstall, and retained-state lifecycle.
+4. Test artifact integrity, privilege authority, registration validation, protocol negotiation where applicable, recovery, and resume compatibility.
 
-Neither form adds provider-specific package or Settings services.
+Neither form adds provider-specific package management or Settings services.
 
 ## Invariants
 
-- Comet is the only bundled and default-installed package.
-- Every optional package requires an explicit install for one addressed Host.
-- Product-maintained SDKs implement `IAgent` directly in Platform Agent Host
-  Node; connected execution is reserved for genuine external processes.
-- Package ID, Agent ID, registration, authentication, and materialization remain
-  distinct.
-- Build pins and lockfiles select SDK versions; users do not manage provider
-  package versions.
-- Activation verifies the entire SDK/module/executable closure before publishing
-  any registration.
-- Session creation, Turn execution, authentication, and Agent discovery never
-  install, update, or download package code.
-- Models come from the active Agent's installed SDK snapshot, not a UI or
-  product-maintained provider list.
-- Updates commit package, registrations, and resume migrations atomically.
-- Uninstall preserves Session history and never deletes credentials or provider
-  backing implicitly.
-- Missing packages, corrupt artifacts, unsupported targets, invalid model
-  snapshots, incompatible resume state, and denied privileges fail explicitly.
-- No failure path selects another source, revision, execution kind, Agent, or
-  model list.
+- Comet, Claude, and Codex are product-built-in Agents, not external packages.
+- Built-in SDK cache state never masquerades as installation state.
+- Every external Agent requires an explicit install for one addressed Host.
+- External package installation verifies the complete runtime closure before registration.
+- Package ID, Agent ID, registration, authentication, SDK cache, preparation, and materialization remain distinct.
+- Updates commit package state, registrations, and resume migrations atomically.
+- Uninstall preserves retained Session history and credentials.
+- Missing packages, corrupt artifacts, unsupported targets, invalid registrations, and incompatible resume state fail explicitly.
+- No failure path selects another source, revision, execution kind, Agent, or model list.

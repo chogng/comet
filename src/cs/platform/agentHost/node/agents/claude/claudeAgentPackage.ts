@@ -18,6 +18,7 @@ import type {
 } from 'cs/platform/agentHost/common/packages';
 import type { IVerifiedAgentPackage } from 'cs/platform/agentHost/node/packages/agentPackageTypes';
 import type { ILocalHostAgentPackageProduct } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
+import { CLAUDE_AGENT_SDK_VERSION } from '../agentSdkProducts.js';
 import { ClaudeAgent, productClaudeAgentRetentionLimits, type IClaudeAgentSdk } from './claudeAgent.js';
 import {
 	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
@@ -29,7 +30,6 @@ import {
 	CLAUDE_AGENT_TOOL_EXECUTOR_PRIVILEGE,
 } from './claudeAgentDefinition.js';
 
-export const CLAUDE_AGENT_SDK_VERSION = '0.3.208';
 export const CLAUDE_AGENT_SDK_EXECUTABLE_TARGET = 'vendor/claude-agent-sdk/claude';
 export const CLAUDE_AGENT_SDK_EXECUTABLE_WINDOWS_TARGET = 'vendor/claude-agent-sdk/claude.exe';
 export const CLAUDE_AGENT_SDK_MODULE_TARGET = 'vendor/claude-agent-sdk/sdk.js';

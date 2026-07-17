@@ -18,12 +18,11 @@ Shipping a production external Agent is not required to delete this migration
 document; the Agent Host composition registers `CometAgent` directly without
 changing Sessions, Chat, Turn, attachment, or Tool contracts.
 
-The migration also establishes the Host-owned Agent package lifecycle. Its
-default installed set contains only the bundled `comet` package. Optional
-Copilot, Claude, Codex, and other packages remain absent until an explicit user
-install operation commits for the addressed Host. Product-maintained SDK
-packages activate direct Host Agents; genuinely external packages use the
-connected protocol.
+The migration also establishes the Host-owned Agent package lifecycle for
+genuinely external Agents. Comet, Claude, and Codex are product-built-in
+orchestration layers. Claude and Codex use App-compiled direct `IAgent`
+mappings plus exact product-configured SDK download caches; they do not enter
+the installable external package catalog.
 
 The migration establishes the Remote Tunnel foundation defined in
 [REMOTE_TUNNEL.md](../platform/tunnel/REMOTE_TUNNEL.md), including hosted
@@ -157,17 +156,17 @@ copy upstream `defaultChat` routing, Feature-advisory directory handling,
 client-local URI assumptions, or permissive handling that can leave required
 state actions unapplied.
 
-The upstream SDK downloader also treats product-configured SDKs as available
-before their bytes are local and may trigger a cold download from first Agent
-use. That mechanism is a runtime dependency cache, not the target installation
-contract. The target does not copy create-on-use or send-on-use download:
-optional packages become executable only after a separate explicit install and
-activation transaction, while Comet is the sole bundled package.
+The target treats product-configured Claude and Codex as available before their
+SDK bytes are local. An explicit preparation operation after user selection
+fills a cold version-and-target cache, discovers exact native models, and
+publishes the active registration before draft or Session creation. Startup,
+passive discovery, restoration, Settings, and Turn execution do not trigger
+the download. Clearing the cache does not uninstall a built-in Agent.
 
-The Claude and Codex packages and direct `IAgent` implementations now live
-under `src/cs/platform/agentHost/node/agents/<agent>`. Their exact module and/or
-executable artifacts come from `build/agent-sdk/agents/<agent>`. The remaining
-migration preserves that boundary for later product-maintained SDKs:
+The Claude and Codex direct `IAgent` implementations live under
+`src/cs/platform/agentHost/node/agents/<agent>`. Their exact SDK pins and
+target tarballs come from `build/agent-sdk/agents/<agent>`. The remaining
+migration preserves that boundary for later product-built-in SDK Agents:
 `src/cs/code` contains application startup only, with no forwarding module,
 provider runtime entry, or root-`node_modules` package construction.
 
@@ -221,17 +220,16 @@ Agent Host Protocol over each route without introducing a second Agent API.
 
 ## Final project-owned boundary
 
-- The `CometAgent` integration, with stable Agent ID `comet`, owns the built-in
-  Agent registration. Its bundled package is the only default-installed Agent
-  package and implements `IAgent` directly.
+- Comet, Claude, and Codex own product-built-in Agent registrations and
+  implement `IAgent` directly.
+- Agent Host publishes built-in availability separately from exact prepared
+  registrations. Claude and Codex preparation resolves a product-owned SDK
+  cache and native model snapshot before Session creation.
 - Agent Host owns separate installable-package, installed-package, and active
-  registration catalogs. Optional packages require an explicit user
-  install for the addressed Host; Session and Turn paths never install or
-  download an SDK. Product-maintained SDK packages use direct Host Agents;
-  genuinely external packages use connected Agents.
-- One installed revision records a fully staged and verified executable
-  dependency closure. No Session, Turn, authentication, or runtime-start path
-  downloads or replaces an SDK, module, helper, or native executable.
+  registration catalogs for genuinely external Agents.
+- One installed external revision records a fully staged and verified
+  executable dependency closure. External Session, Turn, authentication, and
+  runtime-start paths never install or replace package bytes.
 - `IAgent` is the single Host-side semantic port. Comet and product-maintained
   SDK Agents implement it directly; genuinely external Agents project it
   through `IAgentRuntimeConnection`.
@@ -332,7 +330,7 @@ The naming cutover is direct:
 | `DefaultSessionsProvider` | `AgentHostSessionsProvider` |
 | `DefaultSession` and `DefaultChat` | Host-identified provider models implementing `ISession` and `IChat` |
 | `mainAgent` and `run_main_agent_turn` | one `CometAgent` integration registered as `comet` through the Agent Runtime Port |
-| product-configured or first-use SDK download | explicit Host package install and activation; only `comet` is bundled |
+| product-configured or first-use SDK download | explicit built-in Agent preparation before draft creation |
 | `defaultChat` and `mainChat` roles | no durable role; address the exact Chat ID |
 | `sessions.providers.default` | one-time migration input, then deleted; Host catalog and Comet Agent resume state are authoritative |
 
@@ -420,11 +418,12 @@ names. No target registration imports or dispatches through the legacy path.
    a call to the independently exposed Tool. Add stable Browser main-frame
    document epochs so a target can address one navigation without pretending
    to be an immutable content snapshot.
-5. Register the `CometAgent` integration with Agent Host under Agent ID `comet`
-   through the bundled `comet` package and one exact runtime registration
-   revision. Make it the only default-installed package. Do not register or
-   download Copilot, Claude, Codex, or another optional package until an
-   explicit user install transaction commits its direct or connected Agent for the
+5. Register Comet, Claude, and Codex as product-built-in direct `IAgent`
+   integrations. Publish Claude and Codex availability from exact product SDK
+   configuration without downloading at startup. Add explicit preparation
+   after user selection, version-and-target SDK caching, progress, native model
+   discovery, and atomic active registration before draft creation. Keep
+   genuinely external Agents behind explicit package installation for the
    addressed Host. Persist the opaque resume-schema ID with Agent backing and
    retain the owning package ID and Agent ID on every Session and Chat record.
    Attribute migrated legacy records to the bundled `comet` package and Agent.
@@ -437,8 +436,8 @@ names. No target registration imports or dispatches through the legacy path.
    runtime or package replacement while any old-revision Turn remains
    non-terminal.
    Add exact SDK dependency pins and lockfiles under
-   `build/agent-sdk/agents/<agent>/`, produce immutable target-specific package
-   artifacts there, and publish those revisions into the installable catalog.
+   `build/agent-sdk/agents/<agent>/`, produce immutable target-specific
+   tarballs there, and stamp exact product version and URL templates.
    Move Claude, Codex, and later SDK-specific behavior directly into
    `src/cs/platform/agentHost/node/agents/<agent>/`. Keep Code files as thin
    application entry points and composition only; delete package definitions
@@ -570,7 +569,8 @@ names. No target registration imports or dispatches through the legacy path.
     reconciliation, retained package-and-Agent attribution, rejection of a
     different package claiming the same Agent ID, user-installed
     connected-runtime isolation, complete dependency-closure verification,
-    rejection of runtime or first-use SDK downloads, reinstall with retained
+    rejection of hidden startup or Turn-time SDK downloads, cold built-in
+    preparation, cache reuse and deletion, reinstall with retained external
     state, incompatible retained-state rejection, explicit preinstall purge,
     lazy target-backed reads, and connected-executor disconnect and effect
     reconciliation. Cover typed Article item identity and

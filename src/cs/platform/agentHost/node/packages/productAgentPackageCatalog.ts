@@ -8,16 +8,18 @@ import { readFile } from 'node:fs/promises';
 
 import {
 	claudeAgentSdkExecutableTarget,
-	CLAUDE_AGENT_SDK_VERSION,
 	CLAUDE_AGENT_SDK_MODULE_TARGET,
 	createClaudeAgentPackageProduct,
 } from 'cs/platform/agentHost/node/agents/claude/claudeAgentPackage';
 import {
 	codexAgentSdkExecutableTarget,
 	CODEX_AGENT_SDK_PROTOCOL_TARGET,
-	CODEX_AGENT_SDK_VERSION,
 	createCodexAgentPackageProduct,
 } from 'cs/platform/agentHost/node/agents/codex/codexAgentPackage';
+import {
+	CLAUDE_AGENT_SDK_VERSION,
+	CODEX_AGENT_SDK_VERSION,
+} from 'cs/platform/agentHost/node/agents/agentSdkProducts';
 import {
 	CODEX_GENERATED_PROTOCOL_FILE_COUNT,
 	CODEX_GENERATED_PROTOCOL_SOURCE_DIGEST,

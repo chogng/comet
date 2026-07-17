@@ -53,6 +53,7 @@
     "prosemirror-state": "^1.4.4",
     "prosemirror-transform": "^1.11.0",
     "prosemirror-view": "^1.41.7",
+    "tar": "^7.5.12",
     "zod": "4.4.3"
   },
   "devDependencies": {

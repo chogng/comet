@@ -64,9 +64,9 @@ import {
 import {
 	CODEX_AGENT_SDK_EXECUTABLE_TARGET,
 	CODEX_AGENT_SDK_PROTOCOL_TARGET,
-	CODEX_AGENT_SDK_VERSION,
 	createCodexAgentPackageProduct,
 } from 'cs/platform/agentHost/node/agents/codex/codexAgentPackage';
+import { CODEX_AGENT_SDK_VERSION } from 'cs/platform/agentHost/node/agents/agentSdkProducts';
 import {
 	CODEX_GENERATED_PROTOCOL_FILE_COUNT,
 	CODEX_GENERATED_PROTOCOL_SDK_VERSION,
