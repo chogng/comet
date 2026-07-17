@@ -10,7 +10,7 @@ import {
 	getEditorDraftStyleCatalogSnapshot,
 	normalizeEditorDraftStyleCatalogSnapshot,
 	type EditorDraftStyleCatalogSnapshot,
-} from 'cs/editor/browser/text/editorDraftStyleCatalog';
+} from 'cs/editor/browser/services/editorDraftStyleCatalog';
 import type {
 	EditorDraftDefaultBodyStyle,
 	EditorDraftStyleSettings,

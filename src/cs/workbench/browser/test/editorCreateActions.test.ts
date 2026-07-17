@@ -21,7 +21,7 @@ import { DraftEditorActionsContribution } from 'cs/workbench/contrib/draftEditor
 import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
 import type { DraftEditorCommandId } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { DraftEditorSurfaceActionId } from 'cs/workbench/contrib/draftEditor/browser/draftEditorCommands';
-import { EditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { EditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
 import type { IDraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import { DraftEditorInput } from 'cs/workbench/contrib/draftEditor/common/draftEditorInput';
 import {

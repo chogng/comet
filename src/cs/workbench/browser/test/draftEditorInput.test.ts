@@ -24,7 +24,7 @@ import {
 	type IDraftEditorCloseService,
 } from 'cs/workbench/contrib/draftEditor/common/draftEditorInput';
 import { DraftEditorPane } from 'cs/workbench/contrib/draftEditor/browser/draftEditorPane';
-import { EditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { EditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
 import { DraftEditorService } from 'cs/workbench/contrib/draftEditor/common/draftEditorService';
 import { EditorGroupModel } from 'cs/workbench/common/editor/editorGroupModel';
 import type { EditorInput } from 'cs/workbench/common/editor/editorInput';

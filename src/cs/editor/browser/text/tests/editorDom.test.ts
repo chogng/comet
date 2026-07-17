@@ -9,11 +9,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElementOptions';
 import { createEmptyWritingEditorDocument, createWritingEditorDocumentFromPlainText, writingEditorDocumentToPlainText } from 'cs/editor/common/writingEditorDocument';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
-import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/editorDraftStyleCatalog';
+import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/services/editorDraftStyleCatalog';
 import {
 	EditorDraftStyleService,
 	type EditorDraftStyleServiceSnapshot,
-} from 'cs/editor/browser/text/editorDraftStyleService';
+} from 'cs/editor/browser/services/editorDraftStyleService';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';

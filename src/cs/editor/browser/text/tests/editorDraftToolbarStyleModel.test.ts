@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/editorDraftStyleCatalog';
+import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/services/editorDraftStyleCatalog';
 import { createEditorDraftToolbarStyleModel } from 'cs/editor/browser/text/editorDraftToolbarStyleModel';
 
 const snapshot = getEditorDraftStyleCatalogSnapshot();

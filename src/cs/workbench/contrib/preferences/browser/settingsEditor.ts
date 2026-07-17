@@ -10,7 +10,7 @@ import { DisposableStore, toDisposable } from 'cs/base/common/lifecycle';
 import {
 	IEditorDraftStyleService,
 	type IEditorDraftStyleService as EditorDraftStyleService,
-} from 'cs/editor/browser/text/editorDraftStyleService';
+} from 'cs/editor/browser/services/editorDraftStyleService';
 import { IContextViewService } from 'cs/platform/contextview/browser/contextView';
 import { IHoverService } from 'cs/platform/hover/browser/hover';
 import { INativeHostService } from 'cs/platform/native/common/native';

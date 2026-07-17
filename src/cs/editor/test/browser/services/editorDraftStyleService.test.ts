@@ -9,8 +9,8 @@ import {
   normalizeEditorDraftStyleSettings,
 } from 'cs/base/common/editorDraftStyle';
 import { DEFAULT_EDITOR_BODY_FONT_SIZE_VALUE } from 'cs/base/common/editorFormat';
-import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/text/editorDraftStyleCatalog';
-import { EditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/services/editorDraftStyleCatalog';
+import { EditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
 
 test('EditorDraftStyleService initializes from catalog and notifies on snapshot changes', () => {
   const initialSnapshot = getEditorDraftStyleCatalogSnapshot();

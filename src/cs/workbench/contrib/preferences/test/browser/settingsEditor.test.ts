@@ -10,7 +10,7 @@ import { Event as CometEvent, EventEmitter } from 'cs/base/common/event';
 import { URI } from 'cs/base/common/uri';
 import type { ElectronInvoke } from 'cs/base/parts/sandbox/common/electronTypes';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
-import { EditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { EditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
 import { installDomTestEnvironment } from 'cs/editor/browser/text/tests/domTestUtils';
 import { InstantiationService } from 'cs/platform/instantiation/common/instantiationService';
 import { ServiceCollection } from 'cs/platform/instantiation/common/serviceCollection';

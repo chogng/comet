@@ -26,7 +26,7 @@ import {
 	ISettingsModel,
 	SettingsModel,
 } from 'cs/workbench/services/settings/settingsModel';
-import { IEditorDraftStyleService } from 'cs/editor/browser/text/editorDraftStyleService';
+import { IEditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
 import { IAgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
 
 class SettingsModelConsumer {

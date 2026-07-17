@@ -25,7 +25,7 @@ import {
   type WritingEditorToolbarSplitButtonConfig,
 } from 'cs/editor/browser/text/editorCommandRegistry';
 import type { WritingEditorSurfaceLabels } from 'cs/editor/browser/text/editor';
-import type { EditorDraftStyleServiceSnapshot } from 'cs/editor/browser/text/editorDraftStyleService';
+import type { EditorDraftStyleServiceSnapshot } from 'cs/editor/browser/services/editorDraftStyleService';
 
 export type DraftEditorToolbarActions = WritingEditorToolbarActions;
 

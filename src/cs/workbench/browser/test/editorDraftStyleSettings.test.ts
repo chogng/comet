@@ -8,7 +8,7 @@ import type {
 } from 'cs/base/parts/sandbox/common/electronTypes';
 import {
 	EditorDraftStyleService,
-} from 'cs/editor/browser/text/editorDraftStyleService';
+} from 'cs/editor/browser/services/editorDraftStyleService';
 import type { INativeHostService } from 'cs/platform/native/common/native';
 import { NoOpNotificationService } from 'cs/platform/notification/common/notification';
 import { AgentHostManagementService } from 'cs/platform/agentHost/browser/agentHostManagementService';
