@@ -126,7 +126,14 @@ export type DocumentSnapshotCodecError =
 		readonly limit: BoundedClosedJsonLimit;
 	};
 
-export interface IDecodedDocumentSnapshotV1 {
+/**
+ * A fully validated, closed-codec candidate built from persisted bytes.
+ *
+ * Successful codec validation does not grant online manuscript provenance.
+ * Live mutation owners must establish that authority separately and must not
+ * adopt a caller-supplied Snapshot/index/Merkle triple.
+ */
+export interface IDecodedDocumentSnapshotCandidateV1 {
 	readonly snapshot: DocumentSnapshot;
 	readonly index: DocumentIndex;
 	readonly merkleState: RevisionMerkleState;
@@ -135,7 +142,7 @@ export interface IDecodedDocumentSnapshotV1 {
 export type DecodeDocumentSnapshotResult =
 	| {
 		readonly type: 'valid';
-		readonly value: IDecodedDocumentSnapshotV1;
+		readonly value: IDecodedDocumentSnapshotCandidateV1;
 	}
 	| DocumentSnapshotCodecError;
 
