@@ -6,7 +6,7 @@
 import type { Locale } from 'language/i18n';
 import type { LocaleMessages } from 'language/locales';
 import type { LibraryDocumentSummary } from 'cs/base/parts/sandbox/common/sandboxTypes';
-import type { EditorDraftStyleOption } from 'cs/editor/browser/services/editorDraftStyleCatalog';
+import type { EditorDraftStyleOption } from 'cs/editor/common/services/editorDraftStyleService';
 import type { JournalDescriptor } from 'cs/workbench/services/fetch/common/fetch';
 import type { SettingsModelSnapshot } from 'cs/workbench/services/settings/settingsModel';
 import type { IAgentHostManagementSnapshot } from 'cs/platform/agentHost/browser/agentHostManagementService';

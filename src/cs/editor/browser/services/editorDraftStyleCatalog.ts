@@ -9,22 +9,15 @@ import {
 import {
   EDITOR_NAMED_FONT_SIZE_PRESETS,
 } from 'cs/base/common/editorFormat';
+import type {
+	EditorDraftStyleOption,
+	EditorDraftStyleServiceSnapshot,
+} from 'cs/editor/common/services/editorDraftStyleService';
 
 export type {
   EditorDraftDefaultBodyStyle,
   EditorDraftInlineStyleDefaults,
   EditorDraftStyleSettings,
-};
-
-export type EditorDraftStyleOption = {
-  value: string;
-  label: string;
-  title?: string;
-};
-
-export type EditorDraftStyleCatalogSnapshot = EditorDraftStyleSettings & {
-  fontFamilyPresets: readonly EditorDraftStyleOption[];
-  fontSizePresets: readonly EditorDraftStyleOption[];
 };
 
 function freezeEditorDraftStyleOptions(
@@ -59,8 +52,8 @@ function freezeEditorDraftDefaultBodyStyle(
 }
 
 export function normalizeEditorDraftStyleCatalogSnapshot(
-  snapshot: EditorDraftStyleSettings | EditorDraftStyleCatalogSnapshot,
-): EditorDraftStyleCatalogSnapshot {
+  snapshot: EditorDraftStyleSettings | EditorDraftStyleServiceSnapshot,
+): EditorDraftStyleServiceSnapshot {
   const normalizedSettings = normalizeEditorDraftStyleSettings(snapshot);
   const defaultBodyStyle = normalizedSettings.defaultBodyStyle;
   const fontFamilyPresets =
@@ -107,8 +100,8 @@ function areEditorDraftStyleOptionsEqual(
 }
 
 export function areEditorDraftStyleCatalogSnapshotsEqual(
-  previous: EditorDraftStyleCatalogSnapshot,
-  next: EditorDraftStyleCatalogSnapshot,
+  previous: EditorDraftStyleServiceSnapshot,
+  next: EditorDraftStyleServiceSnapshot,
 ) {
   return (
     areEditorDraftStyleSettingsEqual(previous, next) &&
@@ -183,7 +176,7 @@ const EDITOR_DRAFT_FONT_SIZE_PRESETS: readonly EditorDraftStyleOption[] = freeze
   })),
 );
 
-const EDITOR_DRAFT_STYLE_CATALOG_SNAPSHOT: EditorDraftStyleCatalogSnapshot = normalizeEditorDraftStyleCatalogSnapshot({
+const EDITOR_DRAFT_STYLE_CATALOG_SNAPSHOT: EditorDraftStyleServiceSnapshot = normalizeEditorDraftStyleCatalogSnapshot({
   ...createDefaultEditorDraftStyleSettings(),
   fontFamilyPresets: EDITOR_DRAFT_FONT_FAMILY_PRESETS,
   fontSizePresets: EDITOR_DRAFT_FONT_SIZE_PRESETS,

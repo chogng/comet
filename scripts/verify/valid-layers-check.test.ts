@@ -58,6 +58,10 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		"void import('../../sessions/common/shared.js');\n",
 	);
 	writeSource(
+		'workbench/browser/editorServiceLeak.ts',
+		"import 'cs/editor/browser/services/editorDraftStyleService';\n",
+	);
+	writeSource(
 		'workbench/workbench.common.main.ts',
 		[
 			"import 'cs/editor/editor.all';",
@@ -70,8 +74,16 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		"import 'prosemirror-state';\n",
 	);
 	writeSource(
+		'editor/browser/view/loadServiceContribution.ts',
+		"import 'cs/editor/browser/services/editorDraftStyleService.contribution';\n",
+	);
+	writeSource(
 		'editor/editor.all.ts',
-		"import 'cs/editor/browser/text/editorDraftStyleService';\n",
+		[
+			"import 'cs/editor/browser/services/editorDraftStyleService.contribution';",
+			"import 'cs/editor/browser/text/editorDraftStyleService';",
+			'',
+		].join('\n'),
 	);
 
 	const violations = findLayerViolations({
@@ -81,7 +93,7 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 			moduleResolution: ts.ModuleResolutionKind.Bundler,
 		},
 	});
-	assert.equal(violations.length, 11);
+	assert.equal(violations.length, 13);
 	assert.ok(violations.some(violation => violation.includes(
 		'workbench/browser/static.ts:1: lower cs layers must not import Sessions',
 	)));
@@ -107,7 +119,13 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		'editor/browser/view/invalid.ts:1: the native Editor pipeline must not import ProseMirror',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
-		'editor/editor.all.ts:1: editor.all must not load the legacy ProseMirror surface',
+		'editor/editor.all.ts:2: editor.all must not load the legacy ProseMirror surface',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'workbench/browser/editorServiceLeak.ts:1: Workbench must consume Editor service contracts',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/browser/view/loadServiceContribution.ts:1: only editor.all may load Editor browser service contributions',
 	)));
 	assert.equal(
 		violations.filter(violation => violation.includes('only Sessions entry points may load contribution entry points')).length,

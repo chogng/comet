@@ -1,7 +1,9 @@
 import type { DropdownOption } from 'cs/base/browser/ui/dropdown/dropdown';
 import { resolvePrimaryFontFamily } from 'cs/base/common/editorFormat';
-import type { EditorDraftStyleOption } from 'cs/editor/browser/services/editorDraftStyleCatalog';
-import type { EditorDraftStyleServiceSnapshot } from 'cs/editor/browser/services/editorDraftStyleService';
+import type {
+	EditorDraftStyleOption,
+	EditorDraftStyleServiceSnapshot,
+} from 'cs/editor/common/services/editorDraftStyleService';
 
 export type EditorDraftToolbarFontModel = {
   currentValue: string;

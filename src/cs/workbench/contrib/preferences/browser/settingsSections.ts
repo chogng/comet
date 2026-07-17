@@ -41,7 +41,7 @@ import {
 import type {
   SettingsViewState,
 } from 'cs/workbench/contrib/preferences/browser/settingsTypes';
-import type { EditorDraftStyleOption } from 'cs/editor/browser/services/editorDraftStyleCatalog';
+import type { EditorDraftStyleOption } from 'cs/editor/common/services/editorDraftStyleService';
 import type { SettingsController } from 'cs/workbench/contrib/preferences/browser/settingsController';
 import { createBuiltInLanguagePackItems } from 'cs/platform/languagePacks/common/languagePacks';
 import {

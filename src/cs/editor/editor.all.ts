@@ -7,4 +7,4 @@
 // Shells may load the Editor, but must not reach into individual Editor services.
 import 'cs/editor/browser/services/identityService';
 import 'cs/editor/browser/services/openerService';
-import 'cs/editor/browser/services/editorDraftStyleService';
+import 'cs/editor/browser/services/editorDraftStyleService.contribution';

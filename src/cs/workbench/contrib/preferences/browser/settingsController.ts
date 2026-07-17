@@ -11,7 +11,7 @@ import {
 import {
 	IEditorDraftStyleService,
 	type IEditorDraftStyleService as EditorDraftStyleService,
-} from 'cs/editor/browser/services/editorDraftStyleService';
+} from 'cs/editor/common/services/editorDraftStyleService';
 import type { LocaleMessages } from 'language/locales';
 import {
   parseAppErrorData,

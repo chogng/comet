@@ -3,33 +3,19 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { DisposableHandle, IDisposable } from 'cs/base/common/lifecycle';
 import { EventEmitter } from 'cs/base/common/event';
+import type { IDisposable } from 'cs/base/common/lifecycle';
+import type { EditorDraftDefaultBodyStyle } from 'cs/base/common/editorDraftStyle';
 import {
 	areEditorDraftStyleCatalogSnapshotsEqual,
 	getEditorDraftStyleCatalogSnapshot,
 	normalizeEditorDraftStyleCatalogSnapshot,
-	type EditorDraftStyleCatalogSnapshot,
 } from 'cs/editor/browser/services/editorDraftStyleCatalog';
 import type {
-	EditorDraftDefaultBodyStyle,
-	EditorDraftStyleSettings,
-} from 'cs/base/common/editorDraftStyle';
-import { InstantiationType, registerSingleton } from 'cs/platform/instantiation/common/extensions';
-import { createDecorator } from 'cs/platform/instantiation/common/instantiation';
-
-export type EditorDraftStyleServiceSnapshot = EditorDraftStyleCatalogSnapshot;
-type EditorDraftStyleServiceInput = EditorDraftStyleSettings | EditorDraftStyleCatalogSnapshot;
-
-export interface IEditorDraftStyleService {
-	readonly _serviceBrand: undefined;
-	getSnapshot(): EditorDraftStyleServiceSnapshot;
-	subscribe(listener: () => void): DisposableHandle;
-	setSnapshot(nextSnapshot: EditorDraftStyleServiceInput): void;
-	setDefaultBodyStyle(nextDefaultBodyStyle: EditorDraftDefaultBodyStyle): void;
-}
-
-export const IEditorDraftStyleService = createDecorator<IEditorDraftStyleService>('editorDraftStyleService');
+	EditorDraftStyleServiceInput,
+	EditorDraftStyleServiceSnapshot,
+	IEditorDraftStyleService,
+} from 'cs/editor/common/services/editorDraftStyleService';
 
 export class EditorDraftStyleService implements IEditorDraftStyleService, IDisposable {
 	declare readonly _serviceBrand: undefined;
@@ -84,9 +70,3 @@ export class EditorDraftStyleService implements IEditorDraftStyleService, IDispo
 		this.onDidChangeEmitter.dispose();
 	}
 }
-
-registerSingleton(
-	IEditorDraftStyleService,
-	EditorDraftStyleService,
-	InstantiationType.Delayed,
-);

@@ -160,6 +160,28 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 				);
 			}
 			if (
+				relativeFile !== 'workbench/workbench.common.main.ts'
+				&& relativeFile.startsWith('workbench/')
+				&& target.startsWith('cs/editor/browser/services/')
+			) {
+				report(
+					relativeFile,
+					imported,
+					'Workbench must consume Editor service contracts, not browser implementations',
+				);
+			}
+			if (
+				relativeFile !== 'editor/editor.all.ts'
+				&& target.startsWith('cs/editor/browser/services/')
+				&& target.endsWith('.contribution')
+			) {
+				report(
+					relativeFile,
+					imported,
+					'only editor.all may load Editor browser service contributions',
+				);
+			}
+			if (
 				/^(?:editor\/common\/(?:core|model|services)\/|editor\/browser\/(?:controller|input|services|view|widget)\/|editor\/contrib\/)/u.test(relativeFile)
 				&& /^prosemirror(?:-|$)/u.test(target)
 			) {

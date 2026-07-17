@@ -10,10 +10,8 @@ import { ScrollbarVisibility } from 'cs/base/browser/ui/scrollbar/scrollableElem
 import { createEmptyWritingEditorDocument, createWritingEditorDocumentFromPlainText, writingEditorDocumentToPlainText } from 'cs/editor/common/writingEditorDocument';
 import type { WritingEditorDocument } from 'cs/editor/common/writingEditorDocument';
 import { getEditorDraftStyleCatalogSnapshot } from 'cs/editor/browser/services/editorDraftStyleCatalog';
-import {
-	EditorDraftStyleService,
-	type EditorDraftStyleServiceSnapshot,
-} from 'cs/editor/browser/services/editorDraftStyleService';
+import { EditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
+import type { EditorDraftStyleServiceSnapshot } from 'cs/editor/common/services/editorDraftStyleService';
 import { installDomTestEnvironment } from 'cs/base/test/browser/domTestUtils';
 import { createDropdownTestServices } from 'cs/base/test/browser/dropdownTestServices';
 import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdownActionViewItem';

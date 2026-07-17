@@ -12,7 +12,7 @@ import type { DropdownContextServices } from 'cs/base/browser/ui/dropdown/dropdo
 import { clearFontFamilyCommand, clearFontSizeCommand, clearInlineStylesCommand, getWritingEditorToolbarState, insertCitationCommand, insertFigureCommand, insertFigureRefCommand, insertPlainTextCommand, redoCommand, runWritingEditorCommand, setFontFamilyCommand, setFontSizeCommand, setParagraphCommand, setTextAlignCommand, toggleBlockquoteCommand, toggleBoldCommand, toggleBulletListCommand, toggleHeadingCommand, toggleItalicCommand, toggleOrderedListCommand, toggleUnderlineCommand, undoCommand } from 'cs/editor/browser/text/commands';
 import type { InsertFigurePayload, WritingEditorCommand, WritingEditorToolbarState } from 'cs/editor/browser/text/commands';
 import { createWritingEditorKeymapBindings } from 'cs/editor/browser/text/editorCommandRegistry';
-import type { IEditorDraftStyleService } from 'cs/editor/browser/services/editorDraftStyleService';
+import type { IEditorDraftStyleService } from 'cs/editor/common/services/editorDraftStyleService';
 import { collectWritingEditorDerivedLabels, createWritingEditorDocumentModel, findWritingEditorNodeByBlockId, getWritingEditorNodeText, getWritingEditorTextUnitKind, isWritingEditorPlainTextEditableNode, normalizeWritingEditorDocument, syncWritingEditorDerivedLabels } from 'cs/editor/common/writingEditorDocument';
 import type { WritingEditorDocument, WritingEditorStableSelectionTarget, WritingEditorTextUnitKind } from 'cs/editor/common/writingEditorDocument';
 import { $ } from 'cs/base/browser/dom';
