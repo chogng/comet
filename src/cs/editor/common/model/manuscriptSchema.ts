@@ -108,6 +108,8 @@ export type SettableManuscriptNodeAttributes = Exclude<
 	{ readonly type: 'text' }
 >['attrs'];
 
+export const maximumManuscriptTextUtf16Length = 1_000_000;
+
 type ClosedJsonRecord = Readonly<Record<string, CanonicalJsonValue>>;
 type RuntimeRecord = Readonly<Record<string, unknown>>;
 
@@ -719,7 +721,13 @@ function decodeNodeTree(
 		let textValue: string | undefined;
 		let marks: readonly Mark[] | undefined;
 		if (type === 'text') {
-			if (!isBoundedString(record['value'], 0, 1_000_000)) {
+			if (
+				!isBoundedString(
+					record['value'],
+					0,
+					maximumManuscriptTextUtf16Length,
+				)
+			) {
 				return schemaError('invalid-node', `${frame.path}.value`);
 			}
 			const decodedMarks = decodeMarks(
@@ -954,7 +962,13 @@ function encodeNodeTree(
 		let textValue: string | undefined;
 		let marks: readonly CanonicalJsonValue[] | undefined;
 		if (type === 'text') {
-			if (typeof record['value'] !== 'string') {
+			if (
+				!isBoundedString(
+					record['value'],
+					0,
+					maximumManuscriptTextUtf16Length,
+				)
+			) {
 				return schemaError('invalid-node', `${frame.path}.value`);
 			}
 			const encodedMarks = encodeRuntimeMarks(

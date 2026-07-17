@@ -20,6 +20,7 @@ import {
 	encodeManuscriptRootV1,
 	encodeMarksV1,
 	encodeNodeAttributesV1,
+	maximumManuscriptTextUtf16Length,
 	type IManuscriptTreeCodecLimits,
 	type ManuscriptSchemaFailure,
 	type ManuscriptSchemaResult,
@@ -191,6 +192,41 @@ suite('Manuscript persisted schema V1', () => {
 				reason,
 			);
 		}
+	});
+
+	test('uses one exported UTF-16 length bound for decoded and encoded Text', () => {
+		const bounded = json({
+			id: uuid(13),
+			type: 'text',
+			value: 'x'.repeat(maximumManuscriptTextUtf16Length),
+			marks: [],
+		});
+		const decoded = requireOk(
+			decodeInsertableNodeV1(bounded, generousTreeLimits),
+		);
+		assert.equal(decoded.root.type, 'text');
+		assert.equal(
+			decoded.root.type === 'text' ? decoded.root.value.length : undefined,
+			maximumManuscriptTextUtf16Length,
+		);
+		requireOk(encodeInsertableNodeV1(decoded.root, generousTreeLimits));
+
+		const oversized = json({
+			id: uuid(14),
+			type: 'text',
+			value: 'x'.repeat(maximumManuscriptTextUtf16Length + 1),
+			marks: [],
+		});
+		assertFailure(
+			decodeInsertableNodeV1(oversized, generousTreeLimits),
+			'invalid-node',
+			'$.node.value',
+		);
+		assertFailure(
+			encodeInsertableNodeV1(oversized, generousTreeLimits),
+			'invalid-node',
+			'$.node.value',
+		);
 	});
 
 	test('encoders inspect unknown runtime values without invoking accessors', () => {
