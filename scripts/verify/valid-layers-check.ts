@@ -121,18 +121,34 @@ function isLegacyEditorTextTarget(target: string): boolean {
 		|| target === 'cs/editor/common/writingEditorDocument';
 }
 
-function isAllowedManuscriptAuthorityImporter(relativeFile: string, target: string): boolean {
+function manuscriptAuthorityImportRule(relativeFile: string, target: string): string | undefined {
 	switch (target) {
 		case 'cs/editor/common/model/operationReducer':
 			return relativeFile === 'editor/common/model/manuscriptDraft.ts'
-				|| relativeFile === 'editor/common/model/revisionMerkleUpdater.ts';
+				|| relativeFile === 'editor/common/model/revisionMerkleUpdater.ts'
+				? undefined
+				: 'operationReducer may be imported only by manuscriptDraft and revisionMerkleUpdater';
+		case 'cs/editor/common/model/normalization':
+			return relativeFile === 'editor/common/model/manuscriptDraft.ts'
+				? undefined
+				: 'normalization may be imported only by manuscriptDraft';
+		case 'cs/editor/common/model/documentIndexUpdater':
+			return relativeFile === 'editor/common/model/operationReducer.ts'
+				|| relativeFile === 'editor/common/model/normalization.ts'
+				? undefined
+				: 'documentIndexUpdater may be imported only by operationReducer and normalization';
 		case 'cs/editor/common/model/revisionMerkleUpdater':
-			return relativeFile === 'editor/common/model/manuscriptDraft.ts';
+			return relativeFile === 'editor/common/model/manuscriptDraft.ts'
+				|| relativeFile === 'editor/common/model/normalization.ts'
+				? undefined
+				: 'revisionMerkleUpdater may be imported only by manuscriptDraft and normalization';
 		case 'cs/editor/common/model/revisionMerkleStateInternal':
 			return relativeFile === 'editor/common/model/revisionMerkleState.ts'
-				|| relativeFile === 'editor/common/model/revisionMerkleUpdater.ts';
+				|| relativeFile === 'editor/common/model/revisionMerkleUpdater.ts'
+				? undefined
+				: 'revisionMerkleStateInternal may be imported only by revisionMerkleState and revisionMerkleUpdater';
 		default:
-			return true;
+			return undefined;
 	}
 }
 
@@ -220,12 +236,9 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 					'the native Editor pipeline must not import the legacy ProseMirror surface',
 				);
 			}
-			if (!isAllowedManuscriptAuthorityImporter(relativeFile, target)) {
-				report(
-					relativeFile,
-					imported,
-					'only manuscript authority owners may import reducer and Merkle internals',
-				);
+			const manuscriptAuthorityRule = manuscriptAuthorityImportRule(relativeFile, target);
+			if (manuscriptAuthorityRule) {
+				report(relativeFile, imported, manuscriptAuthorityRule);
 			}
 			if (relativeFile.startsWith('sessions/common/')
 				&& target.startsWith('cs/sessions/')

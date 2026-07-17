@@ -99,6 +99,19 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		'editor/common/model/manuscriptDraft.ts',
 		[
 			"import 'cs/editor/common/model/operationReducer';",
+			"import 'cs/editor/common/model/normalization';",
+			"import 'cs/editor/common/model/revisionMerkleUpdater';",
+			'',
+		].join('\n'),
+	);
+	writeSource(
+		'editor/common/model/operationReducer.ts',
+		"import 'cs/editor/common/model/documentIndexUpdater';\n",
+	);
+	writeSource(
+		'editor/common/model/normalization.ts',
+		[
+			"import 'cs/editor/common/model/documentIndexUpdater';",
 			"import 'cs/editor/common/model/revisionMerkleUpdater';",
 			'',
 		].join('\n'),
@@ -127,6 +140,14 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		'editor/common/model/invalidMerkleInternalConsumer.ts',
 		"import 'cs/editor/common/model/revisionMerkleStateInternal';\n",
 	);
+	writeSource(
+		'editor/common/model/invalidNormalizationConsumer.ts',
+		"import 'cs/editor/common/model/normalization';\n",
+	);
+	writeSource(
+		'editor/common/model/invalidDocumentIndexUpdaterConsumer.ts',
+		"import 'cs/editor/common/model/documentIndexUpdater';\n",
+	);
 
 	const violations = findLayerViolations({
 		sourceRoot,
@@ -135,7 +156,7 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 			moduleResolution: ts.ModuleResolutionKind.Bundler,
 		},
 	});
-	assert.equal(violations.length, 20);
+	assert.equal(violations.length, 22);
 	assert.ok(violations.some(violation => violation.includes(
 		'workbench/browser/static.ts:1: lower cs layers must not import Sessions',
 	)));
@@ -182,13 +203,19 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		'editor/browser/view/loadServiceContribution.ts:1: only editor.all may load Editor browser service contributions',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
-		'editor/common/model/invalidReducerConsumer.ts:1: only manuscript authority owners may import reducer and Merkle internals',
+		'editor/common/model/invalidReducerConsumer.ts:1: operationReducer may be imported only by manuscriptDraft and revisionMerkleUpdater',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
-		'editor/common/model/invalidUpdaterConsumer.ts:1: only manuscript authority owners may import reducer and Merkle internals',
+		'editor/common/model/invalidUpdaterConsumer.ts:1: revisionMerkleUpdater may be imported only by manuscriptDraft and normalization',
 	)));
 	assert.ok(violations.some(violation => violation.includes(
-		'editor/common/model/invalidMerkleInternalConsumer.ts:1: only manuscript authority owners may import reducer and Merkle internals',
+		'editor/common/model/invalidMerkleInternalConsumer.ts:1: revisionMerkleStateInternal may be imported only by revisionMerkleState and revisionMerkleUpdater',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/common/model/invalidNormalizationConsumer.ts:1: normalization may be imported only by manuscriptDraft',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/common/model/invalidDocumentIndexUpdaterConsumer.ts:1: documentIndexUpdater may be imported only by operationReducer and normalization',
 	)));
 	assert.equal(
 		violations.filter(violation => violation.includes('only Sessions entry points may load contribution entry points')).length,

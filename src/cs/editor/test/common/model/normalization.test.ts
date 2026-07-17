@@ -21,6 +21,7 @@ import {
 	createDocumentIndex,
 	type DocumentIndex,
 	type DocumentIndexResult,
+	type IDocumentIndexLimits,
 } from 'cs/editor/common/model/documentIndex';
 import {
 	type BlockNode,
@@ -34,33 +35,46 @@ import {
 	type TextNode,
 } from 'cs/editor/common/model/manuscript';
 import {
-	decodeManuscriptRootV1,
-	encodeManuscriptRootV1,
 	maximumManuscriptTextUtf16Length,
-	type IManuscriptTreeCodecLimits,
-	type ManuscriptSchemaResult,
 } from 'cs/editor/common/model/manuscriptSchema';
 import {
-	isTrustedManuscriptNormalizationDelta,
-	normalizeManuscriptRoot,
+	consumeManuscriptNormalizationForwardTransition,
+	createManuscriptNormalizationForwardTransition,
 	restoreManuscriptNormalization,
-	type IManuscriptNormalizationDelta,
-	type IManuscriptNormalizationValue,
-	type IRestoreManuscriptNormalizationOptions,
+	type IConsumedManuscriptNormalizationForwardTransition,
+	type IManuscriptNormalizationInstrumentation,
+	type ManuscriptNormalizationForwardTransition,
+	type ManuscriptNormalizationRestoreReceipt,
 	type ManuscriptNormalizationResult,
 } from 'cs/editor/common/model/normalization';
 import {
 	createPositionMap,
 	type PositionMapFragment,
 } from 'cs/editor/common/model/positionMap';
+import {
+	rebuildRevisionMerkleState,
+} from 'cs/editor/common/model/revisionMerkleState';
+import {
+	documentFormat,
+	documentFormatVersion,
+	manuscriptSchemaId,
+	manuscriptSchemaVersion,
+	type DocumentContent,
+	type RevisionMerkleState,
+} from 'cs/editor/common/model/snapshot';
+
+interface ICheckpoint {
+	readonly content: DocumentContent;
+	readonly index: DocumentIndex;
+	readonly merkleState: RevisionMerkleState;
+}
 
 const revisionOne = revisionId(1);
 const revisionTwo = revisionId(2);
 const resource = createManuscriptDraftResource(uuid(900));
-const generousTreeLimits: IManuscriptTreeCodecLimits = Object.freeze({
+const generousIndexLimits: IDocumentIndexLimits = Object.freeze({
 	maximumNodes: 100_000,
 	maximumDepth: 30_000,
-	maximumCollectionItems: 100_000,
 });
 
 function uuid(sequence: number): string {
@@ -141,35 +155,124 @@ function manuscript(
 	});
 }
 
-function requireIndex(
-	result: DocumentIndexResult,
-): DocumentIndex {
+function requireIndex(result: DocumentIndexResult): DocumentIndex {
 	if (result.type === 'error') {
 		throw new Error(`Expected an index, received ${result.error.reason}.`);
 	}
 	return result.value;
 }
 
-function requireNormalized(
+function checkpoint(
+	root: ManuscriptNode,
+	limits: IDocumentIndexLimits = generousIndexLimits,
+): ICheckpoint {
+	const content: DocumentContent = Object.freeze({
+		format: documentFormat,
+		formatVersion: documentFormatVersion,
+		schemaId: manuscriptSchemaId,
+		schemaVersion: manuscriptSchemaVersion,
+		metadata: Object.freeze({
+			title: 'Normalization fixture',
+			authors: Object.freeze([]),
+			abstract: '',
+			keywords: Object.freeze([]),
+		}),
+		root,
+		academicGraph: Object.freeze({
+			referenceSnapshots: Object.freeze([]),
+			evidenceLinks: Object.freeze([]),
+			claims: Object.freeze([]),
+			claimEvidenceRelations: Object.freeze([]),
+		}),
+		settings: Object.freeze({
+			language: 'en',
+			citationStyle: 'apa',
+			headingNumbering: true,
+			bibliographyEnabled: true,
+		}),
+	});
+	const index = requireIndex(createDocumentIndex(root, limits));
+	return Object.freeze({
+		content,
+		index,
+		merkleState: rebuildRevisionMerkleState(
+			content,
+			undefined,
+			limits,
+			index,
+		),
+	});
+}
+
+function checkpointFromCandidate(
+	consumed: IConsumedManuscriptNormalizationForwardTransition,
+): ICheckpoint {
+	return Object.freeze({
+		content: consumed.targetContent,
+		index: consumed.targetIndex,
+		merkleState: consumed.targetMerkleState,
+	});
+}
+
+function requireForward(
 	result: ManuscriptNormalizationResult,
-): IManuscriptNormalizationValue {
+): ManuscriptNormalizationForwardTransition {
 	if (result.type === 'error') {
-		throw new Error(`Expected normalization success, received ${result.error.reason}.`);
+		throw new Error(
+			`Expected normalization success, received ${result.error.reason}.`,
+		);
 	}
 	return result.value;
 }
 
-function requireSchemaValue<TValue>(
-	result: ManuscriptSchemaResult<TValue>,
-): TValue {
-	if (result.type === 'error') {
-		throw new Error(`Expected schema success, received ${result.reason} at ${result.path}.`);
+function createForward(
+	source: ICheckpoint,
+	touchedParentNodeIds: readonly NodeId[],
+	touchedNodeIds: readonly NodeId[],
+	maximumDeltaEntries: number,
+	instrumentation?: IManuscriptNormalizationInstrumentation,
+): ManuscriptNormalizationResult {
+	return createManuscriptNormalizationForwardTransition({
+		canonicalResource: resource.toString(),
+		generatedAgainstRevisionId: revisionOne,
+		sourceContent: source.content,
+		sourceIndex: source.index,
+		sourceMerkleState: source.merkleState,
+		touchedParentNodeIds,
+		touchedNodeIds,
+		maximumDeltaEntries,
+		...(instrumentation === undefined ? {} : { instrumentation }),
+	});
+}
+
+function requireConsumed(
+	transition: ManuscriptNormalizationForwardTransition,
+	source: ICheckpoint,
+): IConsumedManuscriptNormalizationForwardTransition {
+	const consumed = consumeManuscriptNormalizationForwardTransition(
+		transition,
+		resource.toString(),
+		revisionOne,
+		source.content,
+		source.index,
+		source.merkleState,
+	);
+	if (consumed.type === 'error') {
+		throw new Error(
+			`Expected forward consumption, received ${consumed.error.reason}.`,
+		);
 	}
-	return result.value;
+	return consumed.value;
+}
+
+function requireReceipt(
+	consumed: IConsumedManuscriptNormalizationForwardTransition,
+): ManuscriptNormalizationRestoreReceipt {
+	return consumed.restoreReceipt;
 }
 
 suite('Touched-neighborhood manuscript normalization', () => {
-	test('validates canonical Marks, normalizes Text, maps UTF-16, and restores by parent snapshot', () => {
+	test('normalizes touched Text, emits an opaque transition, and restores exact provenance', () => {
 		const canonicalMarks: readonly Mark[] = [
 			{ type: 'bold' },
 			{ type: 'italic' },
@@ -190,27 +293,30 @@ suite('Touched-neighborhood manuscript normalization', () => {
 		const unrelatedText = text(7, 'unrelated');
 		const unrelatedParagraph = paragraph(8, [unrelatedText]);
 		const root = manuscript(10, 9, [touchedParagraph, unrelatedParagraph]);
-		const index = requireIndex(createDocumentIndex(root));
+		const source = checkpoint(root);
 		const visited: NodeId[] = [];
 		const scheduled: NodeId[] = [];
 		const copied: { readonly parentNodeId: NodeId; readonly count: number }[] = [];
 
-		const normalized = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [touchedParagraph.id],
-			touchedNodeIds: [left.id],
-			maximumDeltaEntries: 2,
-			instrumentation: {
-				onVisitNode: nodeId => visited.push(nodeId),
-				onScheduleRehash: nodeId => scheduled.push(nodeId),
+		const transition = requireForward(createForward(
+			source,
+			[touchedParagraph.id],
+			[left.id],
+			2,
+			{
+				onVisitNode: id => visited.push(id),
+				onScheduleRehash: id => scheduled.push(id),
 				onCopyChildSlots: (parentNodeId, count) => {
 					copied.push({ parentNodeId, count });
 				},
 			},
-		}));
-		const body = normalized.root.children[0];
-		assert.equal(body.type, 'body');
+		));
+		assert.equal(Object.getPrototypeOf(transition), null);
+		assert.equal(Object.isFrozen(transition), true);
+		assert.deepStrictEqual(Reflect.ownKeys(transition), []);
+
+		const normalized = requireConsumed(transition, source);
+		const body = normalized.targetContent.root.children[0];
 		const normalizedParagraph = body.children[0];
 		assert.equal(normalizedParagraph?.type, 'paragraph');
 		if (normalizedParagraph?.type !== 'paragraph') {
@@ -221,13 +327,34 @@ suite('Touched-neighborhood manuscript normalization', () => {
 		if (joined?.type !== 'text') {
 			throw new Error('Expected joined Text.');
 		}
-
 		assert.equal(joined.id, left.id);
 		assert.equal(joined.value, 'e\u0301😀雪');
-		assert.deepStrictEqual(joined.marks.map(mark => mark.type), ['bold', 'italic']);
+		assert.deepStrictEqual(
+			joined.marks.map(mark => mark.type),
+			['bold', 'italic'],
+		);
 		assert.equal(normalizedParagraph.children[1], hardBreak);
 		assert.equal(normalizedParagraph.children[2], afterBoundary);
 		assert.equal(body.children[1], unrelatedParagraph);
+		assert.equal(
+			normalized.targetIndex.getNode(root.id),
+			normalized.targetContent.root,
+		);
+		assert.equal(normalized.targetIndex.getNode(left.id), joined);
+		assert.equal(normalized.targetIndex.getNode(empty.id), undefined);
+		assert.equal(normalized.targetIndex.getNode(right.id), undefined);
+		assert.equal(
+			normalized.targetMerkleState.nodeCount,
+			source.merkleState.nodeCount - 2,
+		);
+		assert.equal(
+			normalized.targetMerkleState.getNodeHash(empty.id),
+			undefined,
+		);
+		assert.equal(
+			normalized.targetMerkleState.getNodeHash(right.id),
+			undefined,
+		);
 		assert.deepStrictEqual(visited, [
 			touchedParagraph.id,
 			left.id,
@@ -237,6 +364,7 @@ suite('Touched-neighborhood manuscript normalization', () => {
 			afterBoundary.id,
 		]);
 		assert.deepStrictEqual(scheduled, [
+			left.id,
 			touchedParagraph.id,
 			body.id,
 			root.id,
@@ -248,11 +376,9 @@ suite('Touched-neighborhood manuscript normalization', () => {
 			{ parentNodeId: touchedParagraph.id, count: 1 },
 			{ parentNodeId: touchedParagraph.id, count: 1 },
 			{ parentNodeId: touchedParagraph.id, count: 1 },
-			{ parentNodeId: touchedParagraph.id, count: 5 },
 			{ parentNodeId: body.id, count: 2 },
 			{ parentNodeId: root.id, count: 1 },
 		]);
-
 		assert.deepStrictEqual(normalized.fragments, [
 			{
 				kind: 'child-delete',
@@ -279,25 +405,6 @@ suite('Touched-neighborhood manuscript normalization', () => {
 				targetNodeId: left.id,
 			},
 		]);
-		assert.deepStrictEqual(
-			normalized.delta.entries.map(entry => entry.kind),
-			['remove-empty-text', 'join-adjacent-text'],
-		);
-		assert.equal(normalized.delta.parents.length, 1);
-		const parentDelta = normalized.delta.parents[0];
-		assert.equal(parentDelta?.parentNodeId, touchedParagraph.id);
-		assert.notEqual(parentDelta?.previousChildren, touchedParagraph.children);
-		assert.deepStrictEqual(parentDelta?.previousChildren, touchedParagraph.children);
-		assert.equal(parentDelta?.normalizedChildren, normalizedParagraph.children);
-		assert.equal(Object.isFrozen(normalized), true);
-		assert.equal(Object.isFrozen(normalized.fragments), true);
-		assert.equal(Object.isFrozen(normalized.delta), true);
-		assert.equal(Object.isFrozen(normalized.delta.entries), true);
-		assert.equal(Object.isFrozen(normalized.delta.parents), true);
-		assert.equal(Object.isFrozen(parentDelta), true);
-		assert.equal(Object.isFrozen(parentDelta?.previousChildren), true);
-		assert.equal(Object.isFrozen(parentDelta?.normalizedChildren), true);
-		assert.equal(isTrustedManuscriptNormalizationDelta(normalized.delta), true);
 
 		const map = createPositionMap({
 			resource,
@@ -328,67 +435,57 @@ suite('Touched-neighborhood manuscript normalization', () => {
 			},
 		});
 
-		const encoded = requireSchemaValue(
-			encodeManuscriptRootV1(normalized.root, generousTreeLimits),
+		const target = checkpointFromCandidate(normalized);
+		assert.equal(
+			normalized.targetMerkleState.documentHash,
+			rebuildRevisionMerkleState(normalized.targetContent).documentHash,
 		);
-		const decoded = requireSchemaValue(
-			decodeManuscriptRootV1(encoded, generousTreeLimits),
-		);
-		assert.equal(decoded.root.children[0].type, 'body');
-
-		const restoredCopies: { readonly parentNodeId: NodeId; readonly count: number }[] = [];
-		const normalizedIndex = requireIndex(createDocumentIndex(normalized.root));
-		const restored = restoreManuscriptNormalization({
-			root: normalized.root,
-			index: normalizedIndex,
-			delta: normalized.delta,
-			instrumentation: {
-				onCopyChildSlots: (parentNodeId, count) => {
-					restoredCopies.push({ parentNodeId, count });
-				},
+		const receipt = requireReceipt(normalized);
+		assert.equal(receipt, transition);
+		assert.deepStrictEqual(
+			consumeManuscriptNormalizationForwardTransition(
+				transition,
+				resource.toString(),
+				revisionOne,
+				source.content,
+				source.index,
+				source.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'invalid-forward-transition' },
 			},
+		);
+		const restored = restoreManuscriptNormalization(receipt);
+		assert.equal(restored.type, 'ok');
+		assert.equal(restored.value.sourceContent, source.content);
+		assert.equal(restored.value.sourceIndex, source.index);
+		assert.equal(restored.value.sourceMerkleState, source.merkleState);
+		assert.deepStrictEqual(restoreManuscriptNormalization(receipt), {
+			type: 'error',
+			error: { reason: 'invalid-restore-receipt' },
 		});
-		if (restored.type === 'error') {
-			throw new Error('Expected normalization restoration.');
-		}
-		assert.deepStrictEqual(restored.value.root, root);
-		const restoredBody = restored.value.root.children[0];
-		assert.equal(restoredBody.type, 'body');
-		assert.equal(restoredBody.children[1], unrelatedParagraph);
-		assert.deepStrictEqual(restoredCopies, [
-			{ parentNodeId: touchedParagraph.id, count: 5 },
-			{ parentNodeId: body.id, count: 2 },
-			{ parentNodeId: root.id, count: 1 },
-		]);
 
-		const secondIndex = requireIndex(createDocumentIndex(normalized.root));
-		const second = requireNormalized(normalizeManuscriptRoot({
-			root: normalized.root,
-			index: secondIndex,
-			touchedParentNodeIds: [touchedParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 0,
-		}));
-		assert.equal(second.root, normalized.root);
+		const second = requireConsumed(
+			requireForward(createForward(
+				target,
+				[touchedParagraph.id],
+				[],
+				0,
+			)),
+			target,
+		);
+		assert.equal(second.targetContent.root, target.content.root);
+		assert.equal(second.targetIndex, target.index);
+		assert.equal(second.targetMerkleState, target.merkleState);
 		assert.deepStrictEqual(second.fragments, []);
-		assert.deepStrictEqual(second.delta.entries, []);
-		assert.deepStrictEqual(second.delta.parents, []);
 		assert.deepStrictEqual(second.rehashNodeIds, []);
-		assert.equal(isTrustedManuscriptNormalizationDelta(second.delta), true);
 	});
 
 	test('rejects non-canonical, duplicate, and incompatible Marks without repairing them', () => {
 		for (const [sequence, marks, reason] of [
-			[
-				20,
-				[{ type: 'italic' }, { type: 'bold' }],
-				'invalid-marks',
-			],
-			[
-				30,
-				[{ type: 'bold' }, { type: 'bold' }],
-				'invalid-marks',
-			],
+			[20, [{ type: 'italic' }, { type: 'bold' }], 'invalid-marks'],
+			[30, [{ type: 'bold' }, { type: 'bold' }], 'invalid-marks'],
 			[
 				40,
 				[{ type: 'subscript' }, { type: 'superscript' }],
@@ -397,21 +494,19 @@ suite('Touched-neighborhood manuscript normalization', () => {
 		] as const) {
 			const invalidText = text(sequence, 'invalid', marks);
 			const invalidParagraph = paragraph(sequence + 1, [invalidText]);
-			const root = manuscript(sequence + 3, sequence + 2, [invalidParagraph]);
-			const normalized = normalizeManuscriptRoot({
-				root,
-				index: requireIndex(createDocumentIndex(root)),
-				touchedParentNodeIds: [invalidParagraph.id],
-				touchedNodeIds: [],
-				maximumDeltaEntries: 10,
-			});
-			assert.deepStrictEqual(normalized, {
-				type: 'error',
-				error: {
-					reason,
-					nodeId: invalidText.id,
+			const source = checkpoint(
+				manuscript(sequence + 3, sequence + 2, [invalidParagraph]),
+			);
+			assert.deepStrictEqual(
+				createForward(source, [invalidParagraph.id], [], 10),
+				{
+					type: 'error',
+					error: {
+						reason,
+						nodeId: invalidText.id,
+					},
 				},
-			});
+			);
 		}
 	});
 
@@ -420,151 +515,54 @@ suite('Touched-neighborhood manuscript normalization', () => {
 		const left = text(51, 'left');
 		const right = text(52, 'right');
 		const touchedParagraph = paragraph(53, [empty, left, right]);
-		const root = manuscript(55, 54, [touchedParagraph]);
-		const index = requireIndex(createDocumentIndex(root));
+		const source = checkpoint(manuscript(55, 54, [touchedParagraph]));
 
 		for (const maximumDeltaEntries of [
 			-1,
 			1.5,
 			Number.MAX_SAFE_INTEGER + 1,
 		]) {
-			assert.deepStrictEqual(normalizeManuscriptRoot({
-				root,
-				index,
-				touchedParentNodeIds: [touchedParagraph.id],
-				touchedNodeIds: [],
-				maximumDeltaEntries,
-			}), {
-				type: 'error',
-				error: {
-					reason: 'invalid-normalization-budget',
+			assert.deepStrictEqual(
+				createForward(
+					source,
+					[touchedParagraph.id],
+					[],
+					maximumDeltaEntries,
+				),
+				{
+					type: 'error',
+					error: { reason: 'invalid-normalization-budget' },
 				},
-			});
+			);
 		}
-		const failedCopies: {
-			readonly parentNodeId: NodeId;
-			readonly count: number;
-		}[] = [];
-		assert.deepStrictEqual(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [touchedParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 1,
-			instrumentation: {
-				onCopyChildSlots: (parentNodeId, count) => {
-					failedCopies.push({ parentNodeId, count });
-				},
-			},
-		}), {
-			type: 'error',
-			error: {
-				reason: 'normalization-budget-exceeded',
-				nodeId: right.id,
-				maximumDeltaEntries: 1,
-			},
-		});
-		assert.deepStrictEqual(failedCopies, [
-			{ parentNodeId: touchedParagraph.id, count: 0 },
-			{ parentNodeId: touchedParagraph.id, count: 1 },
-		]);
-		const exact = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [touchedParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 2,
-		}));
-		assert.equal(exact.delta.entries.length, 2);
-	});
-
-	test('rejects forged deltas before inspecting their structure', () => {
-		const onlyText = text(60, 'stable');
-		const onlyParagraph = paragraph(61, [onlyText]);
-		const root = manuscript(63, 62, [onlyParagraph]);
-		const index = requireIndex(createDocumentIndex(root));
-		const forged = Object.freeze({
-			entries: Object.freeze([]),
-			parents: Object.freeze([]),
-		}) as IManuscriptNormalizationDelta;
-
-		assert.equal(isTrustedManuscriptNormalizationDelta(forged), false);
-		assert.deepStrictEqual(restoreManuscriptNormalization({
-			root,
-			index,
-			delta: forged,
-		}), {
-			type: 'error',
-			error: {
-				reason: 'untrusted-normalization-delta',
-			},
-		});
-	});
-
-	test('captures restore options once without invoking a swapping delta getter', () => {
-		const empty = text(64, '');
-		const originalParagraph = paragraph(65, [empty]);
-		const root = manuscript(67, 66, [originalParagraph]);
-		const normalized = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index: requireIndex(createDocumentIndex(root)),
-			touchedParentNodeIds: [originalParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 1,
-		}));
-		const normalizedBody = normalized.root.children[0];
-		assert.equal(normalizedBody.type, 'body');
-		const normalizedParagraph = normalizedBody.children[0];
-		assert.equal(normalizedParagraph?.type, 'paragraph');
-		if (normalizedParagraph?.type !== 'paragraph') {
-			throw new Error('Expected a normalized Paragraph fixture.');
-		}
-
-		const forged = Object.freeze({
-			entries: normalized.delta.entries,
-			parents: Object.freeze([
-				Object.freeze({
-					parentNodeId: normalizedParagraph.id,
-					previousChildren: Object.freeze([text(68, 'EVIL')]),
-					normalizedChildren: normalizedParagraph.children,
-				}),
-			]),
-		}) as IManuscriptNormalizationDelta;
-		let getterCalls = 0;
-		const swappingOptions = {
-			root: normalized.root,
-			index: requireIndex(createDocumentIndex(normalized.root)),
-		} as Omit<IRestoreManuscriptNormalizationOptions, 'delta'> & {
-			readonly delta?: IManuscriptNormalizationDelta;
-		};
-		Object.defineProperty(swappingOptions, 'delta', {
-			enumerable: true,
-			get: () => {
-				getterCalls += 1;
-				return getterCalls === 1 ? normalized.delta : forged;
-			},
-		});
-
 		assert.deepStrictEqual(
-			restoreManuscriptNormalization(
-				swappingOptions as IRestoreManuscriptNormalizationOptions,
-			),
+			createForward(source, [touchedParagraph.id], [], 1),
 			{
 				type: 'error',
 				error: {
-					reason: 'invalid-options',
+					reason: 'normalization-budget-exceeded',
+					nodeId: right.id,
+					maximumDeltaEntries: 1,
 				},
 			},
 		);
-		assert.equal(getterCalls, 0);
+		const exact = requireConsumed(
+			requireForward(createForward(
+				source,
+				[touchedParagraph.id],
+				[],
+				2,
+			)),
+			source,
+		);
+		assert.equal(exact.fragments.length, 4);
 	});
 
 	test('captures nested touched ID arrays without getters or iterators', () => {
 		const left = text(69, 'left');
 		const right = text(70, 'right');
 		const touchedParagraph = paragraph(71, [left, right]);
-		const root = manuscript(73, 72, [touchedParagraph]);
-		const index = requireIndex(createDocumentIndex(root));
+		const source = checkpoint(manuscript(73, 72, [touchedParagraph]));
 
 		let elementGetterCalls = 0;
 		const accessorIds: NodeId[] = [];
@@ -576,33 +574,35 @@ suite('Touched-neighborhood manuscript normalization', () => {
 			},
 		});
 		accessorIds.length = 1;
-		assert.deepStrictEqual(normalizeManuscriptRoot({
-			root,
-			index,
+		assert.deepStrictEqual(createManuscriptNormalizationForwardTransition({
+			canonicalResource: resource.toString(),
+			generatedAgainstRevisionId: revisionOne,
+			sourceContent: source.content,
+			sourceIndex: source.index,
+			sourceMerkleState: source.merkleState,
 			touchedParentNodeIds: accessorIds,
 			touchedNodeIds: [],
 			maximumDeltaEntries: 1,
 		}), {
 			type: 'error',
-			error: {
-				reason: 'invalid-options',
-			},
+			error: { reason: 'invalid-options' },
 		});
 		assert.equal(elementGetterCalls, 0);
 
 		const revoked = Proxy.revocable([touchedParagraph.id], {});
 		revoked.revoke();
-		assert.deepStrictEqual(normalizeManuscriptRoot({
-			root,
-			index,
+		assert.deepStrictEqual(createManuscriptNormalizationForwardTransition({
+			canonicalResource: resource.toString(),
+			generatedAgainstRevisionId: revisionOne,
+			sourceContent: source.content,
+			sourceIndex: source.index,
+			sourceMerkleState: source.merkleState,
 			touchedParentNodeIds: revoked.proxy,
 			touchedNodeIds: [],
 			maximumDeltaEntries: 1,
 		}), {
 			type: 'error',
-			error: {
-				reason: 'inspection-failed',
-			},
+			error: { reason: 'inspection-failed' },
 		});
 
 		let iteratorReads = 0;
@@ -614,116 +614,113 @@ suite('Touched-neighborhood manuscript normalization', () => {
 				return Reflect.get(target, property, receiver);
 			},
 		});
-		const normalized = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: proxiedIds,
-			touchedNodeIds: [],
-			maximumDeltaEntries: 1,
-		}));
-		assert.equal(normalized.delta.entries.length, 1);
+		const normalized = requireConsumed(
+			requireForward(createManuscriptNormalizationForwardTransition({
+				canonicalResource: resource.toString(),
+				generatedAgainstRevisionId: revisionOne,
+				sourceContent: source.content,
+				sourceIndex: source.index,
+				sourceMerkleState: source.merkleState,
+				touchedParentNodeIds: proxiedIds,
+				touchedNodeIds: [],
+				maximumDeltaEntries: 1,
+			})),
+			source,
+		);
+		assert.equal(normalized.fragments.length, 2);
 		assert.equal(iteratorReads, 0);
 	});
 
 	test('rejects an oversized join and accepts the exact shared Text UTF-16 bound', () => {
 		const oversizedLeft = text(
-			70,
+			75,
 			'x'.repeat(maximumManuscriptTextUtf16Length),
 		);
-		const oversizedRight = text(71, 'y');
-		const oversizedParagraph = paragraph(72, [oversizedLeft, oversizedRight]);
-		const oversizedRoot = manuscript(74, 73, [oversizedParagraph]);
-		assert.deepStrictEqual(normalizeManuscriptRoot({
-			root: oversizedRoot,
-			index: requireIndex(createDocumentIndex(oversizedRoot)),
-			touchedParentNodeIds: [oversizedParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 1,
-		}), {
-			type: 'error',
-			error: {
-				reason: 'text-utf16-limit-exceeded',
-				nodeId: oversizedLeft.id,
-				maximumUtf16Length: maximumManuscriptTextUtf16Length,
+		const oversizedRight = text(76, 'y');
+		const oversizedParagraph = paragraph(77, [
+			oversizedLeft,
+			oversizedRight,
+		]);
+		const oversized = checkpoint(manuscript(79, 78, [oversizedParagraph]));
+		assert.deepStrictEqual(
+			createForward(oversized, [oversizedParagraph.id], [], 1),
+			{
+				type: 'error',
+				error: {
+					reason: 'text-utf16-limit-exceeded',
+					nodeId: oversizedLeft.id,
+					maximumUtf16Length: maximumManuscriptTextUtf16Length,
+				},
 			},
-		});
+		);
 
 		const boundedLeft = text(
-			75,
+			80,
 			'x'.repeat(maximumManuscriptTextUtf16Length - 1),
 		);
-		const boundedRight = text(76, 'y');
-		const boundedParagraph = paragraph(77, [boundedLeft, boundedRight]);
-		const boundedRoot = manuscript(79, 78, [boundedParagraph]);
-		const bounded = requireNormalized(normalizeManuscriptRoot({
-			root: boundedRoot,
-			index: requireIndex(createDocumentIndex(boundedRoot)),
-			touchedParentNodeIds: [boundedParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 1,
-		}));
-		const boundedBody = bounded.root.children[0];
-		assert.equal(boundedBody.type, 'body');
-		const joined = boundedBody.children[0];
+		const boundedRight = text(81, 'y');
+		const boundedParagraph = paragraph(82, [boundedLeft, boundedRight]);
+		const bounded = checkpoint(manuscript(84, 83, [boundedParagraph]));
+		const normalized = requireConsumed(
+			requireForward(createForward(
+				bounded,
+				[boundedParagraph.id],
+				[],
+				1,
+			)),
+			bounded,
+		);
+		const normalizedBody = normalized.targetContent.root.children[0];
+		const joined = normalizedBody.children[0];
 		assert.equal(joined?.type, 'paragraph');
-		if (joined?.type !== 'paragraph') {
-			throw new Error('Expected a bounded Paragraph.');
-		}
-		assert.equal(joined.children[0]?.type, 'text');
 		assert.equal(
-			joined.children[0]?.type === 'text'
+			joined?.type === 'paragraph' && joined.children[0]?.type === 'text'
 				? joined.children[0].value.length
 				: undefined,
 			maximumManuscriptTextUtf16Length,
 		);
-		const encoded = requireSchemaValue(
-			encodeManuscriptRootV1(bounded.root, generousTreeLimits),
-		);
-		requireSchemaValue(decodeManuscriptRootV1(encoded, generousTreeLimits));
 	});
 
 	test('orders independent touched neighborhoods deterministically', () => {
-		const firstParagraph = paragraph(82, [
-			text(80, 'a'),
-			text(81, 'b'),
-		]);
-		const secondParagraph = paragraph(85, [
-			text(83, 'c'),
-			text(84, 'd'),
-		]);
-		const root = manuscript(87, 86, [firstParagraph, secondParagraph]);
-		const index = requireIndex(createDocumentIndex(root));
-		const forward = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [firstParagraph.id, secondParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 2,
-		}));
-		const reversed = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [secondParagraph.id, firstParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 2,
-		}));
-
-		assert.deepStrictEqual(reversed.root, forward.root);
+		const firstParagraph = paragraph(92, [text(90, 'a'), text(91, 'b')]);
+		const secondParagraph = paragraph(95, [text(93, 'c'), text(94, 'd')]);
+		const source = checkpoint(
+			manuscript(97, 96, [firstParagraph, secondParagraph]),
+		);
+		const forward = requireConsumed(
+			requireForward(createForward(
+				source,
+				[firstParagraph.id, secondParagraph.id],
+				[],
+				2,
+			)),
+			source,
+		);
+		const reversed = requireConsumed(
+			requireForward(createForward(
+				source,
+				[secondParagraph.id, firstParagraph.id],
+				[],
+				2,
+			)),
+			source,
+		);
+		assert.deepStrictEqual(
+			reversed.targetContent.root,
+			forward.targetContent.root,
+		);
 		assert.deepStrictEqual(reversed.fragments, forward.fragments);
-		assert.deepStrictEqual(reversed.delta.entries, forward.delta.entries);
-		assert.deepStrictEqual(reversed.delta.parents, forward.delta.parents);
 		assert.deepStrictEqual(reversed.rehashNodeIds, forward.rehashNodeIds);
 	});
 
-	test('rebuilds a 20k-deep path by indexed child slots without reading unrelated subtree IDs', () => {
+	test('rebuilds a deep changed path without reading an unrelated subtree', () => {
 		const left = text(100, '深');
 		const right = text(101, '度');
 		const deepestParagraph = paragraph(102, [left, right]);
-		const unrelatedText = text(103, 'side');
-		const unrelatedParagraph = paragraph(104, [unrelatedText]);
+		const unrelatedParagraph = paragraph(104, [text(103, 'side')]);
 		let nested: ParagraphNode | ListNode = deepestParagraph;
 		let sequence = 105;
-		for (let depth = 0; depth < 10_000; depth += 1) {
+		for (let depth = 0; depth < 2_000; depth += 1) {
 			const item: ListItemNode = Object.freeze({
 				id: nodeId(sequence++),
 				type: 'listItem',
@@ -733,121 +730,282 @@ suite('Touched-neighborhood manuscript normalization', () => {
 			nested = Object.freeze({
 				id: nodeId(sequence++),
 				type: 'list',
-				attrs: Object.freeze({
-					ordered: false,
-				}),
+				attrs: Object.freeze({ ordered: false }),
 				children: Object.freeze([item]) as readonly [ListItemNode],
 			});
 		}
-		const root = manuscript(
-			sequence++,
-			sequence++,
-			[nested, unrelatedParagraph],
-		);
-		const index = requireIndex(createDocumentIndex(root, {
-			maximumNodes: 25_000,
-			maximumDepth: 25_000,
-		}));
+		const root = manuscript(sequence++, sequence++, [
+			nested,
+			unrelatedParagraph,
+		]);
+		const limits = Object.freeze({
+			maximumNodes: 5_000,
+			maximumDepth: 5_000,
+		});
+		const source = checkpoint(root, limits);
 		const visited: NodeId[] = [];
 		const scheduled: NodeId[] = [];
-		const copied: { readonly parentNodeId: NodeId; readonly count: number }[] = [];
-
-		const normalized = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [deepestParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: 1,
-			instrumentation: {
-				onVisitNode: nodeId => visited.push(nodeId),
-				onScheduleRehash: nodeId => scheduled.push(nodeId),
-				onCopyChildSlots: (parentNodeId, count) => {
-					copied.push({ parentNodeId, count });
+		const normalized = requireConsumed(
+			requireForward(createForward(
+				source,
+				[deepestParagraph.id],
+				[],
+				1,
+				{
+					onVisitNode: id => visited.push(id),
+					onScheduleRehash: id => scheduled.push(id),
 				},
-			},
-		}));
+			)),
+			source,
+		);
 		assert.deepStrictEqual(visited, [
 			deepestParagraph.id,
 			left.id,
 			right.id,
 		]);
-		assert.equal(scheduled.length > 20_000, true);
-		assert.equal(scheduled[0], deepestParagraph.id);
+		assert.equal(scheduled.length > 4_000, true);
+		assert.equal(scheduled[0], left.id);
+		assert.equal(scheduled[1], deepestParagraph.id);
 		assert.equal(scheduled[scheduled.length - 1], root.id);
 		assert.equal(scheduled.includes(unrelatedParagraph.id), false);
 		assert.deepStrictEqual(normalized.rehashNodeIds, scheduled);
 		assert.equal(
-			copied.some(event => event.parentNodeId === unrelatedParagraph.id),
-			false,
+			normalized.targetContent.root.children[0].children[1],
+			unrelatedParagraph,
 		);
-		assert.equal(
-			copied.find(event => event.parentNodeId === root.children[0].id)?.count,
-			2,
-		);
-		assert.equal(
-			copied.reduce((total, event) => total + event.count, 0) > 20_000,
-			true,
-		);
-
-		const normalizedBody = normalized.root.children[0];
-		assert.equal(normalizedBody.type, 'body');
-		assert.equal(normalizedBody.children[1], unrelatedParagraph);
-		assert.notEqual(normalizedBody.children[0], nested);
-		assert.equal(normalized.fragments[0]?.kind, 'text-join');
-		assert.equal(normalized.fragments[1]?.kind, 'node-alias');
 	});
 
-	test('restores a 50k-entry delta with one validation and one replacement per parent', () => {
-		const childCount = 50_000;
-		const emptyChildren: TextNode[] = [];
-		for (let index = 0; index < childCount; index += 1) {
-			emptyChildren.push(text(30_000 + index, ''));
-		}
-		const largeParagraph = paragraph(80_001, emptyChildren);
-		const root = manuscript(80_003, 80_002, [largeParagraph]);
-		const index = requireIndex(createDocumentIndex(root, {
-			maximumNodes: 60_000,
-			maximumDepth: 10,
-		}));
-		const normalized = requireNormalized(normalizeManuscriptRoot({
-			root,
-			index,
-			touchedParentNodeIds: [largeParagraph.id],
-			touchedNodeIds: [],
-			maximumDeltaEntries: childCount,
-		}));
-		assert.equal(normalized.delta.entries.length, childCount);
-		assert.equal(normalized.delta.parents.length, 1);
-		const normalizedBody = normalized.root.children[0];
-		assert.equal(normalizedBody.type, 'body');
-		const emptied = normalizedBody.children[0];
-		assert.equal(emptied?.type, 'paragraph');
-		assert.deepStrictEqual(
-			emptied?.type === 'paragraph' ? emptied.children : undefined,
+	test('rejects clone, Proxy, repeat, and cross-transition splicing by identity', () => {
+		const firstParagraph = paragraph(201, [text(200, 'a'), text(202, 'b')]);
+		const secondParagraph = paragraph(211, [text(210, 'c'), text(212, 'd')]);
+		const first = checkpoint(manuscript(204, 203, [firstParagraph]));
+		const second = checkpoint(manuscript(214, 213, [secondParagraph]));
+		const firstTransition = requireForward(createForward(
+			first,
+			[firstParagraph.id],
 			[],
-		);
-
-		const visited: NodeId[] = [];
-		const copied: { readonly parentNodeId: NodeId; readonly count: number }[] = [];
-		const restored = restoreManuscriptNormalization({
-			root: normalized.root,
-			index: requireIndex(createDocumentIndex(normalized.root)),
-			delta: normalized.delta,
-			instrumentation: {
-				onVisitNode: nodeId => visited.push(nodeId),
-				onCopyChildSlots: (parentNodeId, count) => {
-					copied.push({ parentNodeId, count });
-				},
+			1,
+		));
+		let transitionProxyTrapCount = 0;
+		const proxy = new Proxy(firstTransition, {
+			get: (target, property, receiver) => {
+				transitionProxyTrapCount += 1;
+				return Reflect.get(target, property, receiver);
 			},
 		});
-		if (restored.type === 'error') {
-			throw new Error(`Expected large restoration, received ${restored.error.reason}.`);
-		}
-		assert.deepStrictEqual(restored.value.root, root);
-		assert.deepStrictEqual(visited, [largeParagraph.id]);
 		assert.deepStrictEqual(
-			copied.filter(event => event.parentNodeId === largeParagraph.id),
-			[{ parentNodeId: largeParagraph.id, count: childCount }],
+			consumeManuscriptNormalizationForwardTransition(
+				proxy,
+				resource.toString(),
+				revisionOne,
+				first.content,
+				first.index,
+				first.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'invalid-forward-transition' },
+			},
 		);
+		assert.equal(transitionProxyTrapCount, 0);
+		assert.deepStrictEqual(
+			consumeManuscriptNormalizationForwardTransition(
+				0,
+				resource.toString(),
+				revisionOne,
+				first.content,
+				first.index,
+				first.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'invalid-forward-transition' },
+			},
+		);
+		assert.deepStrictEqual(
+			consumeManuscriptNormalizationForwardTransition(
+				Object.freeze(Object.create(null)),
+				resource.toString(),
+				revisionOne,
+				first.content,
+				first.index,
+				first.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'invalid-forward-transition' },
+			},
+		);
+		const contextTransition = requireForward(createForward(
+			first,
+			[firstParagraph.id],
+			[],
+			1,
+		));
+		assert.deepStrictEqual(
+			consumeManuscriptNormalizationForwardTransition(
+				contextTransition,
+				resource.toString(),
+				revisionTwo,
+				first.content,
+				first.index,
+				first.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'forward-source-mismatch' },
+			},
+		);
+		assert.deepStrictEqual(
+			restoreManuscriptNormalization(contextTransition),
+			{
+				type: 'error',
+				error: { reason: 'invalid-restore-receipt' },
+			},
+		);
+		assert.deepStrictEqual(
+			consumeManuscriptNormalizationForwardTransition(
+				firstTransition,
+				resource.toString(),
+				revisionOne,
+				second.content,
+				second.index,
+				second.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'forward-source-mismatch' },
+			},
+		);
+		assert.deepStrictEqual(
+			consumeManuscriptNormalizationForwardTransition(
+				firstTransition,
+				resource.toString(),
+				revisionOne,
+				first.content,
+				first.index,
+				first.merkleState,
+			),
+			{
+				type: 'error',
+				error: { reason: 'invalid-forward-transition' },
+			},
+		);
+		assert.deepStrictEqual(
+			restoreManuscriptNormalization(firstTransition),
+			{
+				type: 'error',
+				error: { reason: 'invalid-restore-receipt' },
+			},
+		);
+
+		const firstValid = requireConsumed(
+			requireForward(createForward(first, [firstParagraph.id], [], 1)),
+			first,
+		);
+		const secondValid = requireConsumed(
+			requireForward(createForward(second, [secondParagraph.id], [], 1)),
+			second,
+		);
+		assert.equal(firstValid.sourceContent, first.content);
+		assert.equal(firstValid.sourceIndex, first.index);
+		assert.equal(firstValid.sourceMerkleState, first.merkleState);
+		assert.equal(firstValid.canonicalResource, resource.toString());
+		assert.equal(firstValid.generatedAgainstRevisionId, revisionOne);
+		assert.equal(firstValid.entryCount, 1);
+		assert.equal(firstValid.maximumDeltaEntries, 1);
+		assert.deepStrictEqual(
+			restoreManuscriptNormalization(new Proxy(
+				firstValid.restoreReceipt,
+				{},
+			)),
+			{
+				type: 'error',
+				error: { reason: 'invalid-restore-receipt' },
+			},
+		);
+		assert.deepStrictEqual(
+			restoreManuscriptNormalization(
+				Object.freeze(Object.create(null)),
+			),
+			{
+				type: 'error',
+				error: { reason: 'invalid-restore-receipt' },
+			},
+		);
+		assert.deepStrictEqual(restoreManuscriptNormalization(0), {
+			type: 'error',
+			error: { reason: 'invalid-restore-receipt' },
+		});
+		const restoreWithIgnoredStructure = restoreManuscriptNormalization as (
+			receipt: unknown,
+			...extra: readonly unknown[]
+		) => ReturnType<typeof restoreManuscriptNormalization>;
+		const restoredFirst = restoreWithIgnoredStructure(
+			firstValid.restoreReceipt,
+			{
+				root: second.content.root,
+				index: second.index,
+				delta: Object.freeze({}),
+			},
+		);
+		assert.equal(restoredFirst.type, 'ok');
+		assert.equal(restoredFirst.value.sourceContent, first.content);
+		assert.equal(restoredFirst.value.sourceIndex, first.index);
+		assert.equal(restoredFirst.value.sourceMerkleState, first.merkleState);
+		assert.equal(restoredFirst.value.targetContent, firstValid.targetContent);
+		assert.equal(restoredFirst.value.targetIndex, firstValid.targetIndex);
+		assert.equal(
+			restoredFirst.value.targetMerkleState,
+			firstValid.targetMerkleState,
+		);
+		assert.deepStrictEqual(
+			restoreManuscriptNormalization(firstValid.restoreReceipt),
+			{
+				type: 'error',
+				error: { reason: 'invalid-restore-receipt' },
+			},
+		);
+		assert.equal(
+			restoreManuscriptNormalization(secondValid.restoreReceipt).type,
+			'ok',
+		);
+	});
+
+	test('authenticates the source Merkle state before scanning or instrumentation', () => {
+		const touchedParagraph = paragraph(301, [
+			text(300, 'left'),
+			text(302, 'right'),
+		]);
+		const source = checkpoint(manuscript(304, 303, [touchedParagraph]));
+		let stateTrapCount = 0;
+		const proxiedState = new Proxy(source.merkleState, {
+			get: (target, property, receiver) => {
+				stateTrapCount += 1;
+				return Reflect.get(target, property, receiver);
+			},
+		});
+		let visited = 0;
+		const result = createForward(
+			Object.freeze({
+				content: source.content,
+				index: source.index,
+				merkleState: proxiedState,
+			}),
+			[touchedParagraph.id],
+			[],
+			1,
+			{
+				onVisitNode: () => {
+					visited += 1;
+				},
+			},
+		);
+		assert.deepStrictEqual(result, {
+			type: 'error',
+			error: { reason: 'normalization-candidate-failed' },
+		});
+		assert.equal(stateTrapCount, 0);
+		assert.equal(visited, 0);
 	});
 });

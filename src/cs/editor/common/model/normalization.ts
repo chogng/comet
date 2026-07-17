@@ -5,9 +5,18 @@
 
 import {
 	parseNodeId,
+	parseRevisionId,
 	type NodeId,
+	type RevisionId,
 } from 'cs/editor/common/core/identifiers';
+import { manuscriptHashDomains } from 'cs/editor/common/core/hashPreimage';
+import {
+	parseManuscriptResource,
+} from 'cs/editor/common/core/manuscriptResource';
 import type { DocumentIndex } from 'cs/editor/common/model/documentIndex';
+import {
+	createNormalizedDocumentIndex,
+} from 'cs/editor/common/model/documentIndexUpdater';
 import {
 	getDocumentNodeChildren,
 	type DocumentNode,
@@ -22,6 +31,40 @@ import {
 	maximumManuscriptTextUtf16Length,
 } from 'cs/editor/common/model/manuscriptSchema';
 import type { PositionMapFragment } from 'cs/editor/common/model/positionMap';
+import {
+	createDocumentMerkleHashPayload,
+	hashRevisionMerklePayload,
+} from 'cs/editor/common/model/revisionHashPayload';
+import {
+	updateRevisionMerkleNormalizationCandidate,
+} from 'cs/editor/common/model/revisionMerkleUpdater';
+import type {
+	DocumentContent,
+	RevisionMerkleState,
+} from 'cs/editor/common/model/snapshot';
+
+declare const manuscriptNormalizationForwardTransitionBrand: unique symbol;
+declare const manuscriptNormalizationRestoreReceiptBrand: unique symbol;
+
+/**
+ * A single-use forward normalization authority.
+ *
+ * The nominal brand has no runtime representation. Genuine values are frozen,
+ * null-prototype, zero-field tokens authenticated exclusively by this module.
+ */
+export interface ManuscriptNormalizationForwardTransition {
+	readonly [manuscriptNormalizationForwardTransitionBrand]: never;
+}
+
+/**
+ * A direction-bound, single-use restore authority.
+ *
+ * Restore accepts this receipt alone. Callers cannot supply a root, index,
+ * Merkle state, delta, or any other structural restoration input.
+ */
+export interface ManuscriptNormalizationRestoreReceipt {
+	readonly [manuscriptNormalizationRestoreReceiptBrand]: never;
+}
 
 export interface IManuscriptNormalizationInstrumentation {
 	readonly onVisitNode?: (nodeId: NodeId) => void;
@@ -35,8 +78,11 @@ export interface IManuscriptNormalizationInstrumentation {
 }
 
 export interface IManuscriptNormalizationOptions {
-	readonly root: ManuscriptNode;
-	readonly index: DocumentIndex;
+	readonly canonicalResource: string;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly sourceContent: DocumentContent;
+	readonly sourceIndex: DocumentIndex;
+	readonly sourceMerkleState: RevisionMerkleState;
 	readonly touchedParentNodeIds: readonly NodeId[];
 	readonly touchedNodeIds: readonly NodeId[];
 
@@ -48,14 +94,14 @@ export interface IManuscriptNormalizationOptions {
 	readonly instrumentation?: IManuscriptNormalizationInstrumentation;
 }
 
-export interface IRemoveEmptyTextNormalizationDelta {
+interface IRemoveEmptyTextNormalizationDelta {
 	readonly kind: 'remove-empty-text';
 	readonly parentNodeId: NodeId;
 	readonly childIndexBeforeRemoval: number;
 	readonly removedTextNode: TextNode;
 }
 
-export interface IJoinAdjacentTextNormalizationDelta {
+interface IJoinAdjacentTextNormalizationDelta {
 	readonly kind: 'join-adjacent-text';
 	readonly parentNodeId: NodeId;
 	readonly leftChildIndexBeforeJoin: number;
@@ -64,38 +110,55 @@ export interface IJoinAdjacentTextNormalizationDelta {
 	readonly joinedTextNode: TextNode;
 }
 
-export type ManuscriptNormalizationDeltaEntry =
+type ManuscriptNormalizationDeltaEntry =
 	| IRemoveEmptyTextNormalizationDelta
 	| IJoinAdjacentTextNormalizationDelta;
 
 /**
  * One linear restoration checkpoint per changed direct-child neighborhood.
  *
- * The arrays are normalization-owned and frozen. Their nodes are already
- * immutable Snapshot-owned values, so retaining those values preserves exact
- * structural sharing without traversing or cloning their subtrees.
+ * `previousChildren` is the exact immutable Snapshot-owned collection;
+ * `normalizedChildren` is normalization-owned and frozen. Retaining those
+ * references preserves exact structural sharing without traversing subtrees.
  */
-export interface IManuscriptNormalizationParentDelta {
+interface IManuscriptNormalizationParentDelta {
 	readonly parentNodeId: NodeId;
 	readonly previousChildren: readonly DocumentNode[];
 	readonly normalizedChildren: readonly DocumentNode[];
 }
 
-export interface IManuscriptNormalizationDelta {
+interface IManuscriptNormalizationDelta {
 	readonly entries: readonly ManuscriptNormalizationDeltaEntry[];
 	readonly parents: readonly IManuscriptNormalizationParentDelta[];
 }
 
-export interface IManuscriptNormalizationValue {
-	readonly root: ManuscriptNode;
+export interface IConsumedManuscriptNormalizationForwardTransition {
+	readonly canonicalResource: string;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly sourceContent: DocumentContent;
+	readonly sourceIndex: DocumentIndex;
+	readonly sourceMerkleState: RevisionMerkleState;
+	readonly targetContent: DocumentContent;
+	readonly targetIndex: DocumentIndex;
+	readonly targetMerkleState: RevisionMerkleState;
 	readonly fragments: readonly PositionMapFragment[];
-	readonly delta: IManuscriptNormalizationDelta;
-
-	/**
-	 * Changed nodes in descendant-to-root order. An incremental Snapshot hasher
-	 * can consume this sequence without discovering paths by traversing the tree.
-	 */
 	readonly rehashNodeIds: readonly NodeId[];
+	readonly entryCount: number;
+	readonly maximumDeltaEntries: number;
+	readonly restoreReceipt: ManuscriptNormalizationRestoreReceipt;
+}
+
+export interface IRestoredManuscriptNormalization {
+	readonly canonicalResource: string;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly targetContent: DocumentContent;
+	readonly targetIndex: DocumentIndex;
+	readonly targetMerkleState: RevisionMerkleState;
+	readonly sourceContent: DocumentContent;
+	readonly sourceIndex: DocumentIndex;
+	readonly sourceMerkleState: RevisionMerkleState;
+	readonly entryCount: number;
+	readonly maximumDeltaEntries: number;
 }
 
 export type ManuscriptNormalizationFailure =
@@ -147,14 +210,25 @@ export type ManuscriptNormalizationFailure =
 		readonly maximumUtf16Length: number;
 	}
 	| {
-		readonly reason: 'untrusted-normalization-delta';
+		readonly reason: 'invalid-forward-transition';
 	}
 	| {
-		readonly reason: 'normalization-delta-mismatch';
+		readonly reason: 'forward-source-mismatch';
+	}
+	| {
+		readonly reason: 'normalization-candidate-failed';
+	}
+	| {
+		readonly reason: 'invalid-restore-receipt';
+	}
+	| {
+		readonly reason: 'checkpoint-mismatch';
 		readonly nodeId: NodeId;
 	};
 
-export type ManuscriptNormalizationResult<TValue = IManuscriptNormalizationValue> =
+export type ManuscriptNormalizationResult<
+	TValue = ManuscriptNormalizationForwardTransition,
+> =
 	| {
 		readonly type: 'ok';
 		readonly value: TValue;
@@ -163,13 +237,6 @@ export type ManuscriptNormalizationResult<TValue = IManuscriptNormalizationValue
 		readonly type: 'error';
 		readonly error: ManuscriptNormalizationFailure;
 	};
-
-export interface IRestoreManuscriptNormalizationOptions {
-	readonly root: ManuscriptNode;
-	readonly index: DocumentIndex;
-	readonly delta: IManuscriptNormalizationDelta;
-	readonly instrumentation?: IManuscriptNormalizationInstrumentation;
-}
 
 interface INormalizedParent {
 	readonly node: DocumentNode;
@@ -183,7 +250,48 @@ interface IRebuildResult {
 
 const maximumCanonicalMarkCount = 8;
 const maximumNormalizationTouchedNodeIds = 100_000;
-const trustedNormalizationDeltas = new WeakSet<object>();
+const forwardTransitionRecords = new WeakMap<
+	ManuscriptNormalizationForwardTransition,
+	IManuscriptNormalizationForwardRecord
+>();
+const restoreReceiptRecords = new WeakMap<
+	ManuscriptNormalizationRestoreReceipt,
+	IManuscriptNormalizationRestoreRecord
+>();
+
+interface IManuscriptNormalizationForwardRecord {
+	readonly direction: 'forward';
+	readonly canonicalResource: string;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly sourceContent: DocumentContent;
+	readonly sourceIndex: DocumentIndex;
+	readonly sourceMerkleState: RevisionMerkleState;
+	readonly targetContent: DocumentContent;
+	readonly targetIndex: DocumentIndex;
+	readonly targetMerkleState: RevisionMerkleState;
+	readonly delta: IManuscriptNormalizationDelta;
+	readonly fragments: readonly PositionMapFragment[];
+	readonly rehashNodeIds: readonly NodeId[];
+	readonly entryCount: number;
+	readonly maximumDeltaEntries: number;
+}
+
+interface IManuscriptNormalizationRestoreRecord {
+	readonly direction: 'restore';
+	readonly canonicalResource: string;
+	readonly generatedAgainstRevisionId: RevisionId;
+	readonly sourceContent: DocumentContent;
+	readonly sourceIndex: DocumentIndex;
+	readonly sourceMerkleState: RevisionMerkleState;
+	readonly targetContent: DocumentContent;
+	readonly targetIndex: DocumentIndex;
+	readonly targetMerkleState: RevisionMerkleState;
+	readonly delta: IManuscriptNormalizationDelta;
+	readonly fragments: readonly PositionMapFragment[];
+	readonly rehashNodeIds: readonly NodeId[];
+	readonly entryCount: number;
+	readonly maximumDeltaEntries: number;
+}
 
 /**
  * These are the only V1 schema nodes whose direct children may be Text nodes.
@@ -199,20 +307,6 @@ const removableEmptyTextParentTypes: ReadonlySet<NodeKind> = new Set([
 ]);
 
 /**
- * Returns true only for a delta created in this module by a successful
- * normalization call in the current runtime.
- */
-export function isTrustedManuscriptNormalizationDelta(
-	value: unknown,
-): value is IManuscriptNormalizationDelta {
-	return (
-		typeof value === 'object'
-		&& value !== null
-		&& trustedNormalizationDeltas.has(value)
-	);
-}
-
-/**
  * Validates and normalizes only explicitly touched text neighborhoods.
  *
  * The supplied index must belong to `root`. It provides topology lookup so the
@@ -220,7 +314,7 @@ export function isTrustedManuscriptNormalizationDelta(
  * every production codec boundary; this stage rejects non-canonical Marks and
  * never sorts, deduplicates, or otherwise repairs them.
  */
-export function normalizeManuscriptRoot(
+export function createManuscriptNormalizationForwardTransition(
 	options: IManuscriptNormalizationOptions,
 ): ManuscriptNormalizationResult {
 	const capturedOptions = captureNormalizationOptions(options);
@@ -236,9 +330,27 @@ export function normalizeManuscriptRoot(
 			reason: 'invalid-normalization-budget',
 		});
 	}
-	const ownershipFailure = validateIndexOwnership(options.root, options.index);
-	if (ownershipFailure !== undefined) {
-		return errorResult(ownershipFailure);
+	try {
+		const authenticatedSource = updateRevisionMerkleNormalizationCandidate(
+			options.sourceMerkleState,
+			{
+				previousContent: options.sourceContent,
+				previousIndex: options.sourceIndex,
+				nextContent: options.sourceContent,
+				nextIndex: options.sourceIndex,
+				normalizedParentNodeIds: Object.freeze([]),
+				rehashNodeIds: Object.freeze([]),
+			},
+		);
+		if (authenticatedSource !== options.sourceMerkleState) {
+			return errorResult({
+				reason: 'normalization-candidate-failed',
+			});
+		}
+	} catch {
+		return errorResult({
+			reason: 'normalization-candidate-failed',
+		});
 	}
 
 	const parentNodeIds = collectTouchedParentNodeIds(options);
@@ -252,7 +364,7 @@ export function normalizeManuscriptRoot(
 	const replacements = new Map<NodeId, DocumentNode>();
 	const visitedNodeIds = new Set<NodeId>();
 	for (const parentNodeId of parentNodeIds.value) {
-		const parent = options.index.getNode(parentNodeId);
+		const parent = options.sourceIndex.getNode(parentNodeId);
 		if (parent === undefined) {
 			return errorResult({
 				reason: 'unknown-touched-parent',
@@ -280,84 +392,208 @@ export function normalizeManuscriptRoot(
 			parentDeltas.push(normalized.value.delta);
 		}
 	}
+	const additionalRehashNodeIds = new Set<NodeId>();
+	for (const entry of deltaEntries) {
+		if (entry.kind === 'join-adjacent-text') {
+			additionalRehashNodeIds.add(entry.joinedTextNode.id);
+		}
+	}
 
 	const rebuilt = rebuildChangedPaths(
-		options.root,
-		options.index,
+		options.sourceContent.root,
+		options.sourceIndex,
 		replacements,
+		additionalRehashNodeIds,
 		options.instrumentation,
 	);
-	const delta = createTrustedDelta(deltaEntries, parentDeltas);
-	return okResult(Object.freeze({
+	const delta = createPrivateDelta(deltaEntries, parentDeltas);
+	const targetContent = Object.freeze({
+		format: options.sourceContent.format,
+		formatVersion: options.sourceContent.formatVersion,
+		schemaId: options.sourceContent.schemaId,
+		schemaVersion: options.sourceContent.schemaVersion,
+		metadata: options.sourceContent.metadata,
 		root: rebuilt.root,
-		fragments: Object.freeze([...fragments]),
-		delta,
+		academicGraph: options.sourceContent.academicGraph,
+		settings: options.sourceContent.settings,
+	});
+	const targetIndex = createNormalizedDocumentIndex({
+		base: options.sourceIndex,
+		targetRoot: targetContent.root,
+		changedParents: delta.parents,
 		rehashNodeIds: rebuilt.rehashNodeIds,
+	});
+	if (targetIndex === undefined) {
+		return errorResult({
+			reason: 'normalization-candidate-failed',
+		});
+	}
+	let targetMerkleState: RevisionMerkleState;
+	try {
+		targetMerkleState = updateRevisionMerkleNormalizationCandidate(
+			options.sourceMerkleState,
+			{
+				previousContent: options.sourceContent,
+				previousIndex: options.sourceIndex,
+				nextContent: targetContent,
+				nextIndex: targetIndex,
+				normalizedParentNodeIds: Object.freeze(
+					delta.parents.map(parent => parent.parentNodeId),
+				),
+				rehashNodeIds: rebuilt.rehashNodeIds,
+			},
+		);
+	} catch {
+		return errorResult({
+			reason: 'normalization-candidate-failed',
+		});
+	}
+	if (
+		validateCheckpointOwnership(
+			targetContent,
+			targetIndex,
+			targetMerkleState,
+		) !== undefined
+	) {
+		return errorResult({
+			reason: 'normalization-candidate-failed',
+		});
+	}
+	const token = createOpaqueNormalizationToken<
+		ManuscriptNormalizationForwardTransition
+	>();
+	forwardTransitionRecords.set(token, Object.freeze({
+		direction: 'forward',
+		canonicalResource: options.canonicalResource,
+		generatedAgainstRevisionId: options.generatedAgainstRevisionId,
+		sourceContent: options.sourceContent,
+		sourceIndex: options.sourceIndex,
+		sourceMerkleState: options.sourceMerkleState,
+		targetContent,
+		targetIndex,
+		targetMerkleState,
+		delta,
+		fragments: Object.freeze([...fragments]),
+		rehashNodeIds: rebuilt.rehashNodeIds,
+		entryCount: delta.entries.length,
+		maximumDeltaEntries: options.maximumDeltaEntries,
+	}));
+	return okResult(token);
+}
+
+/**
+ * Burns a genuine forward transition before validating its exact source.
+ *
+ * The exact target checkpoint remains derived, not installation authority.
+ * Successful consumption moves the same token identity directly into the
+ * independent restore authority map.
+ */
+export function consumeManuscriptNormalizationForwardTransition(
+	transition: unknown,
+	canonicalResource: string,
+	generatedAgainstRevisionId: RevisionId,
+	sourceContent: DocumentContent,
+	sourceIndex: DocumentIndex,
+	sourceMerkleState: RevisionMerkleState,
+): ManuscriptNormalizationResult<
+	IConsumedManuscriptNormalizationForwardTransition
+> {
+	const record = forwardTransitionRecords.get(
+		transition as ManuscriptNormalizationForwardTransition,
+	);
+	if (record === undefined) {
+		return errorResult({
+			reason: 'invalid-forward-transition',
+		});
+	}
+	forwardTransitionRecords.delete(
+		transition as ManuscriptNormalizationForwardTransition,
+	);
+	if (
+		record.canonicalResource !== canonicalResource
+		|| record.generatedAgainstRevisionId !== generatedAgainstRevisionId
+		|| record.sourceContent !== sourceContent
+		|| record.sourceIndex !== sourceIndex
+		|| record.sourceMerkleState !== sourceMerkleState
+	) {
+		return errorResult({
+			reason: 'forward-source-mismatch',
+		});
+	}
+	const receipt = transition as ManuscriptNormalizationRestoreReceipt;
+	restoreReceiptRecords.set(receipt, Object.freeze({
+		direction: 'restore',
+		canonicalResource: record.canonicalResource,
+		generatedAgainstRevisionId: record.generatedAgainstRevisionId,
+		sourceContent: record.sourceContent,
+		sourceIndex: record.sourceIndex,
+		sourceMerkleState: record.sourceMerkleState,
+		targetContent: record.targetContent,
+		targetIndex: record.targetIndex,
+		targetMerkleState: record.targetMerkleState,
+		delta: record.delta,
+		fragments: record.fragments,
+		rehashNodeIds: record.rehashNodeIds,
+		entryCount: record.entryCount,
+		maximumDeltaEntries: record.maximumDeltaEntries,
+	}));
+	return okResult(Object.freeze({
+		canonicalResource: record.canonicalResource,
+		generatedAgainstRevisionId: record.generatedAgainstRevisionId,
+		sourceContent: record.sourceContent,
+		sourceIndex: record.sourceIndex,
+		sourceMerkleState: record.sourceMerkleState,
+		targetContent: record.targetContent,
+		targetIndex: record.targetIndex,
+		targetMerkleState: record.targetMerkleState,
+		fragments: record.fragments,
+		rehashNodeIds: record.rehashNodeIds,
+		entryCount: record.entryCount,
+		maximumDeltaEntries: record.maximumDeltaEntries,
+		restoreReceipt: receipt,
 	}));
 }
 
 /**
- * Restores each changed direct-child neighborhood with one linear validation
- * and one linear replacement. Delta entries are not replayed one by one.
+ * Burns a restore receipt before validating its module-owned exact target.
  */
 export function restoreManuscriptNormalization(
-	options: IRestoreManuscriptNormalizationOptions,
-): ManuscriptNormalizationResult<{
-	readonly root: ManuscriptNode;
-	readonly rehashNodeIds: readonly NodeId[];
-}> {
-	const capturedOptions = captureRestoreOptions(options);
-	if (capturedOptions.type === 'error') {
-		return capturedOptions;
-	}
-	options = capturedOptions.value;
-	if (!isTrustedManuscriptNormalizationDelta(options.delta)) {
+	receipt: unknown,
+): ManuscriptNormalizationResult<IRestoredManuscriptNormalization> {
+	const record = restoreReceiptRecords.get(
+		receipt as ManuscriptNormalizationRestoreReceipt,
+	);
+	if (record === undefined) {
 		return errorResult({
-			reason: 'untrusted-normalization-delta',
+			reason: 'invalid-restore-receipt',
 		});
 	}
-	const ownershipFailure = validateIndexOwnership(options.root, options.index);
-	if (ownershipFailure !== undefined) {
-		return errorResult(ownershipFailure);
-	}
-
-	const replacements = new Map<NodeId, DocumentNode>();
-	const visitedNodeIds = new Set<NodeId>();
-	for (const parentDelta of options.delta.parents) {
-		const parent = options.index.getNode(parentDelta.parentNodeId);
-		if (
-			parent === undefined
-			|| !Object.hasOwn(parent, 'children')
-		) {
-			return deltaMismatch(parentDelta.parentNodeId);
-		}
-		visitNode(parent.id, visitedNodeIds, options.instrumentation);
-		const currentChildren = getDocumentNodeChildren(parent);
-		if (!sameChildReferences(currentChildren, parentDelta.normalizedChildren)) {
-			return deltaMismatch(parentDelta.parentNodeId);
-		}
-
-		const previousChildren = Object.freeze([...parentDelta.previousChildren]);
-		copyChildSlots(
-			parent.id,
-			previousChildren.length,
-			options.instrumentation,
-		);
-		replacements.set(
-			parent.id,
-			cloneNodeWithChildren(parent, previousChildren),
-		);
-	}
-
-	const rebuilt = rebuildChangedPaths(
-		options.root,
-		options.index,
-		replacements,
-		options.instrumentation,
+	restoreReceiptRecords.delete(
+		receipt as ManuscriptNormalizationRestoreReceipt,
 	);
+	if (
+		validateCheckpointOwnership(
+			record.targetContent,
+			record.targetIndex,
+			record.targetMerkleState,
+		) !== undefined
+	) {
+		return errorResult({
+			reason: 'checkpoint-mismatch',
+			nodeId: record.targetContent.root.id,
+		});
+	}
 	return okResult(Object.freeze({
-		root: rebuilt.root,
-		rehashNodeIds: rebuilt.rehashNodeIds,
+		canonicalResource: record.canonicalResource,
+		generatedAgainstRevisionId: record.generatedAgainstRevisionId,
+		targetContent: record.targetContent,
+		targetIndex: record.targetIndex,
+		targetMerkleState: record.targetMerkleState,
+		sourceContent: record.sourceContent,
+		sourceIndex: record.sourceIndex,
+		sourceMerkleState: record.sourceMerkleState,
+		entryCount: record.entryCount,
+		maximumDeltaEntries: record.maximumDeltaEntries,
 	}));
 }
 
@@ -366,7 +602,7 @@ function collectTouchedParentNodeIds(
 ): ManuscriptNormalizationResult<readonly NodeId[]> {
 	const parentNodeIds = new Set<NodeId>();
 	for (const parentNodeId of options.touchedParentNodeIds) {
-		const parent = options.index.getNode(parentNodeId);
+		const parent = options.sourceIndex.getNode(parentNodeId);
 		if (parent === undefined) {
 			return errorResult({
 				reason: 'unknown-touched-parent',
@@ -383,7 +619,7 @@ function collectTouchedParentNodeIds(
 	}
 
 	for (const touchedNodeId of options.touchedNodeIds) {
-		const node = options.index.getNode(touchedNodeId);
+		const node = options.sourceIndex.getNode(touchedNodeId);
 		if (node === undefined) {
 			return errorResult({
 				reason: 'unknown-touched-node',
@@ -391,14 +627,14 @@ function collectTouchedParentNodeIds(
 			});
 		}
 		if (node.type === 'text') {
-			const parent = options.index.getParentLocation(node.id);
+			const parent = options.sourceIndex.getParentLocation(node.id);
 			if (parent === undefined) {
 				return errorResult({
 					reason: 'invalid-text-parent',
 					nodeId: node.id,
 				});
 			}
-			const parentNode = options.index.getNode(parent.parentNodeId);
+			const parentNode = options.sourceIndex.getNode(parent.parentNodeId);
 			if (
 				parentNode === undefined
 				|| !removableEmptyTextParentTypes.has(parentNode.type)
@@ -423,8 +659,11 @@ function captureNormalizationOptions(
 	const captured = captureExactDataOptions(
 		value,
 		[
-			'root',
-			'index',
+			'canonicalResource',
+			'generatedAgainstRevisionId',
+			'sourceContent',
+			'sourceIndex',
+			'sourceMerkleState',
 			'touchedParentNodeIds',
 			'touchedNodeIds',
 			'maximumDeltaEntries',
@@ -435,15 +674,29 @@ function captureNormalizationOptions(
 		return captured;
 	}
 
-	const root = captured.value.get('root');
-	const index = captured.value.get('index');
+	const canonicalResource = captured.value.get('canonicalResource');
+	const generatedAgainstRevisionId = captured.value.get(
+		'generatedAgainstRevisionId',
+	);
+	const sourceContent = captured.value.get('sourceContent');
+	const sourceIndex = captured.value.get('sourceIndex');
+	const sourceMerkleState = captured.value.get('sourceMerkleState');
 	const touchedParentNodeIds = captured.value.get('touchedParentNodeIds');
 	const touchedNodeIds = captured.value.get('touchedNodeIds');
 	const maximumDeltaEntries = captured.value.get('maximumDeltaEntries');
 	const instrumentation = captured.value.get('instrumentation');
+	const parsedResource = typeof canonicalResource === 'string'
+		? parseManuscriptResource(canonicalResource)
+		: undefined;
+	const parsedRevision = typeof generatedAgainstRevisionId === 'string'
+		? parseRevisionId(generatedAgainstRevisionId)
+		: undefined;
 	if (
-		!isObjectValue(root)
-		|| !isObjectValue(index)
+		parsedResource?.type !== 'valid'
+		|| parsedRevision?.type !== 'valid'
+		|| !isObjectValue(sourceContent)
+		|| !isObjectValue(sourceIndex)
+		|| !isObjectValue(sourceMerkleState)
 		|| typeof maximumDeltaEntries !== 'number'
 		|| (
 			instrumentation !== undefined
@@ -464,54 +717,14 @@ function captureNormalizationOptions(
 	}
 
 	return okResult(Object.freeze({
-		root: root as ManuscriptNode,
-		index: index as DocumentIndex,
+		canonicalResource: parsedResource.canonical,
+		generatedAgainstRevisionId: parsedRevision.value,
+		sourceContent: sourceContent as DocumentContent,
+		sourceIndex: sourceIndex as DocumentIndex,
+		sourceMerkleState: sourceMerkleState as RevisionMerkleState,
 		touchedParentNodeIds: capturedParentNodeIds.value,
 		touchedNodeIds: capturedTouchedNodeIds.value,
 		maximumDeltaEntries,
-		...(instrumentation === undefined
-			? {}
-			: {
-				instrumentation:
-					instrumentation as IManuscriptNormalizationInstrumentation,
-			}),
-	}));
-}
-
-function captureRestoreOptions(
-	value: unknown,
-): ManuscriptNormalizationResult<IRestoreManuscriptNormalizationOptions> {
-	const captured = captureExactDataOptions(
-		value,
-		['root', 'index', 'delta'],
-		['instrumentation'],
-	);
-	if (captured.type === 'error') {
-		return captured;
-	}
-
-	const root = captured.value.get('root');
-	const index = captured.value.get('index');
-	const delta = captured.value.get('delta');
-	const instrumentation = captured.value.get('instrumentation');
-	if (
-		!isObjectValue(root)
-		|| !isObjectValue(index)
-		|| !isObjectValue(delta)
-		|| (
-			instrumentation !== undefined
-			&& !isObjectValue(instrumentation)
-		)
-	) {
-		return errorResult({
-			reason: 'invalid-options',
-		});
-	}
-
-	return okResult(Object.freeze({
-		root: root as ManuscriptNode,
-		index: index as DocumentIndex,
-		delta: delta as IManuscriptNormalizationDelta,
 		...(instrumentation === undefined
 			? {}
 			: {
@@ -811,9 +1024,8 @@ function normalizeTextParent(
 		}));
 	}
 
-	const previousChildren = Object.freeze([...children]);
+	const previousChildren = children;
 	const normalizedChildren = Object.freeze(output);
-	copyChildSlots(parent.id, previousChildren.length, instrumentation);
 	const parentDelta = Object.freeze({
 		parentNodeId: parent.id,
 		previousChildren,
@@ -858,9 +1070,10 @@ function rebuildChangedPaths(
 	root: ManuscriptNode,
 	index: DocumentIndex,
 	initialReplacements: ReadonlyMap<NodeId, DocumentNode>,
+	additionalRehashNodeIds: ReadonlySet<NodeId>,
 	instrumentation: IManuscriptNormalizationInstrumentation | undefined,
 ): IRebuildResult {
-	if (initialReplacements.size === 0) {
+	if (initialReplacements.size === 0 && additionalRehashNodeIds.size === 0) {
 		return Object.freeze({
 			root,
 			rehashNodeIds: Object.freeze([]),
@@ -869,7 +1082,10 @@ function rebuildChangedPaths(
 
 	const replacements = new Map(initialReplacements);
 	const depthByNodeId = new Map<NodeId, number>();
-	for (const changedNodeId of initialReplacements.keys()) {
+	for (const changedNodeId of [
+		...initialReplacements.keys(),
+		...additionalRehashNodeIds,
+	]) {
 		const path = index.iteratePath(changedNodeId);
 		if (path === undefined) {
 			throw new Error('A changed normalization parent is absent from its source index.');
@@ -889,6 +1105,15 @@ function rebuildChangedPaths(
 	const rehashNodeIds: NodeId[] = [];
 	const scheduledNodeIds = new Set<NodeId>();
 	for (const [nodeId] of rebuildOrder) {
+		if (additionalRehashNodeIds.has(nodeId)) {
+			scheduleRehash(
+				nodeId,
+				scheduledNodeIds,
+				rehashNodeIds,
+				instrumentation,
+			);
+			continue;
+		}
 		let replacement = replacements.get(nodeId) ?? index.getNode(nodeId);
 		if (replacement === undefined) {
 			throw new Error('A normalization ancestor is absent from its source index.');
@@ -945,16 +1170,14 @@ function compareNodeDepthDescending(
 	return left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0;
 }
 
-function createTrustedDelta(
+function createPrivateDelta(
 	entries: readonly ManuscriptNormalizationDeltaEntry[],
 	parents: readonly IManuscriptNormalizationParentDelta[],
 ): IManuscriptNormalizationDelta {
-	const delta = Object.freeze({
+	return Object.freeze({
 		entries: Object.freeze([...entries]),
 		parents: Object.freeze([...parents]),
 	});
-	trustedNormalizationDeltas.add(delta);
-	return delta;
 }
 
 function cloneNodeWithChildren(
@@ -1014,21 +1237,6 @@ function marksEqual(left: readonly Mark[], right: readonly Mark[]): boolean {
 	return true;
 }
 
-function sameChildReferences(
-	left: readonly DocumentNode[],
-	right: readonly DocumentNode[],
-): boolean {
-	if (left.length !== right.length) {
-		return false;
-	}
-	for (let index = 0; index < left.length; index += 1) {
-		if (left[index] !== right[index]) {
-			return false;
-		}
-	}
-	return true;
-}
-
 function requireDeltaBudget(
 	currentEntryCount: number,
 	maximumDeltaEntries: number,
@@ -1054,6 +1262,46 @@ function textLimitExceeded(
 		nodeId,
 		maximumUtf16Length: maximumManuscriptTextUtf16Length,
 	});
+}
+
+function validateCheckpointOwnership(
+	content: DocumentContent,
+	index: DocumentIndex,
+	merkleState: RevisionMerkleState,
+): ManuscriptNormalizationFailure | undefined {
+	const root = content.root;
+	const indexFailure = validateIndexOwnership(root, index);
+	if (indexFailure !== undefined) {
+		return indexFailure;
+	}
+	try {
+		if (
+			index.nodeCount !== merkleState.nodeCount
+			|| merkleState.getNodeHash(root.id) !== merkleState.rootNodeHash
+			|| hashRevisionMerklePayload(
+				manuscriptHashDomains.documentContent,
+				createDocumentMerkleHashPayload({
+					schemaId: content.schemaId,
+					schemaVersion: content.schemaVersion,
+					metadataHash: merkleState.metadataHash,
+					rootNodeHash: merkleState.rootNodeHash,
+					academicGraphHash: merkleState.academicGraphHash,
+					settingsHash: merkleState.settingsHash,
+				}),
+			) !== merkleState.documentHash
+		) {
+			return {
+				reason: 'checkpoint-mismatch',
+				nodeId: root.id,
+			};
+		}
+	} catch {
+		return {
+			reason: 'checkpoint-mismatch',
+			nodeId: root.id,
+		};
+	}
+	return undefined;
 }
 
 function validateIndexOwnership(
@@ -1102,13 +1350,8 @@ function copyChildSlots(
 	instrumentation?.onCopyChildSlots?.(parentNodeId, count);
 }
 
-function deltaMismatch<TValue = never>(
-	nodeId: NodeId,
-): ManuscriptNormalizationResult<TValue> {
-	return errorResult({
-		reason: 'normalization-delta-mismatch',
-		nodeId,
-	});
+function createOpaqueNormalizationToken<TToken extends object>(): TToken {
+	return Object.freeze(Object.create(null)) as TToken;
 }
 
 function okResult<TValue>(

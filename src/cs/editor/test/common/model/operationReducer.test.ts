@@ -39,7 +39,6 @@ import type {
 	TextNode,
 } from 'cs/editor/common/model/manuscript';
 import { maximumManuscriptTextUtf16Length } from 'cs/editor/common/model/manuscriptSchema';
-import { normalizeManuscriptRoot } from 'cs/editor/common/model/normalization';
 import type { Operation } from 'cs/editor/common/model/operation';
 import {
 	consumeManuscriptOperationTransition,
@@ -147,29 +146,6 @@ suite('Manuscript Operation reducer', () => {
 					assert.deepStrictEqual(
 						reduced.touchSet.normalizationParentNodeIds,
 						[fixture.ids.body, nodeId(21)],
-					);
-					const normalized = normalizeManuscriptRoot({
-						root: reduced.nextContent.root,
-						index: reduced.nextIndex,
-						touchedParentNodeIds:
-							reduced.touchSet.normalizationParentNodeIds,
-						touchedNodeIds: [],
-						maximumDeltaEntries: 1_024,
-					});
-					if (normalized.type === 'error') {
-						throw new Error(normalized.error.reason);
-					}
-					assert.equal(normalized.type, 'ok');
-					const normalizedIndex = createDocumentIndex(normalized.value.root);
-					if (normalizedIndex.type === 'error') {
-						throw new Error(normalizedIndex.error.reason);
-					}
-					assert.equal(normalizedIndex.type, 'ok');
-					const insertedParagraph = normalizedIndex.value.getNode(nodeId(21));
-					assert.equal(insertedParagraph?.type, 'paragraph');
-					assert.deepStrictEqual(
-						insertedParagraph?.children.map(child => child.id),
-						[nodeId(23)],
 					);
 					assert.equal(reduced.positionMapFragments[0]?.kind, 'child-insert');
 				},
@@ -2240,11 +2216,16 @@ function buildFixture(
 			bibliographyEnabled: true,
 		},
 	});
-	const merkleState = rebuildRevisionMerkleState(content);
 	const indexResult = createDocumentIndex(root);
 	if (indexResult.type === 'error') {
 		throw new Error(`Fixture index failed: ${indexResult.error.reason}.`);
 	}
+	const merkleState = rebuildRevisionMerkleState(
+		content,
+		undefined,
+		undefined,
+		indexResult.value,
+	);
 	return {
 		resource,
 		generatedAgainstRevisionId: revisionId(201),
@@ -2278,7 +2259,12 @@ function advanceFixture(
 	instrumentation: IManuscriptOperationReducerInstrumentation,
 ): IFixture {
 	const reduced = expectOk(reduce(fixture, operation, instrumentation));
-	const merkleState = rebuildRevisionMerkleState(reduced.nextContent);
+	const merkleState = rebuildRevisionMerkleState(
+		reduced.nextContent,
+		undefined,
+		undefined,
+		reduced.nextIndex,
+	);
 	return {
 		...fixture,
 		content: reduced.nextContent,
