@@ -164,6 +164,51 @@ suite('Document revision index', () => {
 		);
 	});
 
+	test('hides construction and private topology stores from hostile callers', () => {
+		const document = createTestDocument();
+		const index = requireIndex(createDocumentIndex(document.root));
+		const prototype = Object.getPrototypeOf(index) as object;
+
+		assert.deepStrictEqual(
+			Reflect.ownKeys(index).sort(),
+			['nodeCount', 'preorderNodeIds', 'rootNodeId'],
+		);
+		assert.equal(Object.isFrozen(prototype), true);
+		assert.deepStrictEqual(
+			Object.getOwnPropertyDescriptor(prototype, 'constructor'),
+			{
+				value: undefined,
+				writable: false,
+				enumerable: false,
+				configurable: false,
+			},
+		);
+		const exposedConstructor =
+			(prototype as { readonly constructor?: Function }).constructor;
+		assert.throws(
+			() => Reflect.construct(
+				exposedConstructor as Function,
+					[
+						Object.freeze({}),
+						document.root.id,
+						new Map(),
+						new Map(),
+						[],
+					],
+				),
+			TypeError,
+		);
+		assert.throws(
+			() => (Object.create(prototype) as DocumentIndex)
+				.getNode(document.root.id),
+			TypeError,
+		);
+		assert.throws(
+			() => new Proxy(index, {}).getNode(document.root.id),
+			TypeError,
+		);
+	});
+
 	test('creates path and ancestor iterators only when requested', () => {
 		const document = createTestDocument();
 		const index = requireIndex(createDocumentIndex(document.root));
@@ -368,6 +413,71 @@ suite('Document revision index', () => {
 			ancestorCount += 1;
 		}
 		assert.equal(ancestorCount, maximumDepth);
+	});
+
+	test('answers parent locations without rescanning a 20k-wide parent', () => {
+		const childCount = 20_000;
+		let childIdReads = 0;
+		const childIds = Array.from(
+			{ length: childCount },
+			(_, childIndex) => nodeId(childIndex + 3),
+		);
+		const children = childIds.map(id =>
+			new Proxy<ParagraphNode>({
+				id,
+				type: 'paragraph',
+				attrs: {
+					alignment: 'start',
+				},
+				children: [],
+			}, {
+				get(target, property, receiver): unknown {
+					if (property === 'id') {
+						childIdReads += 1;
+					}
+					return Reflect.get(target, property, receiver);
+				},
+			})) as [ParagraphNode, ...ParagraphNode[]];
+		const body: BodyNode = {
+			id: nodeId(2),
+			type: 'body',
+			attrs: {},
+			children,
+		};
+		const root: ManuscriptNode = {
+			id: nodeId(1),
+			type: 'manuscript',
+			attrs: {},
+			children: [body],
+		};
+		const index = requireIndex(createDocumentIndex(root));
+		childIdReads = 0;
+		Object.defineProperty(body, 'children', {
+			configurable: true,
+			get(): never {
+				throw new Error('Parent children must not be rescanned after indexing.');
+			},
+		});
+
+		for (let childIndex = 0; childIndex < childCount; childIndex += 1) {
+			const childId = childIds[childIndex];
+			assert.notEqual(childId, undefined);
+			assert.deepStrictEqual(index.getParentLocation(childId), {
+				parentNodeId: body.id,
+				childIndex,
+			});
+		}
+		const lastChildId = childIds.at(-1);
+		assert.notEqual(lastChildId, undefined);
+		assert.deepStrictEqual(
+			lastChildId === undefined
+				? undefined
+				: [...(index.iteratePath(lastChildId) ?? [])],
+			lastChildId === undefined
+				? undefined
+				: [root.id, body.id, lastChildId],
+		);
+		assert.equal(childIdReads, 0);
 	});
 
 	test('isolates topology collections from caller mutation', () => {

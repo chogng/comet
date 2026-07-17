@@ -73,6 +73,9 @@ export type DocumentIndexResult =
  *
  * This is a derived lookup index, not hash authority. The owning Snapshot keeps
  * ownership of node payloads; the index owns copies of all topology collections.
+ * Construction by the generic builder does not bind the result to trusted
+ * content. The exact Snapshot/transition owner must retain that authority and
+ * bind the index identity alongside the immutable content it validated.
  */
 export interface DocumentIndex {
 	readonly rootNodeId: NodeId;
@@ -102,52 +105,68 @@ type TraversalFrame =
 		readonly node: DocumentNode;
 	};
 
+const documentIndexConstructionToken = Object.freeze({});
+
 class ImmutableDocumentIndex implements DocumentIndex {
 	readonly rootNodeId: NodeId;
 	readonly nodeCount: number;
 	readonly preorderNodeIds: readonly NodeId[];
 
-	private readonly nodesById: ReadonlyMap<NodeId, DocumentNode>;
-	private readonly parentsById: ReadonlyMap<NodeId, IDocumentNodeParentLocation>;
+	readonly #nodesById: ReadonlyMap<NodeId, DocumentNode>;
+	readonly #parentsById: ReadonlyMap<NodeId, IDocumentNodeParentLocation>;
 
 	constructor(
+		constructionToken: object,
 		rootNodeId: NodeId,
 		nodesById: ReadonlyMap<NodeId, DocumentNode>,
 		parentsById: ReadonlyMap<NodeId, IDocumentNodeParentLocation>,
 		preorderNodeIds: readonly NodeId[],
 	) {
+		if (constructionToken !== documentIndexConstructionToken) {
+			throw new TypeError(
+				'Document indexes can only be constructed by the index builder.',
+			);
+		}
 		this.rootNodeId = rootNodeId;
-		this.nodesById = new Map(nodesById);
-		this.parentsById = new Map(parentsById);
+		this.#nodesById = new Map(nodesById);
+		this.#parentsById = new Map(parentsById);
 		this.preorderNodeIds = Object.freeze([...preorderNodeIds]);
 		this.nodeCount = this.preorderNodeIds.length;
 		Object.freeze(this);
 	}
 
 	hasNode(nodeId: NodeId): boolean {
-		return this.nodesById.has(nodeId);
+		return this.#nodesById.has(nodeId);
 	}
 
 	getNode(nodeId: NodeId): DocumentNode | undefined {
-		return this.nodesById.get(nodeId);
+		return this.#nodesById.get(nodeId);
 	}
 
 	getParentLocation(nodeId: NodeId): IDocumentNodeParentLocation | undefined {
-		return this.parentsById.get(nodeId);
+		return this.#parentsById.get(nodeId);
 	}
 
 	iteratePath(nodeId: NodeId): IterableIterator<NodeId> | undefined {
-		return this.nodesById.has(nodeId)
-			? iteratePathFromRoot(nodeId, this.parentsById)
+		return this.#nodesById.has(nodeId)
+			? iteratePathFromRoot(nodeId, this.#parentsById)
 			: undefined;
 	}
 
 	iterateAncestors(nodeId: NodeId): IterableIterator<NodeId> | undefined {
-		return this.nodesById.has(nodeId)
-			? iterateNodeAncestors(nodeId, this.parentsById)
+		return this.#nodesById.has(nodeId)
+			? iterateNodeAncestors(nodeId, this.#parentsById)
 			: undefined;
 	}
 }
+
+Object.defineProperty(ImmutableDocumentIndex.prototype, 'constructor', {
+	value: undefined,
+	writable: false,
+	configurable: false,
+});
+Object.freeze(ImmutableDocumentIndex.prototype);
+Object.freeze(ImmutableDocumentIndex);
 
 /**
  * Builds a revision-local index with iterative DFS and bounded traversal.
@@ -271,6 +290,7 @@ export function createDocumentIndex(
 	return Object.freeze({
 		type: 'ok',
 		value: new ImmutableDocumentIndex(
+			documentIndexConstructionToken,
 			rootNodeId,
 			nodesById,
 			parentsById,

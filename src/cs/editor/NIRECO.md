@@ -550,6 +550,12 @@ Snapshot 顶层不包含 manuscript URI、DOM、Selection、ViewState、durabili
 
 运行时 node attribute、Reference、Evidence 和 Anchor 中的资源值使用 Comet `URI`；版本化持久 DTO 和 hash payload 使用经过其拥有层校验的 canonical string。`decodeDocumentSnapshot(value, expectedResource, limits)` 从 `unknown` 做一次 descriptor-safe closed decode，校验所有 URI、ID、预算、schema、graph reference、anchor resource 和 declared hash，并返回 Snapshot、DocumentIndex 与独立重建的 Revision Merkle state。
 
+`createDocumentIndex` 只构造 revision-local derived lookup，不颁发 content
+authority。Generic caller 即使为同一 root 构造出结构相同的 index，也不能替代
+由 draft/transition owner 绑定的 exact Snapshot index。Index concrete class、
+constructor token 和 topology stores 都是 module-private；parent lookup 直接读取
+构建时的 immutable map，禁止在查询热路径重新扫描 parent children。
+
 Immutable installation 只冻结 Manuscript 自己拥有的 plain record 和 array。不得递归 freeze `URI`，因为它是 Comet 基座值对象并拥有惰性内部缓存；不得把“已经 frozen”当成已验证证据。
 
 ### 唯一正文表示
