@@ -50,7 +50,7 @@ const rightTextNodeId = nodeId(108);
 const aliasNodeId = nodeId(109);
 
 function createMap(
-	fragments: readonly [PositionMapFragment, ...PositionMapFragment[]],
+	fragments: readonly PositionMapFragment[],
 	fromRevisionId = revisionOne,
 	toRevisionId = revisionTwo,
 ): IPositionMap {
@@ -217,6 +217,97 @@ function composeNodeMappers(
 }
 
 suite('PositionMap', () => {
+	test('treats an owned empty fragment list as an identity map', () => {
+		const fragments: PositionMapFragment[] = [];
+		const positionMap = createMap(fragments);
+		const position = textPosition(7, 'after');
+
+		assert.deepStrictEqual(positionMap.mapPosition(position), mapped(position));
+		assert.deepStrictEqual(
+			positionMap.mapPosition(nodeBoundary(3, 'before')),
+			mapped(nodeBoundary(3, 'before')),
+		);
+		assert.deepStrictEqual(
+			positionMap.mapNodeId(textNodeId),
+			mapped(textNodeId),
+		);
+
+		const ownedSteps = Reflect.get(positionMap, 'steps') as readonly unknown[];
+		assert.notStrictEqual(ownedSteps, fragments);
+		assert.deepStrictEqual(ownedSteps, []);
+		assert.equal(Object.isFrozen(ownedSteps), true);
+		assert.equal(Object.isFrozen(fragments), false);
+
+		fragments.push({
+			kind: 'node-tombstone',
+			nodeId: textNodeId,
+		});
+		assert.deepStrictEqual(positionMap.mapPosition(position), mapped(position));
+		assert.deepStrictEqual(positionMap.mapNodeId(textNodeId), mapped(textNodeId));
+	});
+
+	test('composes empty and non-empty maps as identities in both orders', () => {
+		const aliasFragment: PositionMapFragment = {
+			kind: 'node-alias',
+			sourceNodeId: textNodeId,
+			targetNodeId: aliasNodeId,
+		};
+		const expectedPosition = textPosition(2, 'before', aliasNodeId);
+
+		const emptyThenAlias = createMap(
+			[],
+			revisionOne,
+			revisionTwo,
+		).compose(createMap(
+			[aliasFragment],
+			revisionTwo,
+			revisionThree,
+		));
+		assert.deepStrictEqual(
+			emptyThenAlias.mapPosition(textPosition(2, 'before')),
+			mapped(expectedPosition),
+		);
+		assert.deepStrictEqual(
+			emptyThenAlias.mapNodeId(textNodeId),
+			mapped(aliasNodeId),
+		);
+
+		const aliasThenEmpty = createMap(
+			[aliasFragment],
+			revisionOne,
+			revisionTwo,
+		).compose(createMap(
+			[],
+			revisionTwo,
+			revisionThree,
+		));
+		assert.deepStrictEqual(
+			aliasThenEmpty.mapPosition(textPosition(2, 'before')),
+			mapped(expectedPosition),
+		);
+		assert.deepStrictEqual(
+			aliasThenEmpty.mapNodeId(textNodeId),
+			mapped(aliasNodeId),
+		);
+	});
+
+	test('keeps resource and revision composition rules for empty maps', () => {
+		const empty = createMap([]);
+		assert.throws(
+			() => empty.compose(createMap([], revisionThree, revisionFour)),
+			/Cannot compose position maps with non-adjacent revisions/u,
+		);
+		assert.throws(
+			() => empty.compose(createPositionMap({
+				resource: otherResource,
+				fromRevisionId: revisionTwo,
+				toRevisionId: revisionThree,
+				fragments: [],
+			})),
+			/Cannot compose position maps for different resources/u,
+		);
+	});
+
 	test('maps text replacement endpoints, affinities, deletion, and UTF-16 lengths', () => {
 		const insertion = createMap([{
 			kind: 'text-replace',
@@ -808,9 +899,15 @@ suite('PositionMap', () => {
 				resource,
 				fromRevisionId: revisionOne,
 				toRevisionId: revisionTwo,
-				fragments: [],
+				fragments: [{
+					kind: 'child-insert',
+					parentNodeId,
+					childIndex: 0,
+					insertedChildCount: 1,
+					insertedNodeIds: [],
+				}],
 			}]),
-			/requires at least one fragment/u,
+			/must contain at least one node identity/u,
 		);
 		assert.throws(
 			() => createMap([{

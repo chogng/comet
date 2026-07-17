@@ -125,7 +125,7 @@ export interface IPositionMapOptions {
 	readonly resource: URI;
 	readonly fromRevisionId: RevisionId;
 	readonly toRevisionId: RevisionId;
-	readonly fragments: readonly [PositionMapFragment, ...PositionMapFragment[]];
+	readonly fragments: readonly PositionMapFragment[];
 }
 
 interface IFragmentMappingStep {
@@ -1124,9 +1124,6 @@ function cloneFragment(fragment: unknown): PositionMapFragment {
 
 function cloneFragmentList(value: unknown): readonly PositionMapFragment[] {
 	const values = inspectDenseDataArray(value, 'Position map fragments');
-	if (values.length === 0) {
-		throw new TypeError('Position map requires at least one fragment.');
-	}
 	const cloned: PositionMapFragment[] = [];
 	for (const fragment of values) {
 		cloned.push(cloneFragment(fragment));
