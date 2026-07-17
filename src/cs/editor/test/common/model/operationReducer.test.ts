@@ -740,6 +740,7 @@ suite('Manuscript Operation reducer', () => {
 			[fixture.ids.firstParagraph, fixture.ids.secondParagraph],
 		);
 
+		const parentEditLogLengths: number[] = [];
 		const moveToEnd = expectOk(reduce(fixture, {
 			id: operationId(441),
 			type: 'move-node',
@@ -748,6 +749,10 @@ suite('Manuscript Operation reducer', () => {
 			newParentNodeId: fixture.ids.body,
 			expectedParentHash: nodeHash(fixture, fixture.ids.body),
 			childIndex: 1,
+		}, {
+			onParentOrdinalEditLogLength: (_parentNodeId, editCount) => {
+				parentEditLogLengths.push(editCount);
+			},
 		}));
 		const movedBody = moveToEnd.nextIndex.getNode(fixture.ids.body);
 		assert.equal(movedBody?.type, 'body');
@@ -755,6 +760,7 @@ suite('Manuscript Operation reducer', () => {
 			movedBody?.children.map(child => child.id),
 			[fixture.ids.secondParagraph, fixture.ids.firstParagraph],
 		);
+		assert.deepStrictEqual(parentEditLogLengths, [1]);
 
 		const outOfRange = reduce(fixture, {
 			id: operationId(442),
@@ -810,6 +816,178 @@ suite('Manuscript Operation reducer', () => {
 				['after', fixture.ids.secondParagraph],
 			],
 		);
+	});
+
+	test('replays structural ordinals for edge edits and move variants', () => {
+		const instrumentation: IManuscriptOperationReducerInstrumentation = {};
+		let fixture = createWideFixture(7);
+		const bodyChildren = (): BodyNode['children'] => {
+			const body = fixture.index.getNode(fixture.ids.body);
+			if (body?.type !== 'body') {
+				throw new Error('The ordinal fixture lost its Body.');
+			}
+			return body.children;
+		};
+		const verify = (): void => {
+			assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+		};
+		const insertedHeadId = nodeId(91_000);
+		const insertedMiddleId = nodeId(91_001);
+		const insertedTailId = nodeId(91_002);
+		const insertedParagraph = (id: NodeId): ParagraphNode => ({
+			id,
+			type: 'paragraph',
+			attrs: { alignment: 'start' },
+			children: [],
+		});
+
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_000),
+			type: 'insert-node',
+			parentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: 0,
+			node: insertedParagraph(insertedHeadId),
+		}, instrumentation);
+		verify();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_001),
+			type: 'insert-node',
+			parentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: Math.floor(bodyChildren().length / 2),
+			node: insertedParagraph(insertedMiddleId),
+		}, instrumentation);
+		verify();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_002),
+			type: 'insert-node',
+			parentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: bodyChildren().length,
+			node: insertedParagraph(insertedTailId),
+		}, instrumentation);
+		verify();
+
+		for (const [operationNumber, targetNodeId] of [
+			[3_003, insertedHeadId],
+			[3_004, insertedMiddleId],
+			[3_005, insertedTailId],
+		] as const) {
+			fixture = advanceFixture(fixture, {
+				id: operationId(operationNumber),
+				type: 'delete-node',
+				targetNodeId,
+				expectedNodeHash: nodeHash(fixture, targetNodeId),
+			}, instrumentation);
+			verify();
+		}
+
+		const firstBodyChild = bodyChildren()[0];
+		if (firstBodyChild === undefined) {
+			throw new Error('The ordinal fixture lost its first Body child.');
+		}
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_006),
+			type: 'move-node',
+			targetNodeId: firstBodyChild.id,
+			expectedNodeHash: nodeHash(fixture, firstBodyChild.id),
+			newParentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: bodyChildren().length - 1,
+		}, instrumentation);
+		verify();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_007),
+			type: 'move-node',
+			targetNodeId: firstBodyChild.id,
+			expectedNodeHash: nodeHash(fixture, firstBodyChild.id),
+			newParentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: 0,
+		}, instrumentation);
+		verify();
+
+		fixture = createFixture();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_008),
+			type: 'move-node',
+			targetNodeId: fixture.ids.rightText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.rightText),
+			newParentNodeId: fixture.ids.secondParagraph,
+			expectedParentHash: nodeHash(fixture, fixture.ids.secondParagraph),
+			childIndex: 0,
+		}, instrumentation);
+		verify();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_009),
+			type: 'move-node',
+			targetNodeId: fixture.ids.leftText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.leftText),
+			newParentNodeId: fixture.ids.secondParagraph,
+			expectedParentHash: nodeHash(fixture, fixture.ids.secondParagraph),
+			childIndex: 2,
+		}, instrumentation);
+		verify();
+
+		fixture = createCrossParentPathFixture();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_010),
+			type: 'move-node',
+			targetNodeId: fixture.ids.firstParagraph,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.firstParagraph),
+			newParentNodeId: fixture.ids.secondParagraph,
+			expectedParentHash: nodeHash(fixture, fixture.ids.secondParagraph),
+			childIndex: 1,
+		}, instrumentation);
+		verify();
+		assert.deepStrictEqual(
+			fixture.index.getParentLocation(fixture.ids.secondParagraph),
+			{ parentNodeId: fixture.ids.body, childIndex: 0 },
+		);
+		assert.deepStrictEqual(
+			fixture.index.getParentLocation(fixture.ids.firstParagraph),
+			{ parentNodeId: fixture.ids.secondParagraph, childIndex: 1 },
+		);
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_011),
+			type: 'move-node',
+			targetNodeId: fixture.ids.firstParagraph,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.firstParagraph),
+			newParentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: 0,
+		}, instrumentation);
+		verify();
+		assert.deepStrictEqual(
+			fixture.index.getParentLocation(fixture.ids.firstParagraph),
+			{ parentNodeId: fixture.ids.body, childIndex: 0 },
+		);
+		assert.deepStrictEqual(
+			fixture.index.getParentLocation(fixture.ids.secondParagraph),
+			{ parentNodeId: fixture.ids.body, childIndex: 1 },
+		);
+
+		fixture = createFixture();
+		const splitRightId = nodeId(91_010);
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_012),
+			type: 'split-text',
+			textNodeId: fixture.ids.leftText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.leftText),
+			splitUtf16Offset: offset(2),
+			rightTextNodeId: splitRightId,
+		}, instrumentation);
+		verify();
+		fixture = advanceFixture(fixture, {
+			id: operationId(3_013),
+			type: 'join-text',
+			leftTextNodeId: fixture.ids.leftText,
+			expectedLeftNodeHash: nodeHash(fixture, fixture.ids.leftText),
+			rightTextNodeId: splitRightId,
+			expectedRightNodeHash: nodeHash(fixture, splitRightId),
+		}, instrumentation);
+		verify();
 	});
 
 	test('validates UTF-16 boundaries and Text schema length', () => {
@@ -1045,12 +1223,19 @@ suite('Manuscript Operation reducer', () => {
 	test('updates a 20k-wide tree without recursive traversal overflow', () => {
 		const fixture = createWideFixture(20_000);
 		const targetId = nodeId(30_000 + 19_999);
+		const changedPathReads: NodeId[] = [];
 		const reduced = expectOk(reduce(fixture, {
 			id: operationId(480),
 			type: 'set-node-attributes',
 			nodeId: targetId,
 			expectedNodeHash: nodeHash(fixture, targetId),
 			attributes: { alignment: 'end' },
+		}, {
+			onNodePayloadRead: (nodeId, kind) => {
+				if (kind === 'changed-path') {
+					changedPathReads.push(nodeId);
+				}
+			},
 		}));
 		const target = reduced.nextIndex.getNode(targetId);
 		assert.equal(target?.type, 'paragraph');
@@ -1064,6 +1249,10 @@ suite('Manuscript Operation reducer', () => {
 			reduced.nextIndex.getNode(nodeId(30_000)),
 			fixture.index.getNode(nodeId(30_000)),
 		);
+		assert.deepStrictEqual(
+			changedPathReads,
+			[fixture.ids.root, fixture.ids.body, targetId],
+		);
 	});
 
 	test('updates a 20k-wide structural index without visiting unrelated payload descendants', () => {
@@ -1073,14 +1262,13 @@ suite('Manuscript Operation reducer', () => {
 		const untouchedTextNodeId = nodeId(60_000 + 10_000);
 		let documentChildSlotsCopied = 0;
 		let indexTrieSlotsCopied = 0;
-		let changedParentReads = 0;
 		let preorderNodeReads = 0;
 		let preorderMaterializations = 0;
+		let parentEditLogLength = 0;
+		let parentEditsReplayed = 0;
 		const instrumentation: IManuscriptOperationReducerInstrumentation = {
 			onNodePayloadRead: (_nodeId, kind) => {
-				if (kind === 'changed-parent-lookup') {
-					changedParentReads += 1;
-				} else if (kind === 'preorder-materialization') {
+				if (kind === 'preorder-materialization') {
 					preorderNodeReads += 1;
 				}
 			},
@@ -1093,6 +1281,12 @@ suite('Manuscript Operation reducer', () => {
 			},
 			onPreorderMaterialized: () => {
 				preorderMaterializations += 1;
+			},
+			onParentOrdinalEditLogLength: (_parentNodeId, editCount) => {
+				parentEditLogLength = editCount;
+			},
+			onParentOrdinalEditsReplayed: (_parentNodeId, editCount) => {
+				parentEditsReplayed += editCount;
 			},
 		};
 		probe.enabled = true;
@@ -1108,25 +1302,26 @@ suite('Manuscript Operation reducer', () => {
 				attrs: { alignment: 'start' },
 				children: [],
 			},
-		}, instrumentation));
+			}, instrumentation));
 
-		assert.deepStrictEqual([...probe.visitedNodeIds], []);
 		assert.equal(documentChildSlotsCopied, 20_002);
 		assert.equal(indexTrieSlotsCopied < 1_000, true);
-		assert.equal(changedParentReads, 0);
 		assert.equal(preorderNodeReads, 0);
 		assert.equal(preorderMaterializations, 0);
+		assert.equal(parentEditLogLength, 1);
+		assert.equal(parentEditsReplayed, 0);
 		assert.equal(reduced.nextIndex.nodeCount, fixture.index.nodeCount + 1);
 		assert.deepStrictEqual(
 			reduced.nextIndex.getParentLocation(insertedNodeId),
 			{ parentNodeId: fixture.ids.body, childIndex: 10_000 },
 		);
-		assert.equal(changedParentReads, 0);
+		probe.visitedNodeIds.clear();
 		assert.deepStrictEqual(
 			reduced.nextIndex.getParentLocation(shiftedNodeId),
 			{ parentNodeId: fixture.ids.body, childIndex: 10_001 },
 		);
-		assert.equal(changedParentReads, 20_001);
+		assert.deepStrictEqual([...probe.visitedNodeIds], []);
+		assert.equal(parentEditsReplayed, 1);
 		assert.strictEqual(
 			reduced.nextIndex.getNode(untouchedTextNodeId),
 			fixture.index.getNode(untouchedTextNodeId),
@@ -1140,10 +1335,97 @@ suite('Manuscript Operation reducer', () => {
 		assert.equal(preorderMaterializations, 1);
 	});
 
+	test('seals updated index internals and rejects forged receivers', () => {
+		const fixture = createFixture();
+		const insertedNodeId = nodeId(92_000);
+		const reduced = expectOk(reduce(fixture, {
+			id: operationId(3_100),
+			type: 'insert-node',
+			parentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: 1,
+			node: {
+				id: insertedNodeId,
+				type: 'paragraph',
+				attrs: { alignment: 'start' },
+				children: [],
+			},
+		}));
+		const index = reduced.nextIndex;
+		const prototype = Object.getPrototypeOf(index) as DocumentIndex & {
+			readonly constructor?: unknown;
+		};
+		assert.equal(Object.isFrozen(index), true);
+		assert.equal(Object.isFrozen(prototype), true);
+		assert.equal(prototype.constructor, undefined);
+		assert.deepStrictEqual(
+			Reflect.ownKeys(index).sort(),
+			['nodeCount', 'rootNodeId'],
+		);
+		for (const privateName of [
+			'ultimateBase',
+			'nodeOverrides',
+			'parentOverrides',
+			'parentVersions',
+			'parentOrdinalEdits',
+			'preorderProvider',
+			'instrumentation',
+			'resolvedParentLocationCache',
+		]) {
+			assert.equal(Reflect.ownKeys(index).includes(privateName), false);
+			assert.equal(Reflect.ownKeys(prototype).includes(privateName), false);
+		}
+
+		const forged = Object.create(prototype) as DocumentIndex;
+		assert.throws(
+			() => forged.getNode(insertedNodeId),
+			{ name: 'TypeError' },
+		);
+		const proxied = new Proxy(index, {});
+		assert.throws(
+			() => proxied.getParentLocation(insertedNodeId),
+			{ name: 'TypeError' },
+		);
+		let hostileReceiverReads = 0;
+		const hostileReceiver = new Proxy(index, {
+			get() {
+				hostileReceiverReads += 1;
+				throw new Error('receiver getter must not run');
+			},
+			getOwnPropertyDescriptor() {
+				hostileReceiverReads += 1;
+				throw new Error('receiver descriptor trap must not run');
+			},
+			getPrototypeOf() {
+				hostileReceiverReads += 1;
+				throw new Error('receiver prototype trap must not run');
+			},
+		});
+		const getParentLocation = prototype.getParentLocation;
+		const iteratePath = prototype.iteratePath;
+		const iterateAncestors = prototype.iterateAncestors;
+		assert.throws(
+			() => getParentLocation.call(hostileReceiver, insertedNodeId),
+			{ name: 'TypeError' },
+		);
+		assert.throws(
+			() => iteratePath.call(hostileReceiver, insertedNodeId),
+			{ name: 'TypeError' },
+		);
+		assert.throws(
+			() => iterateAncestors.call(hostileReceiver, insertedNodeId),
+			{ name: 'TypeError' },
+		);
+		assert.equal(hostileReceiverReads, 0);
+		assert.deepStrictEqual(
+			index.getParentLocation(insertedNodeId),
+			{ parentNodeId: fixture.ids.body, childIndex: 1 },
+		);
+	});
+
 	test('keeps 1024 structural overlays flat and oracle-equivalent', () => {
 		let fixture = createFixture();
 		let indexTriePathCopies = 0;
-		let changedParentReads = 0;
 		let preorderMaterializations = 0;
 		let nodeOverlayValues = -1;
 		let nodeOverlayTombstones = -1;
@@ -1151,15 +1433,25 @@ suite('Manuscript Operation reducer', () => {
 		let parentOverlayTombstones = -1;
 		let parentVersionValues = -1;
 		let parentVersionTombstones = -1;
+		let parentEditValues = -1;
+		let parentEditTombstones = -1;
+		let maximumParentEditLogLength = 0;
+		let maximumParentEditSlotsCopied = 0;
+		let cumulativeParentEditSlotsCopied = 0;
+		let maximumParentEditsReplayed = 0;
+		let maximumParentEditChunksVisited = 0;
+		let lastParentEditChunksVisited = 0;
 		const instrumentation: IManuscriptOperationReducerInstrumentation = {
-			onNodePayloadRead: (_nodeId, kind) => {
-				if (kind === 'changed-parent-lookup') {
-					changedParentReads += 1;
-				}
-			},
-			onShallowCopy: kind => {
+			onShallowCopy: (kind, copiedSlots) => {
 				if (kind.startsWith('index-')) {
 					indexTriePathCopies += 1;
+				}
+				if (kind === 'index-parent-edit-log-chunk') {
+					maximumParentEditSlotsCopied = Math.max(
+						maximumParentEditSlotsCopied,
+						copiedSlots,
+					);
+					cumulativeParentEditSlotsCopied += copiedSlots;
 				}
 			},
 			onPreorderMaterialized: () => {
@@ -1183,14 +1475,36 @@ suite('Manuscript Operation reducer', () => {
 						parentVersionValues = valueEntries;
 						parentVersionTombstones = tombstoneEntries;
 						break;
+					case 'parent-edits':
+						parentEditValues = valueEntries;
+						parentEditTombstones = tombstoneEntries;
+						break;
 				}
+			},
+			onParentOrdinalEditLogLength: (_parentNodeId, editCount) => {
+				maximumParentEditLogLength = Math.max(
+					maximumParentEditLogLength,
+					editCount,
+				);
+			},
+			onParentOrdinalEditsReplayed: (_parentNodeId, editCount) => {
+				maximumParentEditsReplayed = Math.max(
+					maximumParentEditsReplayed,
+					editCount,
+				);
+			},
+			onParentOrdinalEditChunksVisited: (_parentNodeId, chunkCount) => {
+				maximumParentEditChunksVisited = Math.max(
+					maximumParentEditChunksVisited,
+					chunkCount,
+				);
+				lastParentEditChunksVisited = chunkCount;
 			},
 		};
 
-		for (let pair = 0; pair < 512; pair += 1) {
+		for (let pair = 0; pair < 511; pair += 1) {
 			const rightTextNodeId = nodeId(1_000 + pair);
 			indexTriePathCopies = 0;
-			changedParentReads = 0;
 			fixture = advanceFixture(fixture, {
 				id: operationId(1_000 + (pair * 2)),
 				type: 'split-text',
@@ -1200,10 +1514,8 @@ suite('Manuscript Operation reducer', () => {
 				rightTextNodeId,
 			}, instrumentation);
 			assert.equal(indexTriePathCopies <= 400, true);
-			assert.equal(changedParentReads, 0);
 
 			indexTriePathCopies = 0;
-			changedParentReads = 0;
 			fixture = advanceFixture(fixture, {
 				id: operationId(1_001 + (pair * 2)),
 				type: 'join-text',
@@ -1213,7 +1525,6 @@ suite('Manuscript Operation reducer', () => {
 				expectedRightNodeHash: nodeHash(fixture, rightTextNodeId),
 			}, instrumentation);
 			assert.equal(indexTriePathCopies <= 400, true);
-			assert.equal(changedParentReads, 0);
 			assert.equal(preorderMaterializations, 0);
 			assert.deepStrictEqual(
 				[
@@ -1223,12 +1534,59 @@ suite('Manuscript Operation reducer', () => {
 					parentOverlayTombstones,
 					parentVersionValues,
 					parentVersionTombstones,
+					parentEditValues,
+					parentEditTombstones,
 				],
-				[4, 0, 1, 0, 1, 0],
+				[4, 0, 1, 0, 1, 0, 1, 0],
 			);
 		}
 
-		assert.equal(fixture.index.nodeCount, 7);
+		const finalLeftSplitId = nodeId(2_000);
+		fixture = advanceFixture(fixture, {
+			id: operationId(2_022),
+			type: 'split-text',
+			textNodeId: fixture.ids.leftText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.leftText),
+			splitUtf16Offset: offset(2),
+			rightTextNodeId: finalLeftSplitId,
+		}, instrumentation);
+		const finalRightSplitId = nodeId(2_001);
+		fixture = advanceFixture(fixture, {
+			id: operationId(2_023),
+			type: 'split-text',
+			textNodeId: fixture.ids.rightText,
+			expectedNodeHash: nodeHash(fixture, fixture.ids.rightText),
+			splitUtf16Offset: offset(2),
+			rightTextNodeId: finalRightSplitId,
+		}, instrumentation);
+
+		assert.equal(fixture.index.nodeCount, 9);
+		assert.deepStrictEqual(
+			fixture.index.getParentLocation(finalLeftSplitId),
+			{
+				parentNodeId: fixture.ids.firstParagraph,
+				childIndex: 1,
+			},
+		);
+		assert.equal(lastParentEditChunksVisited, 1);
+		assert.equal(maximumParentEditLogLength, 1_024);
+		assert.equal(maximumParentEditSlotsCopied, 31);
+		assert.equal(cumulativeParentEditSlotsCopied, 15_872);
+		assert.equal(maximumParentEditsReplayed, 1_023);
+		assert.equal(maximumParentEditChunksVisited, 32);
+		assert.deepStrictEqual(
+			[
+				nodeOverlayValues,
+				nodeOverlayTombstones,
+				parentOverlayValues,
+				parentOverlayTombstones,
+				parentVersionValues,
+				parentVersionTombstones,
+				parentEditValues,
+				parentEditTombstones,
+			],
+			[7, 0, 4, 0, 1, 0, 1, 0],
+		);
 		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
 		assert.equal(preorderMaterializations, 1);
 	});
@@ -1248,6 +1606,7 @@ suite('Manuscript Operation reducer', () => {
 					...(observed.get('nodes') ?? [-1, -1]),
 					...(observed.get('parents') ?? [-1, -1]),
 					...(observed.get('parent-versions') ?? [-1, -1]),
+					...(observed.get('parent-edits') ?? [-1, -1]),
 				];
 			},
 		};
@@ -1281,7 +1640,7 @@ suite('Manuscript Operation reducer', () => {
 			splitUtf16Offset: offset(4),
 			rightTextNodeId: temporaryRightTextId,
 		}, instrumentation);
-		assert.deepStrictEqual(cardinalities, [5, 0, 3, 0, 2, 0]);
+		assert.deepStrictEqual(cardinalities, [5, 0, 3, 0, 2, 0, 2, 0]);
 
 		fixture = advanceFixture(fixture, {
 			id: operationId(2_502),
@@ -1290,7 +1649,48 @@ suite('Manuscript Operation reducer', () => {
 			expectedNodeHash: nodeHash(fixture, temporaryParagraphId),
 		}, instrumentation);
 
-		assert.deepStrictEqual(cardinalities, [2, 0, 0, 0, 1, 0]);
+		assert.deepStrictEqual(cardinalities, [2, 0, 0, 0, 1, 0, 1, 0]);
+		assert.equal(fixture.index.hasNode(temporaryParagraphId), false);
+		assert.equal(fixture.index.hasNode(temporaryTextId), false);
+		assert.equal(fixture.index.hasNode(temporaryRightTextId), false);
+		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+
+		fixture = advanceFixture(fixture, {
+			id: operationId(2_503),
+			type: 'insert-node',
+			parentNodeId: fixture.ids.body,
+			expectedParentHash: nodeHash(fixture, fixture.ids.body),
+			childIndex: 0,
+			node: {
+				id: temporaryParagraphId,
+				type: 'paragraph',
+				attrs: { alignment: 'start' },
+				children: [{
+					id: temporaryTextId,
+					type: 'text',
+					value: 'temporary',
+					marks: [],
+				}],
+			},
+		}, instrumentation);
+		fixture = advanceFixture(fixture, {
+			id: operationId(2_504),
+			type: 'split-text',
+			textNodeId: temporaryTextId,
+			expectedNodeHash: nodeHash(fixture, temporaryTextId),
+			splitUtf16Offset: offset(3),
+			rightTextNodeId: temporaryRightTextId,
+		}, instrumentation);
+		assert.deepStrictEqual(cardinalities, [5, 0, 3, 0, 2, 0, 2, 0]);
+		assertIndexMatchesRoot(fixture.snapshot.root, fixture.index);
+
+		fixture = advanceFixture(fixture, {
+			id: operationId(2_505),
+			type: 'delete-node',
+			targetNodeId: temporaryParagraphId,
+			expectedNodeHash: nodeHash(fixture, temporaryParagraphId),
+		}, instrumentation);
+		assert.deepStrictEqual(cardinalities, [2, 0, 0, 0, 1, 0, 1, 0]);
 		assert.equal(fixture.index.hasNode(temporaryParagraphId), false);
 		assert.equal(fixture.index.hasNode(temporaryTextId), false);
 		assert.equal(fixture.index.hasNode(temporaryRightTextId), false);
@@ -1452,6 +1852,71 @@ function createWideFixture(width: number): IFixture {
 	);
 }
 
+function createCrossParentPathFixture(): IFixture {
+	const ids: IFixtureIds = {
+		root: nodeId(1),
+		body: nodeId(2),
+		firstParagraph: nodeId(3),
+		leftText: nodeId(4),
+		rightText: nodeId(5),
+		secondParagraph: nodeId(6),
+		secondText: nodeId(7),
+		reference: entityId(101),
+		evidence: entityId(102),
+		claim: entityId(103),
+	};
+	const root: ManuscriptNode = {
+		id: ids.root,
+		type: 'manuscript',
+		attrs: {},
+		children: [{
+			id: ids.body,
+			type: 'body',
+			attrs: {},
+			children: [
+				{
+					id: ids.firstParagraph,
+					type: 'paragraph',
+					attrs: { alignment: 'start' },
+					children: [{
+						id: ids.leftText,
+						type: 'text',
+						value: 'movable',
+						marks: [],
+					}],
+				},
+				{
+					id: ids.secondParagraph,
+					type: 'section',
+					attrs: { level: 1 },
+					children: [{
+						id: ids.secondText,
+						type: 'heading',
+						attrs: { level: 1 },
+						children: [{
+							id: ids.rightText,
+							type: 'text',
+							value: 'Destination',
+							marks: [],
+						}],
+					}],
+				},
+			],
+		}],
+	};
+	return buildFixture(
+		createManuscriptDraftResource(uuid(304)),
+		root,
+		{
+			referenceSnapshots: [],
+			evidenceLinks: [],
+			claims: [],
+			claimEvidenceRelations: [],
+		},
+		ids,
+	);
+}
+
 function createInstrumentedWideFixture(
 	width: number,
 ): {
@@ -1490,13 +1955,22 @@ function createInstrumentedWideFixture(
 				return Reflect.get(target, property, receiver);
 			},
 		});
-		paragraphs.push({
-			id: nodeId(30_000 + index),
-			type: 'paragraph',
-			attrs: { alignment: 'start' },
-			children: [observedTextNode],
-		});
-	}
+			const paragraphNode = Object.freeze({
+				id: nodeId(30_000 + index),
+				type: 'paragraph',
+				attrs: Object.freeze({ alignment: 'start' }),
+				children: Object.freeze([observedTextNode]),
+			}) satisfies ParagraphNode;
+			const observedParagraphNode = new Proxy(paragraphNode, {
+				get: (target, property, receiver) => {
+					if (probe.enabled) {
+						probe.visitedNodeIds.add(target.id);
+					}
+					return Reflect.get(target, property, receiver);
+				},
+			});
+			paragraphs.push(observedParagraphNode);
+		}
 	const body: BodyNode = {
 		id: ids.body,
 		type: 'body',
