@@ -288,7 +288,7 @@ class SessionsWorkbenchHost extends Disposable {
 		}
 
 		const [{ providerId, sessionType }] = sessionTypes;
-		this.sessionsService.openNewSession({
+		void this.sessionsService.openNewSession({
 			kind: OpenNewSessionKind.Draft,
 			providerId,
 			draft: {

@@ -72,10 +72,10 @@ src/cs/sessions/
 Core, services, non-provider contributions, and provider contributions have
 different dependency permissions. See [LAYERS.md](LAYERS.md).
 
-Agent package lifecycle, Agent contracts, runtime connections, and the bundled
-embedded Comet implementation live in the lower
-`src/cs/platform/agentHost/` subsystem. Sessions consumes them only through an
-Agent Host connection and the shared provider contribution.
+Built-in Agent registrations, external Agent package lifecycle, Agent
+contracts, runtime connections, and the embedded Comet implementation live in
+the lower `src/cs/platform/agentHost/` subsystem. Sessions consumes them only
+through an Agent Host connection and the shared provider contribution.
 
 Remote product composition uses the lower
 `src/cs/platform/remote/` foundation and `cs/workbench/services/remote` to
@@ -94,7 +94,7 @@ other after failure.
 | [REMOTE_AGENT_HOST.md](REMOTE_AGENT_HOST.md) | Remote Agent Host placement over Remote Server and Remote Tunnel routes, connection recovery, resources, and Sessions registration |
 | [Remote foundation](../platform/remote/REMOTE.md) | Remote authorities, persistent management connections, channels, Remote Server ownership, and remote resources |
 | [Remote Tunnel](../platform/tunnel/REMOTE_TUNNEL.md) | Tunnel identity, endpoint publication, discovery, hosting, relay connections, authentication, and recovery |
-| [AGENT_PACKAGES.md](AGENT_PACKAGES.md) | Bundled and user-installed Agent packages, catalogs, verification, activation, update, deletion, and retained data |
+| [AGENT_PACKAGES.md](AGENT_PACKAGES.md) | External Agent package catalogs, verification, activation, update, deletion, retained data, and the distinct built-in SDK cache |
 | [COMET_AGENT.md](COMET_AGENT.md) | Comet execution profiles, Host Turn binding, model-and-Tool orchestration, Rust runtime slot, workers, and resumption |
 | [ATTACHMENTS.md](ATTACHMENTS.md) | Composer attachments, producers, content-resource transport, submission, and source-specific rules |
 | [TOOLS.md](TOOLS.md) | Canonical Tools, schema profiles, Turn-bound Tool sets, Agent projection, calls, results, and executor routing |
@@ -109,14 +109,14 @@ other after failure.
 3. Put target-specific layout policy in `contrib/layout/`.
 4. Put optional changes, terminal, task, list, action, editor, and Chat
    integrations in `contrib/<feature>/`.
-5. Put Agent package lifecycle in `cs/platform/agentHost/node/packages/`.
-   Comet is the only bundled and default-installed package; optional packages
-   require an explicit per-Host user install operation.
+5. Put genuinely external Agent package lifecycle in
+   `cs/platform/agentHost/node/packages/`. External packages require an
+   explicit per-Host user install operation.
 6. Keep product-maintained Agent implementations in
-   `cs/platform/agentHost/node/agents/<agent>/`. They implement `IAgent`
-   directly and load only the SDK module installed by their exact package
-   receipt. Put genuinely external Agent processes behind the common Agent
-   Runtime Protocol and `IAgentRuntimeConnection`.
+   `cs/platform/agentHost/node/agents/<agent>/`. Product-built-in
+   orchestrators implement `IAgent` directly and resolve SDK bytes only
+   through their exact product cache. Put genuinely external Agent processes
+   behind the common Agent Runtime Protocol and `IAgentRuntimeConnection`.
 7. Put Remote authority, persistent connection, channel, and Remote Server
    infrastructure in the owners defined by the
    [Remote foundation](../platform/remote/REMOTE.md). Put tunnel discovery,

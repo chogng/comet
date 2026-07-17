@@ -149,6 +149,7 @@ const rootState: IAgentHostRootState = Object.freeze({
 	agentRegistrations: Object.freeze([]),
 	agentDefaults: Object.freeze([]),
 	sessionTypes: Object.freeze([]),
+	builtInAgents: Object.freeze([]),
 });
 
 function createSnapshots(
@@ -380,10 +381,10 @@ class TestTunnelConnection extends Disposable implements IRemoteTunnelConnection
 			return encodeRemoteAgentHostProtocolError(this.initializeFailure);
 		}
 		assert.equal(request.connection, agentHostConnection);
-		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('3')]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('4')]);
 		assert.deepStrictEqual(request.subscriptions, [rootChannel, sessionsChannel]);
 		const result: IAgentHostInitializeResult = Object.freeze({
-			protocolVersion: createAgentHostProtocolVersion('3'),
+			protocolVersion: createAgentHostProtocolVersion('4'),
 			capabilities: Object.freeze([]),
 			implementation: Object.freeze({ name: 'remote-tunnel-test-host', build: '1' }),
 			hostSequence,

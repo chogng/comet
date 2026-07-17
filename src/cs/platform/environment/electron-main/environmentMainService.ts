@@ -26,6 +26,7 @@ export type AppEnvironmentPaths = {
   agentHostContentDir: string;
   agentHostPackagesDir: string;
   agentHostAgentStateDir: string;
+  agentHostSdkCacheDir: string;
 };
 
 function resolvePortableExecutableDir() {
@@ -77,6 +78,7 @@ export function resolveEnvironmentMainPaths(): AppEnvironmentPaths {
     agentHostContentDir: path.join(cacheDir, 'agent-host', 'content'),
     agentHostPackagesDir: path.join(dataDir, 'agent-host', 'packages'),
     agentHostAgentStateDir: path.join(dataDir, 'agent-host', 'agent-state'),
+    agentHostSdkCacheDir: path.join(cacheDir, 'agent-host', 'sdk'),
   };
 }
 

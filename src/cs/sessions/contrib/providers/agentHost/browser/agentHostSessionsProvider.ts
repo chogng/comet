@@ -121,6 +121,7 @@ import {
 	type IChat,
 	type ISession,
 	type ISessionType,
+	type SessionTypeId,
 } from 'cs/sessions/services/sessions/common/session';
 import {
 	SessionTransitionKind,
@@ -249,6 +250,7 @@ function typeSignature(root: IAgentHostRootState): string {
 	return JSON.stringify({
 		create: root.capabilities.supportsCreateSession,
 		types: root.sessionTypes,
+		builtInAgents: root.builtInAgents,
 		registrations: root.agentRegistrations.map(registration => ({
 			agentId: registration.agentId,
 			packageId: registration.packageId,
@@ -524,10 +526,37 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 
 	get sessionTypes(): readonly ISessionType[] {
 		const root = this.requireRootState();
-		if (!root.capabilities.supportsCreateSession) {
-			return Object.freeze([]);
-		}
-		return Object.freeze(root.sessionTypes.map(descriptor => toSessionType(descriptor, this.options.resolveDisplayText)));
+		const ready = new Set(root.sessionTypes.map(descriptor => descriptor.id));
+		return Object.freeze([
+			...root.sessionTypes.map(descriptor => toSessionType(descriptor, this.options.resolveDisplayText)),
+			...root.builtInAgents
+				.filter(availability => !ready.has(availability.sessionType.id))
+				.map(availability => toSessionType(availability.sessionType, this.options.resolveDisplayText)),
+		]);
+	}
+
+	async prepareSessionType(sessionType: SessionTypeId): Promise<void> {
+		this.assertNotDisposed();
+		await this.sequencer.queue(async () => {
+			const root = this.requireRootState();
+			if (root.sessionTypes.some(descriptor => descriptor.id === sessionType)) {
+				return;
+			}
+			const availability = root.builtInAgents.find(candidate => candidate.sessionType.id === sessionType);
+			if (availability === undefined) {
+				throw new Error(`Agent Host provider '${this.id}' does not expose Session type '${sessionType}'.`);
+			}
+			const payload: AgentHostMutationPayload = Object.freeze({
+				kind: 'prepareBuiltInAgent',
+				agent: availability.agentId,
+			});
+			const result = await this.mutate(payload);
+			this.assertMutationKind(result, payload.kind);
+			await this.refreshAuthoritativeState();
+			if (!this.requireRootState().sessionTypes.some(descriptor => descriptor.id === sessionType)) {
+				throw new Error(`Agent Host did not publish prepared Session type '${sessionType}'.`);
+			}
+		});
 	}
 
 	refreshLocalizedPresentation(): void {
@@ -973,13 +1002,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		const sessionsChannel = getAgentHostSessionsChannelId();
 		const result = await this.connection.initialize({
 			connection: this.connection.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('4')]),
 			capabilities: Object.freeze([]),
 			locale: this.options.locale,
 			implementation: this.options.implementation,
 			subscriptions: Object.freeze([rootChannel, sessionsChannel]),
 		});
-		if (result.protocolVersion !== '3') {
+		if (result.protocolVersion !== '4') {
 			throw new Error(`Agent Host selected unsupported protocol version '${result.protocolVersion}'.`);
 		}
 		this.assertNoMissingChannels(result.missingChannels);
@@ -2398,6 +2427,26 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 				throw new Error(`Agent Host Session type '${descriptor.id}' has an undeclared automatic execution preset.`);
 			}
 		}
+		const builtInAgents = new Set<AgentId>();
+		for (const availability of state.builtInAgents) {
+			if (
+				builtInAgents.has(availability.agentId)
+				|| availability.packageId !== availability.sessionType.packageId
+				|| availability.agentId !== availability.sessionType.agentId
+				|| !['cold', 'ready'].includes(availability.state)
+			) {
+				throw new Error(`Agent Host exposes invalid built-in Agent '${availability.agentId}'.`);
+			}
+			const ready = state.sessionTypes.some(descriptor => (
+				descriptor.id === availability.sessionType.id
+				&& descriptor.packageId === availability.packageId
+				&& descriptor.agentId === availability.agentId
+			));
+			if (ready !== (availability.state === 'ready')) {
+				throw new Error(`Agent Host built-in Agent '${availability.agentId}' has inconsistent preparation state.`);
+			}
+			builtInAgents.add(availability.agentId);
+		}
 	}
 
 	private assertDisplayProjection(state: IAgentHostRootState): void {
@@ -2408,6 +2457,10 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 			for (const preset of descriptor.executionPresets) {
 				this.options.resolveDisplayText(preset.displayName);
 			}
+		}
+		for (const availability of state.builtInAgents) {
+			this.options.resolveDisplayText(availability.sessionType.displayName);
+			this.options.resolveDisplayText(availability.sessionType.description);
 		}
 	}
 

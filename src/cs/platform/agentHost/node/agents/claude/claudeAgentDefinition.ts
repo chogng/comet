@@ -37,6 +37,26 @@ export const CLAUDE_AGENT_RESUME_SCHEMA = createAgentResumeSchemaId('claude.agen
 
 const displayName = localize('claudeAgent.displayName', 'Claude');
 const description = localize('claudeAgent.description', 'Claude Agent SDK');
+export const CLAUDE_AGENT_SESSION_TYPE_ID = createAgentSessionTypeId('claude');
+export const CLAUDE_AGENT_AVAILABILITY = Object.freeze({
+	packageId: CLAUDE_AGENT_PACKAGE_ID,
+	agentId: CLAUDE_AGENT_ID,
+	sessionType: Object.freeze({
+		id: CLAUDE_AGENT_SESSION_TYPE_ID,
+		packageId: CLAUDE_AGENT_PACKAGE_ID,
+		agentId: CLAUDE_AGENT_ID,
+		displayName: Object.freeze({ kind: 'literal' as const, value: displayName }),
+		description: Object.freeze({ kind: 'literal' as const, value: description }),
+		capabilities: Object.freeze({
+			workspace: 'optional' as const,
+			supportsEmptySession: true,
+			supportsInitialTurn: true,
+			supportsCreateChat: true,
+			maximumChatCount: 64,
+			supportsForkChat: false,
+		}),
+	}),
+});
 
 const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
 	profile: AgentConfigurationSchemaProfile,
@@ -177,7 +197,7 @@ export function createClaudeAgentSessionType(descriptor: IAgentDescriptor): IAge
 		throw new Error('Claude Agent package received another Agent descriptor.');
 	}
 	return Object.freeze({
-		id: createAgentSessionTypeId('claude'),
+		id: CLAUDE_AGENT_SESSION_TYPE_ID,
 		packageId: CLAUDE_AGENT_PACKAGE_ID,
 		agentId: CLAUDE_AGENT_ID,
 		displayName: Object.freeze({ kind: 'literal', value: displayName }),

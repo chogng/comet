@@ -193,7 +193,7 @@ export class SessionSidebarPartView extends Disposable {
 
 	private async openNewSession(): Promise<void> {
 		if (this.sessionsManagementService.draftSession.get()) {
-			this.sessionsService.openNewSession({ kind: OpenNewSessionKind.Empty });
+			await this.sessionsService.openNewSession({ kind: OpenNewSessionKind.Empty });
 			return;
 		}
 
@@ -225,7 +225,7 @@ export class SessionSidebarPartView extends Disposable {
 			selectedType = selection.sessionType;
 		}
 
-		this.sessionsService.openNewSession({
+		await this.sessionsService.openNewSession({
 			kind: OpenNewSessionKind.Draft,
 			providerId: selectedType.providerId,
 			draft: {

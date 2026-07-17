@@ -187,6 +187,7 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 	readonly onDidChangeModels = this.modelsEmitter.event;
 
 	createSessionDraftHandler: (options: ISessionDraftOptions) => ISession = unexpectedOperation;
+	prepareSessionTypeHandler: (sessionType: string) => Promise<void> = async () => {};
 	discardSessionDraftHandler: (session: ISession) => void = unexpectedOperation;
 	sendRequestHandler: (session: ISession, chat: IChat) => Promise<void> = async () => unexpectedOperation();
 	createChatHandler: (session: ISession) => Promise<IChat> = async () => unexpectedOperation();
@@ -222,6 +223,10 @@ class TestSessionsProvider extends Disposable implements ISessionsProvider {
 
 	getModels(): readonly ISessionModel[] {
 		return this.models;
+	}
+
+	prepareSessionType(sessionType: string): Promise<void> {
+		return this.prepareSessionTypeHandler(sessionType);
 	}
 
 	createSessionDraft(options: ISessionDraftOptions): ISession {
@@ -831,7 +836,7 @@ test('Session draft replacement is atomic, explicit, and preserves the addressed
 	const draftEvents: SessionDraftChangeKind[] = [];
 	store.add(management.onDidChangeDraftSession(event => draftEvents.push(event.kind)));
 	try {
-		assert.equal(management.createSessionDraft(provider.id, {
+		assert.equal(await management.createSessionDraft(provider.id, {
 			sessionType: `${provider.id}.default`,
 			workspace: WorkspaceLess,
 		}), draft.model);
@@ -842,6 +847,45 @@ test('Session draft replacement is atomic, explicit, and preserves the addressed
 		assert.deepEqual(draftEvents, [SessionDraftChangeKind.Created, SessionDraftChangeKind.Replaced]);
 		assert.equal(management.draftSession.get(), undefined);
 		assert.deepEqual(management.sessions.get(), [committed.model]);
+	} finally {
+		store.dispose();
+	}
+});
+
+test('Session draft creation waits for exact provider preparation', async () => {
+	const provider = new TestSessionsProvider('provider.prepared-draft');
+	const draft = createSession(provider.id, URI.parse('test-session:/prepared-draft'), {
+		status: SessionStatus.Draft,
+	});
+	let releasePreparation!: () => void;
+	const preparation = new Promise<void>(resolve => {
+		releasePreparation = resolve;
+	});
+	let prepared = false;
+	let created = false;
+	provider.prepareSessionTypeHandler = async sessionType => {
+		assert.equal(sessionType, `${provider.id}.default`);
+		await preparation;
+		prepared = true;
+	};
+	provider.createSessionDraftHandler = () => {
+		assert.equal(prepared, true);
+		created = true;
+		return draft.model;
+	};
+	provider.discardSessionDraftHandler = () => {};
+	const { store, management } = createHarness([provider]);
+	try {
+		const pending = management.createSessionDraft(provider.id, {
+			sessionType: `${provider.id}.default`,
+			workspace: WorkspaceLess,
+		});
+		await Promise.resolve();
+		assert.equal(created, false);
+		releasePreparation();
+		assert.equal(await pending, draft.model);
+		assert.equal(created, true);
+		management.discardSessionDraft(draft.model);
 	} finally {
 		store.dispose();
 	}
@@ -861,7 +905,7 @@ test('Session drafts require replacement on send and invalid drafts are released
 	const { store, management } = createHarness([provider]);
 
 	try {
-		management.createSessionDraft(provider.id, {
+		await management.createSessionDraft(provider.id, {
 			sessionType: `${provider.id}.default`,
 			workspace: WorkspaceLess,
 		});
@@ -886,8 +930,8 @@ test('Session drafts require replacement on send and invalid drafts are released
 	};
 	const invalidHarness = createHarness([invalidProvider]);
 	try {
-		assert.throws(
-			() => invalidHarness.management.createSessionDraft(invalidProvider.id, {
+		await assert.rejects(
+			invalidHarness.management.createSessionDraft(invalidProvider.id, {
 				sessionType: `${invalidProvider.id}.default`,
 				workspace: WorkspaceLess,
 			}),
@@ -900,7 +944,7 @@ test('Session drafts require replacement on send and invalid drafts are released
 	}
 });
 
-test('Session draft validation rejects every invalid initial Chat shape without publishing a draft', () => {
+test('Session draft validation rejects every invalid initial Chat shape without publishing a draft', async () => {
 	const scenarios: readonly {
 		readonly id: string;
 		readonly configure: (draft: ISessionFixture) => void;
@@ -954,8 +998,8 @@ test('Session draft validation rejects every invalid initial Chat shape without 
 		store.add(management.onDidChangeDraftSession(event => draftEvents.push(event.kind)));
 
 		try {
-			assert.throws(
-				() => management.createSessionDraft(provider.id, {
+			await assert.rejects(
+				management.createSessionDraft(provider.id, {
 					sessionType: `${provider.id}.default`,
 					workspace: WorkspaceLess,
 				}),
@@ -1065,7 +1109,7 @@ test('Committed provider snapshots reject Session drafts', () => {
 	}
 });
 
-test('Provider Session type snapshots are copied, event-driven, and validate committed Sessions', () => {
+test('Provider Session type snapshots are copied, event-driven, and validate committed Sessions', async () => {
 	const invalidProvider = new TestSessionsProvider('provider.invalid-type');
 	const invalidSession = createSession(invalidProvider.id, URI.parse('test-session:/invalid-type'), {
 		sessionType: `${invalidProvider.id}.missing`,
@@ -1098,8 +1142,8 @@ test('Provider Session type snapshots are copied, event-driven, and validate com
 	try {
 		provider.sessionTypes.push(additionalType);
 		assert.equal(management.sessionTypes.get().length, 1);
-		assert.throws(
-			() => management.createSessionDraft(provider.id, {
+		await assert.rejects(
+			management.createSessionDraft(provider.id, {
 				sessionType: additionalType.id,
 				workspace: WorkspaceLess,
 			}),
@@ -1121,7 +1165,7 @@ test('Provider Session type snapshots are copied, event-driven, and validate com
 			return additionalDraft.model;
 		};
 		provider.discardSessionDraftHandler = () => {};
-		assert.equal(management.createSessionDraft(provider.id, {
+		assert.equal(await management.createSessionDraft(provider.id, {
 			sessionType: additionalType.id,
 			workspace: WorkspaceLess,
 		}), additionalDraft.model);
@@ -1132,8 +1176,8 @@ test('Provider Session type snapshots are copied, event-driven, and validate com
 			management.sessionTypes.get().map(entry => entry.sessionType.label),
 			[provider.id, 'Additional'],
 		);
-		assert.throws(
-			() => management.createSessionDraft(provider.id, {
+		await assert.rejects(
+			management.createSessionDraft(provider.id, {
 				sessionType: additionalType.id,
 				workspace: WorkspaceLess,
 			}),
@@ -1810,12 +1854,12 @@ test('Capabilities and addressed Chat state gate current operations', async () =
 	}
 });
 
-test('Workspace-less draft creation is gated by the selected Session type', () => {
+test('Workspace-less draft creation is gated by the selected Session type', async () => {
 	const provider = new TestSessionsProvider('provider.workspace-required', false);
 	const { store, management } = createHarness([provider]);
 	try {
-		assert.throws(
-			() => management.createSessionDraft(provider.id, {
+		await assert.rejects(
+			management.createSessionDraft(provider.id, {
 				sessionType: `${provider.id}.default`,
 				workspace: WorkspaceLess,
 			}),
@@ -1826,7 +1870,7 @@ test('Workspace-less draft creation is gated by the selected Session type', () =
 	}
 });
 
-test('Provider removal clears its separately managed draft without invoking provider discard', () => {
+test('Provider removal clears its separately managed draft without invoking provider discard', async () => {
 	const { store, registry, management } = createHarness([]);
 	const provider = store.add(new TestSessionsProvider('provider.removed-draft'));
 	const draft = createSession(provider.id, URI.parse('test-session:/removed-draft'), {
@@ -1842,7 +1886,7 @@ test('Provider removal clears its separately managed draft without invoking prov
 	store.add(management.onDidChangeDraftSession(event => draftEvents.push(event.kind)));
 
 	try {
-		management.createSessionDraft(provider.id, {
+		await management.createSessionDraft(provider.id, {
 			sessionType: `${provider.id}.default`,
 			workspace: WorkspaceLess,
 		});

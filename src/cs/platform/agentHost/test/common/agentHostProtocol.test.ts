@@ -239,7 +239,8 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 			agents: [],
 			agentRegistrations: [],
 			agentDefaults: [],
-			sessionTypes: [],
+		sessionTypes: [],
+		builtInAgents: [],
 		};
 		const result = {
 			hostSequence: createAgentHostSequence(12),
@@ -299,7 +300,8 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 			agents: [],
 			agentRegistrations: [],
 			agentDefaults: [],
-			sessionTypes: [],
+		sessionTypes: [],
+		builtInAgents: [],
 		};
 		const replay: AgentHostReconnectResult = {
 			kind: 'replay',

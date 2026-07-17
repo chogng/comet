@@ -161,7 +161,7 @@ Node Host runtime. Server composition supplies:
 - package artifact and connected-runtime roots for the server target;
 - encrypted credential storage and exact secret authority;
 - content materialization and Tool execution services;
-- the bundled Comet package and one selected Comet runtime form;
+- the product-built-in Comet registration and one selected Comet runtime form;
 - Agent Host connection and reverse-operation channels;
 - Agent Host lifecycle tied to the Remote Server product lifecycle.
 

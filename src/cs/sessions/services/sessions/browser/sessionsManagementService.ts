@@ -199,7 +199,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return undefined;
 	}
 
-	createSessionDraft(providerId: SessionsProviderId, options: ISessionDraftOptions): ISession {
+	async createSessionDraft(providerId: SessionsProviderId, options: ISessionDraftOptions): Promise<ISession> {
 		if (this.state.get().draftSession) {
 			throw new Error('A Session draft is already active.');
 		}
@@ -215,6 +215,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			throw new Error(`Session type '${sessionType.id}' does not support workspace-less drafts.`);
 		}
 
+		await provider.prepareSessionType(options.sessionType);
+		this.assertProviderSnapshotMatchesTracked(provider);
+		this.assertProviderSessionTypesMatchTracked(provider);
 		const draftSession = provider.createSessionDraft(options);
 		try {
 			this.assertProviderOwnsSession(provider, draftSession);

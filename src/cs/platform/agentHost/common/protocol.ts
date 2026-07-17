@@ -174,6 +174,17 @@ export interface IAgentHostSessionTypeDescriptor {
 	readonly toolPolicy: AgentHostToolPolicy;
 }
 
+/** Publishes one product-built-in Agent before its runtime SDK has been prepared. */
+export interface IAgentHostBuiltInAgentAvailability {
+	readonly packageId: AgentPackageId;
+	readonly agentId: AgentId;
+	readonly sessionType: Omit<
+		IAgentHostSessionTypeDescriptor,
+		'models' | 'executionPresets' | 'automaticExecutionPreset' | 'toolPolicy'
+	>;
+	readonly state: 'cold' | 'ready';
+}
+
 export interface IAgentHostExecutionPreset {
 	readonly id: AgentExecutionPresetId;
 	readonly displayName: AgentHostDisplayText;
@@ -195,6 +206,7 @@ export interface IAgentHostRootState {
 	readonly agentRegistrations: readonly IAgentRuntimeRegistration[];
 	readonly agentDefaults: readonly IAgentConfigurationState[];
 	readonly sessionTypes: readonly IAgentHostSessionTypeDescriptor[];
+	readonly builtInAgents: readonly IAgentHostBuiltInAgentAvailability[];
 }
 
 export type AgentHostSessionLifecycle = 'available' | 'released' | 'unavailable';
@@ -634,6 +646,10 @@ export interface IAgentHostCreateSessionChatRequest {
 
 export type AgentHostMutationPayload =
 	| {
+		readonly kind: 'prepareBuiltInAgent';
+		readonly agent: AgentId;
+	}
+	| {
 		readonly kind: 'createSession';
 		readonly sessionType: AgentSessionTypeId;
 		readonly workspace?: IAgentWorkspace;
@@ -782,6 +798,11 @@ export interface IAgentHostCreatedChatResult {
 }
 
 export type AgentHostMutationResult = IAgentHostMutationCommit & (
+	| {
+		readonly kind: 'prepareBuiltInAgent';
+		readonly agent: AgentId;
+		readonly registration: AgentRuntimeRegistrationRevision;
+	}
 	| {
 		readonly kind: 'createSession';
 		readonly session: AgentSessionId;

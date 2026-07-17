@@ -74,7 +74,7 @@ export interface ISessionsManagementService {
 	getSession(sessionId: SessionId): ISession | undefined;
 	getSessionByResource(providerId: SessionsProviderId, resource: URI): ISession | undefined;
 	getSessionForChatResource(resource: URI): ISessionChatOwner | undefined;
-	createSessionDraft(providerId: SessionsProviderId, options: ISessionDraftOptions): ISession;
+	createSessionDraft(providerId: SessionsProviderId, options: ISessionDraftOptions): Promise<ISession>;
 	discardSessionDraft(session: ISession): void;
 	getModels(session: ISession, chat: IChat): readonly ISessionModel[];
 	sendRequest(session: ISession, chat: IChat): Promise<void>;

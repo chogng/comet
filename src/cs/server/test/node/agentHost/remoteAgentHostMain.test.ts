@@ -71,7 +71,7 @@ import {
 const packageId = createAgentPackageId('comet');
 const agentId = createAgentId('comet');
 const hostAuthority = createAgentHostAuthorityId('remote-test');
-const hostProtocol = createAgentHostProtocolVersion('3');
+const hostProtocol = createAgentHostProtocolVersion('4');
 const descriptorRevision = createAgentDescriptorRevision('remote-test.descriptor.v1');
 const capabilityRevision = createAgentCapabilityRevision('remote-test.capabilities.v1');
 const runtimeRevision = createAgentRuntimeRegistrationRevision('remote-test.runtime.v1');
@@ -376,6 +376,11 @@ function createHostOptions(
 		capabilities: Object.freeze([]),
 		implementation: Object.freeze({ name: 'remote-test-host', build: '1' }),
 		sessionTypeCatalog: { resolve: () => Object.freeze([]) },
+		builtInAgents: {
+			availability: Object.freeze([]),
+			prepare: async requested => { throw new Error(`Unexpected built-in Agent preparation '${requested}'.`); },
+			owns: () => false,
+		},
 		agentRuntimes: {
 			resolve: requested => {
 				assert.deepStrictEqual(requested, registration);

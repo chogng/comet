@@ -45,6 +45,26 @@ export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-ac
 
 const displayName = localize('codexAgent.displayName', 'Codex');
 const description = localize('codexAgent.description', 'OpenAI Codex SDK');
+export const CODEX_AGENT_SESSION_TYPE_ID = createAgentSessionTypeId('codex');
+export const CODEX_AGENT_AVAILABILITY = Object.freeze({
+	packageId: CODEX_AGENT_PACKAGE_ID,
+	agentId: CODEX_AGENT_ID,
+	sessionType: Object.freeze({
+		id: CODEX_AGENT_SESSION_TYPE_ID,
+		packageId: CODEX_AGENT_PACKAGE_ID,
+		agentId: CODEX_AGENT_ID,
+		displayName: Object.freeze({ kind: 'literal' as const, value: displayName }),
+		description: Object.freeze({ kind: 'literal' as const, value: description }),
+		capabilities: Object.freeze({
+			workspace: 'optional' as const,
+			supportsEmptySession: true,
+			supportsInitialTurn: true,
+			supportsCreateChat: true,
+			maximumChatCount: 64,
+			supportsForkChat: true,
+		}),
+	}),
+});
 
 const hostDefaultsSchema = validateAndFreezeAgentConfigurationSchema({
 	profile: AgentConfigurationSchemaProfile,
@@ -234,7 +254,7 @@ export function createCodexAgentSessionType(descriptor: IAgentDescriptor): IAgen
 		throw new Error('Codex Agent package received another Agent descriptor.');
 	}
 	return Object.freeze({
-		id: createAgentSessionTypeId('codex'),
+		id: CODEX_AGENT_SESSION_TYPE_ID,
 		packageId: CODEX_AGENT_PACKAGE_ID,
 		agentId: CODEX_AGENT_ID,
 		displayName: Object.freeze({ kind: 'literal', value: displayName }),

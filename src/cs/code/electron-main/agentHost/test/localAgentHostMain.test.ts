@@ -8,7 +8,6 @@ import { createHash } from 'node:crypto';
 import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import type { IpcMainInvokeEvent } from 'electron';
@@ -31,7 +30,6 @@ import { localAgentHostConnectionChannelName } from 'cs/platform/agentHost/commo
 import { resolveAgentModelConfigurationCandidate } from 'cs/platform/agentHost/common/configuration';
 import {
 	createAgentHostOperationId,
-	createAgentPackageOperationId,
 	createAgentHostProtocolVersion,
 	createAgentModelId,
 	createAgentSubmissionId,
@@ -40,20 +38,13 @@ import {
 	computeAgentHostMutationDigest,
 	computeAgentHostSubmissionCaptureDigest,
 	getAgentHostRootChannelId,
-	getAgentHostSessionChannelId,
 	getAgentHostSessionsChannelId,
 	type AgentHostMutationOutcome,
 	type AgentHostMutationPayload,
 	type AgentHostPrepareSubmissionResult,
 	type IAgentHostInitializeResult,
 	type IAgentHostPrepareSubmissionRequest,
-	type IAgentHostSetSubscriptionsResult,
 } from 'cs/platform/agentHost/common/protocol';
-import {
-	computeAgentPackageOperationDigest,
-	type AgentPackageOperationOutcome,
-	type AgentPackageOperationPayload,
-} from 'cs/platform/agentHost/common/packages';
 import {
 	ApplicationStorageAgentHostCatalogStore,
 	ApplicationStorageAgentPackageStateStore,
@@ -65,6 +56,7 @@ import {
 	COMET_PROVIDER_API_KEY_CREDENTIAL_PROVIDER,
 	COMET_SESSION_CONFIGURATION_SCHEMA,
 } from 'cs/platform/agentHost/node/agents/comet/cometConfiguration';
+import { CODEX_AGENT_ID } from 'cs/platform/agentHost/node/agents/codex/codexAgentDefinition';
 import type { IProviderApiKeySecretStorage, ProviderApiKeyRef } from 'cs/platform/secrets/common/secret';
 
 const productModels = Object.freeze([
@@ -225,7 +217,7 @@ async function createHost(
 	const mockAgentPackageProducts = createMockAgentPackageProducts(
 		Object.freeze({ operatingSystem: process.platform, architecture: process.arch }),
 		await createLocalAgentPackageArtifactFile(mockRuntimeArtifactPath),
-	);
+	).filter(product => product.definition.agentId !== CODEX_AGENT_ID);
 	const packageArtifactPort = new LocalAgentPackageArtifactPort({
 		storageRoot: options.packageStorageRoot ?? path.join(path.dirname(contentRoot), 'packages'),
 		packages: mockAgentPackageProducts.map(product => product.verifiedPackage),
@@ -235,8 +227,11 @@ async function createHost(
 		providerApiKeySecretStorage: new TestProviderApiKeySecretStorage(),
 		contentMaterializationRoot: contentRoot,
 		bundledArtifactPath: artifactPath,
-		agentPackageProducts: mockAgentPackageProducts,
+		externalAgentPackageProducts: mockAgentPackageProducts,
 		packageArtifactPort,
+		agentSdkCacheRoot: path.join(path.dirname(contentRoot), 'sdk-cache'),
+		agentSdkProducts: Object.freeze({}),
+		agentStateRoot: path.join(path.dirname(contentRoot), 'agent-state'),
 		channelServer,
 		fetch: () => Promise.reject(new Error('An empty Session must not execute a model request.')),
 		now: () => 1_000,
@@ -304,7 +299,7 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		const identity = await channel.call<{ readonly connection: string }>(context, 'identity', undefined);
 		const initialized = await channel.call<IAgentHostInitializeResult>(context, 'initialize', {
 			connection: identity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('4')]),
 			capabilities: Object.freeze([]),
 			locale: 'en',
 			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
@@ -506,227 +501,6 @@ test('product startup updates the verified bundled Comet revision before registe
 	}
 });
 
-test('desktop Agent Host installs every connected mock product and cold-restores retained Sessions', async () => {
-	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'comet-agent-host-connected-mocks-'));
-	const storage = await createStorage();
-	let firstHost: LocalAgentHostMain | undefined;
-	let secondHost: LocalAgentHostMain | undefined;
-	try {
-		const artifactPath = path.join(temporaryRoot, 'comet-main.js');
-		const mockRuntimeArtifactPath = path.join(temporaryRoot, 'mock-agent-runtime.js');
-		const packageStorageRoot = path.join(temporaryRoot, 'packages');
-		await writeFile(artifactPath, 'verified embedded Comet artifact');
-		await writeFile(mockRuntimeArtifactPath, 'export const mockRuntimeBuild = "one";');
-		const firstChannels = new RecordingChannelServer();
-		firstHost = await createHost(
-			storage,
-			artifactPath,
-			path.join(temporaryRoot, 'first-content'),
-			firstChannels,
-			{ mockRuntimeArtifactPath, packageStorageRoot },
-		);
-		const firstChannel = firstChannels.registeredChannel;
-		if (firstChannel === undefined) {
-			throw new Error('First Agent Host IPC channel was not registered.');
-		}
-		const firstContext = { sender: new TestRendererSender() } as unknown as IpcMainInvokeEvent;
-		const firstIdentity = await firstChannel.call<{ readonly connection: string }>(firstContext, 'identity', undefined);
-		const firstInitialized = await firstChannel.call<IAgentHostInitializeResult>(firstContext, 'initialize', {
-			connection: firstIdentity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
-			capabilities: Object.freeze([]),
-			locale: 'en',
-			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
-			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
-		});
-		const initialRoot = firstInitialized.snapshots.find(snapshot => snapshot.kind === 'root');
-		if (initialRoot?.kind !== 'root') {
-			throw new Error('Initial Agent Host root snapshot is missing.');
-		}
-		assert.deepEqual(
-			initialRoot.state.packages.installablePackages.map(offering => offering.packageId),
-			['copilot', 'codex'],
-		);
-
-		let packageRevision = initialRoot.state.packages.revision;
-		for (const offering of initialRoot.state.packages.installablePackages) {
-			const payload: AgentPackageOperationPayload = Object.freeze({
-				kind: 'install',
-				packageId: offering.packageId,
-				offering,
-			});
-			const operation = createAgentPackageOperationId(`install-${offering.packageId}`);
-			const requestDigest = await computeAgentPackageOperationDigest(packageRevision, payload);
-			const outcome: AgentPackageOperationOutcome = await firstChannel.call<AgentPackageOperationOutcome>(firstContext, 'executePackageOperation', {
-				operation,
-				digest: requestDigest,
-				expectedCatalogRevision: packageRevision,
-				payload,
-			});
-			if (outcome.kind !== 'succeeded') {
-				throw new Error(
-					`Connected mock package "${offering.packageId}" did not install: ${JSON.stringify(outcome)}`,
-				);
-			}
-			packageRevision = outcome.result.stateRevision;
-		}
-
-		let snapshots = await firstChannel.call<IAgentHostSetSubscriptionsResult>(firstContext, 'setSubscriptions', {
-			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]),
-		});
-		const installedRoot = snapshots.snapshots.find(snapshot => snapshot.kind === 'root');
-		if (installedRoot?.kind !== 'root') {
-			throw new Error('Installed Agent Host root snapshot is missing.');
-		}
-		assert.deepEqual(installedRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'codex']);
-		assert.deepEqual(installedRoot.state.sessionTypes.map(type => type.id), ['comet', 'copilot', 'codex']);
-		assert.deepEqual(
-			installedRoot.state.agentDefaults.map(defaults => defaults.schema.agent),
-			['comet', 'copilot', 'codex'],
-		);
-		const codexRegistration = installedRoot.state.agentRegistrations.find(registration => registration.agentId === 'codex');
-		if (codexRegistration === undefined) {
-			throw new Error('Codex connected registration is missing.');
-		}
-		const codexSessionType = installedRoot.state.sessionTypes.find(type => type.agentId === 'codex');
-		if (codexSessionType === undefined) {
-			throw new Error('Codex connected Session type is missing.');
-		}
-		const createPayload: AgentHostMutationPayload = Object.freeze({
-			kind: 'createSession',
-			sessionType: codexSessionType.id,
-			configuration: Object.freeze({
-				schema: codexRegistration.initialSessionConfigurationSchema,
-				values: Object.freeze({}),
-			}),
-			chats: Object.freeze([]),
-		});
-		const created = await firstChannel.call<AgentHostMutationOutcome>(firstContext, 'mutate', {
-			operation: createAgentHostOperationId('create-connected-codex-session'),
-			digest: await computeAgentHostMutationDigest(createPayload),
-			payload: createPayload,
-		});
-		assert.equal(created.kind, 'succeeded');
-		if (created.kind !== 'succeeded' || created.result.kind !== 'createSession') {
-			throw new Error('Codex connected Session creation failed.');
-		}
-		const retainedSession = created.result.session;
-		const firstPackageState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
-		const firstCodexPackage = firstPackageState?.installedPackages.find(candidate => candidate.packageId === 'codex');
-		if (firstCodexPackage === undefined) {
-			throw new Error('Installed Codex package receipt is missing.');
-		}
-		const firstCodexEntryPoint = fileURLToPath(firstCodexPackage.dependencyClosure[0].source);
-		const firstCodexDigest = firstCodexPackage.contentDigest;
-
-		await firstHost.shutdown();
-		firstHost = undefined;
-		await writeFile(mockRuntimeArtifactPath, 'export const mockRuntimeBuild = "two";');
-
-		const secondChannels = new RecordingChannelServer();
-		secondHost = await createHost(
-			storage,
-			artifactPath,
-			path.join(temporaryRoot, 'second-content'),
-			secondChannels,
-			{ mockRuntimeArtifactPath, packageStorageRoot },
-		);
-		const secondChannel = secondChannels.registeredChannel;
-		if (secondChannel === undefined) {
-			throw new Error('Second Agent Host IPC channel was not registered.');
-		}
-		const secondContext = { sender: new TestRendererSender() } as unknown as IpcMainInvokeEvent;
-		const secondIdentity = await secondChannel.call<{ readonly connection: string }>(secondContext, 'identity', undefined);
-		const secondInitialized = await secondChannel.call<IAgentHostInitializeResult>(secondContext, 'initialize', {
-			connection: secondIdentity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
-			capabilities: Object.freeze([]),
-			locale: 'en',
-			implementation: Object.freeze({ name: 'test.renderer', build: '2' }),
-			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
-		});
-		const restoredRoot = secondInitialized.snapshots.find(snapshot => snapshot.kind === 'root');
-		const restoredSession = secondInitialized.snapshots.find(snapshot => snapshot.kind === 'session');
-		if (restoredRoot?.kind !== 'root' || restoredSession?.kind !== 'session') {
-			throw new Error('Cold-restored connected Agent snapshots are missing.');
-		}
-		assert.deepEqual(restoredRoot.state.agents.map(agent => agent.id), ['comet', 'copilot', 'codex']);
-		assert.equal(restoredSession.state.lifecycle, 'available');
-		const restoredPackageState = await new ApplicationStorageAgentPackageStateStore(storage, packageStateStoreOptions).read();
-		const restoredCodexPackage = restoredPackageState?.installedPackages.find(candidate => candidate.packageId === 'codex');
-		if (restoredCodexPackage === undefined) {
-			throw new Error('Cold-restored Codex installed record is missing.');
-		}
-		assert.equal(restoredCodexPackage.contentDigest, firstCodexDigest);
-		assert.equal(fileURLToPath(restoredCodexPackage.dependencyClosure[0].source), firstCodexEntryPoint);
-
-		const codexOffering = restoredRoot.state.packages.installablePackages.find(offering => offering.packageId === 'codex');
-		if (codexOffering === undefined) {
-			throw new Error('Codex installable offering is missing after cold restore.');
-		}
-		const uninstallPayload: AgentPackageOperationPayload = Object.freeze({ kind: 'uninstall', packageId: codexOffering.packageId });
-		let operation = createAgentPackageOperationId('uninstall-cold-restored-codex');
-		let requestDigest = await computeAgentPackageOperationDigest(restoredRoot.state.packages.revision, uninstallPayload);
-		let packageOutcome = await secondChannel.call<AgentPackageOperationOutcome>(secondContext, 'executePackageOperation', {
-			operation,
-			digest: requestDigest,
-			expectedCatalogRevision: restoredRoot.state.packages.revision,
-			payload: uninstallPayload,
-		});
-		assert.equal(packageOutcome.kind, 'succeeded');
-		await assert.rejects(readFile(firstCodexEntryPoint));
-
-		snapshots = await secondChannel.call<IAgentHostSetSubscriptionsResult>(secondContext, 'setSubscriptions', {
-			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
-		});
-		const unavailableRoot = snapshots.snapshots.find(snapshot => snapshot.kind === 'root');
-		const unavailableSession = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
-		if (unavailableRoot?.kind !== 'root' || unavailableSession?.kind !== 'session') {
-			throw new Error('Uninstalled connected Agent snapshots are missing.');
-		}
-		assert.equal(unavailableRoot.state.agents.some(agent => agent.id === 'codex'), false);
-		assert.equal(unavailableSession.state.lifecycle, 'unavailable');
-
-		const reinstallPayload: AgentPackageOperationPayload = Object.freeze({
-			kind: 'install',
-			packageId: codexOffering.packageId,
-			offering: codexOffering,
-		});
-		operation = createAgentPackageOperationId('reinstall-cold-restored-codex');
-		requestDigest = await computeAgentPackageOperationDigest(unavailableRoot.state.packages.revision, reinstallPayload);
-		packageOutcome = await secondChannel.call<AgentPackageOperationOutcome>(secondContext, 'executePackageOperation', {
-			operation,
-			digest: requestDigest,
-			expectedCatalogRevision: unavailableRoot.state.packages.revision,
-			payload: reinstallPayload,
-		});
-		assert.equal(packageOutcome.kind, 'succeeded');
-
-		snapshots = await secondChannel.call<IAgentHostSetSubscriptionsResult>(secondContext, 'setSubscriptions', {
-			subscriptions: Object.freeze([getAgentHostRootChannelId(), getAgentHostSessionChannelId(retainedSession)]),
-		});
-		const releasedSession = snapshots.snapshots.find(snapshot => snapshot.kind === 'session');
-		if (releasedSession?.kind !== 'session') {
-			throw new Error('Reinstalled connected Agent Session snapshot is missing.');
-		}
-		assert.equal(releasedSession.state.lifecycle, 'released');
-
-		const deletePayload: AgentHostMutationPayload = Object.freeze({ kind: 'deleteSession', session: retainedSession });
-		const deleted = await secondChannel.call<AgentHostMutationOutcome>(secondContext, 'mutate', {
-			operation: createAgentHostOperationId('delete-cold-restored-codex-session'),
-			digest: await computeAgentHostMutationDigest(deletePayload),
-			payload: deletePayload,
-		});
-		assert.equal(deleted.kind, 'succeeded');
-	} finally {
-		await firstHost?.shutdown();
-		await secondHost?.shutdown();
-		storage.dispose();
-		await makeDirectoriesWritable(temporaryRoot);
-		await rm(temporaryRoot, { recursive: true, force: true });
-	}
-});
-
 test('desktop main composes Agent Host before IPC/window startup and closes it before storage', async () => {
 	const mainSource = await readFile(path.join(process.cwd(), 'src/cs/code/electron-main/main.ts'), 'utf8');
 	const ipcSource = await readFile(path.join(process.cwd(), 'src/cs/code/electron-main/ipc.ts'), 'utf8');
@@ -743,14 +517,14 @@ test('desktop main composes Agent Host before IPC/window startup and closes it b
 	assert.match(mainSource, /bundledArtifactPath: fileURLToPath\(import\.meta\.url\)/);
 	assert.doesNotMatch(mainSource, /mockAgentRuntime|createMockAgentPackageProducts/);
 	assert.doesNotMatch(mainSource, /ClaudeAgent|claudeAgent|AgentRuntimeProcessFactory/);
-	assert.match(mainSource, /const agentPackages = await createProductAgentPackageCatalog\(\{/);
-	assert.match(mainSource, /sdkArtifactRoot: app\.isPackaged/);
-	assert.match(mainSource, /fileURLToPath\(new URL\('\.\.\/\.\.\/\.\.\/dist-agent-sdk\/', import\.meta\.url\)\)/);
+	assert.doesNotMatch(mainSource, /createProductAgentPackageCatalog/);
+	assert.match(mainSource, /agentSdkCacheRoot: environmentMainPaths\.agentHostSdkCacheDir/);
+	assert.match(mainSource, /agentSdkProducts: PRODUCT_AGENT_SDKS/);
 	assert.doesNotMatch(mainSource, /app\.getAppPath\(\)/);
-	assert.match(mainSource, /agentPackageProducts: agentPackages\.products/);
+	assert.match(mainSource, /externalAgentPackageProducts: Object\.freeze\(\[\]\)/);
 	assert.match(mainSource, /contentMaterializationRoot: environmentMainPaths\.agentHostContentDir/);
-	assert.match(mainSource, /packageStorageRoot: environmentMainPaths\.agentHostPackagesDir/);
-	assert.match(mainSource, /packageArtifactPort: agentPackages\.artifacts/);
+	assert.match(mainSource, /storageRoot: environmentMainPaths\.agentHostPackagesDir/);
+	assert.match(mainSource, /packageArtifactPort/);
 	assert.match(mainSource, /providerApiKeySecretStorage: storage\.providerApiKeySecretStorage/);
 	assert.match(mainSource, /agentStateRoot: environmentMainPaths\.agentHostAgentStateDir/);
 	assert.match(mainSource, /registerAppIpc\(storage, nativeHostMainService, themeMainService\)/);

@@ -101,7 +101,7 @@ class TestSessionsManagementService implements ISessionsManagementService {
 	}
 	getSessionByResource(_providerId: SessionsProviderId, _resource: URI): ISession | undefined { return undefined; }
 	getSessionForChatResource(_resource: URI): ISessionChatOwner | undefined { return undefined; }
-	createSessionDraft(_providerId: SessionsProviderId, _options: ISessionDraftOptions): ISession {
+	async createSessionDraft(_providerId: SessionsProviderId, _options: ISessionDraftOptions): Promise<ISession> {
 		throw new Error('Unexpected Session draft creation.');
 	}
 	discardSessionDraft(_session: ISession): void { throw new Error('Unexpected Session draft discard.'); }
@@ -148,7 +148,7 @@ class TestSessionsService implements ISessionsService {
 	readonly openedChats: Array<{ session: ISession; resource: URI }> = [];
 
 	openSession(_sessionId: SessionId): void { throw new Error('Unexpected Session open.'); }
-	openNewSession(_options?: IOpenNewSessionOptions): ISession | undefined {
+	async openNewSession(_options?: IOpenNewSessionOptions): Promise<ISession | undefined> {
 		throw new Error('Unexpected new Session open.');
 	}
 	openChat(session: ISession, resource: URI): void { this.openedChats.push({ session, resource }); }

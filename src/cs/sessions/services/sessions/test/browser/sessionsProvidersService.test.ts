@@ -42,6 +42,7 @@ function createProvider(id: string, onDispose: () => void = () => {}): ISessions
 		onDidChangeModels: Event.None,
 		getSessions: () => [],
 		getModels: () => [],
+		prepareSessionType: async () => {},
 		createSessionDraft: unexpectedProviderOperation,
 		discardSessionDraft: unexpectedProviderOperation,
 		sendRequest: async () => unexpectedProviderOperation(),

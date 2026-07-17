@@ -27,7 +27,6 @@ import {
 	createAgentConfigurationStateRevision,
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
-	createAgentPackageContentDigest,
 	createAgentPackageRevision,
 	createAgentSessionId,
 	createAgentSubmissionId,
@@ -46,11 +45,6 @@ import {
 	CLAUDE_AGENT_THINKING_LEVEL_PROPERTY,
 	createClaudeAgentRegistrationRevision,
 } from 'cs/platform/agentHost/node/agents/claude/claudeAgentDefinition';
-import {
-	CLAUDE_AGENT_SDK_EXECUTABLE_TARGET,
-	CLAUDE_AGENT_SDK_MODULE_TARGET,
-	createClaudeAgentPackageProduct,
-} from 'cs/platform/agentHost/node/agents/claude/claudeAgentPackage';
 import {
 	ClaudeAgent,
 	productClaudeAgentRetentionLimits,
@@ -133,51 +127,6 @@ function createAgentOptions(root: string, query: IClaudeAgentSdk['query']): ICla
 		...productClaudeAgentRetentionLimits,
 	};
 }
-
-test('Claude product declares Host execution, exact SDK closure, and credential binding', () => {
-	const executableDigest = createAgentPackageContentDigest(`sha256:${'b'.repeat(64)}`);
-	const moduleDigest = createAgentPackageContentDigest(`sha256:${'a'.repeat(64)}`);
-	const product = createClaudeAgentPackageProduct(
-		{ operatingSystem: 'darwin', architecture: 'arm64' },
-		{
-			contentDigest: createAgentPackageContentDigest(`sha256:${'c'.repeat(64)}`),
-			module: { source: 'file:///verified/sdk.js', contentDigest: moduleDigest },
-			executable: { source: 'file:///verified/claude', contentDigest: executableDigest },
-		},
-		'/tmp/comet-claude-product-state',
-	);
-
-	assert.equal(product.execution, 'host');
-	assert.deepEqual(product.verifiedPackage.manifest.execution, { kind: 'host' });
-	assert.deepEqual(product.verifiedPackage.dependencyClosure.map(dependency => ({
-		target: dependency.target,
-		digest: dependency.digest,
-		executable: dependency.executable,
-		immutable: dependency.immutable,
-	})), [{
-		target: CLAUDE_AGENT_SDK_MODULE_TARGET,
-		digest: moduleDigest,
-		executable: false,
-		immutable: true,
-	}, {
-		target: CLAUDE_AGENT_SDK_EXECUTABLE_TARGET,
-		digest: executableDigest,
-		executable: true,
-		immutable: true,
-	}]);
-	assert.deepEqual(product.verifiedPackage.grantedPrivileges.map(privilege => privilege.kind), [
-		'network', 'secret', 'toolExecutor',
-	]);
-	assert.deepEqual(product.credentialBindings, [{
-		provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
-		scope: 'llm',
-		reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
-		privilege: 'configured.model.api-key',
-	}]);
-	assert.deepEqual(product.definition.sessionConfigurationSchema.properties.map(property => property.id), [
-		CLAUDE_AGENT_PERMISSION_MODE_PROPERTY,
-	]);
-});
 
 test('Claude SessionStore persists, deduplicates, cold-loads, and idempotently deletes SDK entries', async t => {
 	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'comet-claude-session-store-'));

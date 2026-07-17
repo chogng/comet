@@ -1,5 +1,4 @@
 import { app, safeStorage } from 'electron';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { electronMainChannelServer } from 'cs/base/parts/ipc/electron-main/ipcMain';
@@ -22,7 +21,8 @@ import { createNativeHostMainService } from 'cs/platform/native/electron-main/na
 import { registerWindowOpenPolicy } from 'cs/platform/window/electron-main/windowOpenPolicy';
 import { WindowsMainService } from 'cs/platform/windows/electron-main/windowsMainService';
 import { LocalAgentHostMain } from 'cs/code/electron-main/agentHost/localAgentHostMain';
-import { createProductAgentPackageCatalog } from 'cs/platform/agentHost/node/packages/productAgentPackageCatalog';
+import { LocalAgentPackageArtifactPort } from 'cs/platform/agentHost/node/packages/localAgentPackageArtifactPort';
+import { PRODUCT_AGENT_SDKS } from 'cs/platform/agentHost/node/agents/agentSdkProducts';
 
 const environmentMainPaths = resolveEnvironmentMainPaths();
 configureDevelopmentEnvironmentMain();
@@ -52,22 +52,20 @@ async function startApplication() {
   await storage.init();
 
   const settings = await storage.loadSettings();
-  const target = Object.freeze({ operatingSystem: process.platform, architecture: process.arch });
-  const agentPackages = await createProductAgentPackageCatalog({
-    target,
-    sdkArtifactRoot: app.isPackaged
-      ? join(process.resourcesPath, 'agent-sdk')
-      : fileURLToPath(new URL('../../../dist-agent-sdk/', import.meta.url)),
-    packageStorageRoot: environmentMainPaths.agentHostPackagesDir,
-    agentStateRoot: environmentMainPaths.agentHostAgentStateDir,
+  const packageArtifactPort = new LocalAgentPackageArtifactPort({
+    storageRoot: environmentMainPaths.agentHostPackagesDir,
+    packages: Object.freeze([]),
   });
   const agentHost = await LocalAgentHostMain.create({
     storage: storage.applicationStorage,
     providerApiKeySecretStorage: storage.providerApiKeySecretStorage,
     contentMaterializationRoot: environmentMainPaths.agentHostContentDir,
     bundledArtifactPath: fileURLToPath(import.meta.url),
-    agentPackageProducts: agentPackages.products,
-    packageArtifactPort: agentPackages.artifacts,
+    externalAgentPackageProducts: Object.freeze([]),
+    packageArtifactPort,
+    agentSdkCacheRoot: environmentMainPaths.agentHostSdkCacheDir,
+    agentSdkProducts: PRODUCT_AGENT_SDKS,
+    agentStateRoot: environmentMainPaths.agentHostAgentStateDir,
     channelServer: electronMainChannelServer,
     fetch: (url, init) => fetch(url, init),
     now: Date.now,

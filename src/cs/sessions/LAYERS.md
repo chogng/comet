@@ -99,11 +99,11 @@ regardless of packaging. They do not implement
 transport.
 
 `node/packages/` owns installable and installed catalogs, staging,
-verification, package operations, storage, and atomic activation. Comet is the
-only bundled and default-installed package. Optional packages are not loaded or
-registered until an explicit user install operation commits for the addressed
-Host. Product-maintained SDK packages activate direct Host Agents; external
-packages activate connected Agents outside the Host process.
+verification, package operations, storage, and atomic activation for genuinely
+external Agents. External packages are not loaded or registered until an
+explicit user install operation commits for the addressed Host.
+Product-built-in Comet, Claude, and Codex registrations live under
+`node/agents/`; SDK cache preparation is distinct from package installation.
 Sessions and provider contributions never import package management or SDK
 implementations.
 

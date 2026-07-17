@@ -74,7 +74,7 @@ export interface ISessionsService {
 	readonly visibleSessions: IObservable<readonly IVisibleSessionSlot[]>;
 	readonly activeSession: IObservable<IActiveSession | undefined>;
 	openSession(sessionId: SessionId, options?: IOpenSessionOptions): void;
-	openNewSession(options?: IOpenNewSessionOptions): ISession | undefined;
+	openNewSession(options?: IOpenNewSessionOptions): Promise<ISession | undefined>;
 	openChat(session: ISession, chatResource: URI, options?: IOpenSessionOptions): void;
 	closeChat(session: IActiveSession, chat: IChat): void;
 	reopenChat(session: IActiveSession, chat: IChat, options?: IOpenSessionOptions): void;
@@ -175,9 +175,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 		this.focusUnlessPreserved(visibleSession, options.preserveFocus);
 	}
 
-	openNewSession(
+	async openNewSession(
 		options: IOpenNewSessionOptions = { kind: OpenNewSessionKind.Empty },
-	): ISession | undefined {
+	): Promise<ISession | undefined> {
 		if (options.kind === OpenNewSessionKind.Empty) {
 			this.cancelPendingRestore();
 			const draft = this.sessionsManagementService.draftSession.get();
@@ -187,7 +187,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 
 		this.cancelPendingRestore();
-		const draft = this.sessionsManagementService.createSessionDraft(options.providerId, options.draft);
+		const draft = await this.sessionsManagementService.createSessionDraft(options.providerId, options.draft);
 		try {
 			const visibleSession = this.visibility.setActive(draft, this.requireDraftChat(draft))!;
 			this.focusUnlessPreserved(visibleSession, options.preserveFocus);

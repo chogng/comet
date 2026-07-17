@@ -3,12 +3,12 @@
 ## Overview
 
 Comet Agent is Comet's product-owned general Agent. It has stable Agent ID
-`comet`, is supplied by the bundled `comet` Agent package, and is the only
-Agent installed by default.
+`comet` and is one of the product-built-in orchestration layers alongside
+Claude and Codex.
 
-Comet Agent uses the same Agent Host contracts as every optional Agent. Its
-special status is product distribution and ownership, not a private Sessions,
-Chat, Tool, attachment, or transport API.
+Comet Agent uses the same Agent Host contracts as every built-in or external
+Agent. Its product ownership does not create a private Sessions, Chat, Tool,
+attachment, or transport API.
 
 ```text
 accepted Host Turn
@@ -27,13 +27,12 @@ through the common Agent Runtime Port.
 
 ## Product contract
 
-The bundled Comet package is installed and activated by product composition.
-Users do not need an Agent package installation operation before creating a
-Comet Session. Ordinary Agent package operations cannot uninstall Comet; its
-revision changes with the Comet product distribution through the same
-package-wide quiesce, resume migration, and atomic activation transaction used
-for package updates. Product distribution retains the previous Comet endpoint
-until that transaction commits.
+Comet is registered by product composition and requires no Agent package
+installation operation before Session creation. External package operations
+cannot install, update, or uninstall it. Its revision changes only with the
+Comet product distribution through a Host-wide quiesce, resume migration, and
+atomic registration replacement. Product distribution retains the previous
+Comet registration until that transaction commits.
 
 Being installed does not imply that a usable model endpoint or credentials
 exist. Agent authentication state describes only authentication of the Agent
@@ -46,10 +45,10 @@ addressed Turn fails explicitly; Comet does not select an unrelated provider,
 credential, runtime, or Agent. Empty Session creation remains governed by the
 ordinary Host capability.
 
-Package lifecycle is defined in
-[Agent package architecture](AGENT_PACKAGES.md). The Host-facing runtime,
-Session, Chat, Turn, connection, and resume contracts are defined in
-[Agent Host architecture](AGENT_HOST.md).
+External package lifecycle is defined in
+[Agent package architecture](AGENT_PACKAGES.md). Built-in registration,
+Host-facing runtime, Session, Chat, Turn, connection, and resume contracts are
+defined in [Agent Host architecture](AGENT_HOST.md).
 
 ## Ownership
 
@@ -66,9 +65,9 @@ Fetch, or Feature implementations. It receives normalized Host values and uses
 the content-resource and Tool ports. Agent Host never interprets Comet's
 private plan, provider messages, SDK objects, or model cache.
 
-Comet does not own Agent package installation. Once its bundled package is
-activated, the runtime owns only its execution-engine and package-private SDK
-or model-provider lifecycle.
+Comet does not own Agent package installation. Once its built-in registration
+is active, the runtime owns only its execution engine and private SDK or
+model-provider lifecycle.
 
 ## Execution profile and Turn binding
 
@@ -302,11 +301,11 @@ Every opaque checkpoint carries a Comet resume-schema ID. It contains no raw
 credentials, Workbench objects, Feature callbacks, client-local paths, or
 unbounded provider event log. An accepted active Turn resumes only under the
 same logical Comet registration revision with explicit support for that schema.
-A released Session or Chat may materialize after an atomic Comet package update
+A released Session or Chat may materialize after an atomic Comet product update
 only when the new registration explicitly supports its stored schema or the
-package update committed a migration through the common Agent resume-state
+product update committed a migration through the common Agent resume-state
 operation. Comet declares exact source and target schema edges and returns a
-new opaque value into package-operation staging; it never mutates committed
+new opaque value into update staging; it never mutates committed
 state during validation. Otherwise the Session or Turn is unavailable or
 failed according to its committed Host state; no unqualified runtime, model,
 or Agent receives the checkpoint.
@@ -318,7 +317,8 @@ src/cs/platform/agentHost/
 ├── common/                    IAgent and Agent Runtime Protocol contracts
 └── node/
     ├── agents/comet/          embedded Comet runtime, when selected
-    ├── packages/              bundled Comet package activation
+    ├── agents/                product-built-in Agent registrations
+    ├── packages/              genuinely external Agent lifecycle
     └── runtime/               generic connected-runtime support
 ```
 
@@ -344,10 +344,10 @@ Comet conformance covers:
 
 ## Invariants
 
-- Comet has stable Agent ID and package ID `comet` in distinct namespaces.
-- Comet is the only bundled and default-installed Agent.
+- Comet has stable Agent ID `comet`.
+- Comet, Claude, and Codex are product-built-in orchestration layers.
 - Comet uses the same Agent Host, Session, Chat, Turn, attachment, target, and
-  Tool contracts as optional Agents.
+  Tool contracts as other Agents.
 - Exactly one embedded or connected Comet runtime is registered per Host.
 - The Comet runtime owns orchestration; Agent Host owns canonical product
   lifecycle and state.

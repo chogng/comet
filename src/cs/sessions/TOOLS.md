@@ -224,8 +224,8 @@ configuration, and their runtime activity maps into canonical Turn state.
 
 `IAgent` is the common Host-side integration contract. It receives normalized
 Turn input, including the exact Tool-set revision, and exposes only canonical
-Tool calls and results to Agent Host. The bundled Comet Agent implements it
-directly. Product-maintained SDK Agents also implement it
+Tool calls and results to Agent Host. The product-built-in Comet Agent
+implements it directly. Product-built-in SDK Agents also implement it
 directly. Genuinely external Agents use its language-neutral wire projection
 through `IAgentRuntimeConnection`; Tool identity and schemas do not change at
 that boundary.

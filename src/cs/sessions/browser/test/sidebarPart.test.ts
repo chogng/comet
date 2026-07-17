@@ -102,7 +102,7 @@ class TestSessionsManagementService implements ISessionsManagementService {
 	getSession(sessionId: SessionId): ISession | undefined { return this.sessions.get().find(session => session.sessionId === sessionId); }
 	getSessionByResource(_providerId: SessionsProviderId, _resource: URI): ISession | undefined { return undefined; }
 	getSessionForChatResource(_resource: URI): ISessionChatOwner | undefined { return undefined; }
-	createSessionDraft(_providerId: SessionsProviderId, _options: ISessionDraftOptions): ISession { throw new Error('Unexpected Session draft creation.'); }
+	async createSessionDraft(_providerId: SessionsProviderId, _options: ISessionDraftOptions): Promise<ISession> { throw new Error('Unexpected Session draft creation.'); }
 	discardSessionDraft(_session: ISession): void { throw new Error('Unexpected Session draft discard.'); }
 	getModels(_session: ISession, _chat: IChat): readonly ISessionModel[] { return []; }
 	sendRequest(_session: ISession, _chat: IChat): Promise<void> { throw new Error('Unexpected Session request.'); }
@@ -128,7 +128,7 @@ class TestSessionsService implements ISessionsService {
 	readonly openedSessionIds: SessionId[] = [];
 
 	openSession(sessionId: SessionId): void { this.openedSessionIds.push(sessionId); }
-	openNewSession(options: IOpenNewSessionOptions = { kind: OpenNewSessionKind.Empty }): ISession | undefined {
+	async openNewSession(options: IOpenNewSessionOptions = { kind: OpenNewSessionKind.Empty }): Promise<ISession | undefined> {
 		this.openNewSessionOptions.push(options);
 		return undefined;
 	}

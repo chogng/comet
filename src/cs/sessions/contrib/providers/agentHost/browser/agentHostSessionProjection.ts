@@ -55,7 +55,7 @@ export function resolveAgentHostDisplayText(
 export type AgentHostDisplayTextResolver = (displayText: AgentHostDisplayText) => string;
 
 export function toSessionType(
-	descriptor: IAgentHostSessionTypeDescriptor,
+	descriptor: Pick<IAgentHostSessionTypeDescriptor, 'id' | 'displayName' | 'capabilities'>,
 	resolveDisplayText: AgentHostDisplayTextResolver,
 ): ISessionType {
 	return Object.freeze({

@@ -58,6 +58,30 @@ External Agent packages retain the generic install, update, activation, and unin
 
 Call sites migrate directly. No package alias, compatibility factory, placeholder Agent, second SDK source, or first-Turn download path remains.
 
+## Implemented slice
+
+- The desktop Host publishes cold Claude and Codex availability without
+  reading or downloading SDK bytes.
+- Sessions awaits explicit preparation before creating a draft.
+- Preparation resolves the exact product SDK, discovers native models, and
+  atomically activates the direct `IAgent`.
+- Claude and Codex are excluded from external package persistence, catalog,
+  installation, activation, and uninstall.
+- Existing external-package records for those built-in IDs are removed from
+  package lifecycle state while retained Host backing remains attributed to
+  the same package and Agent identities.
+- Desktop builds no longer embed `dist-agent-sdk`, and the obsolete product
+  package factories are deleted.
+
+## Remaining work in scope
+
+- Carry bounded SDK download progress and cancellation across the Agent Host
+  protocol.
+- Exercise cache deletion and retained backing restoration through composed
+  desktop and remote Host tests.
+- Complete the exhaustive Claude and Codex native behavior mappings described
+  by the parent Agent Host migration.
+
 ## Behavior that must be preserved
 
 - exact Claude and Codex Agent IDs and retained backing ownership;

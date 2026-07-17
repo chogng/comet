@@ -115,9 +115,27 @@ import type {
 	IAgentPackageCredentialBinding,
 	ILocalAgentPackageProduct,
 } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
+import { AgentSdkDownloader, type IAgentSdkProductConfiguration } from 'cs/platform/agentHost/node/agentSdkDownloader';
+import { BuiltInAgentRegistry } from 'cs/platform/agentHost/node/agents/builtInAgentRegistry';
+import { createClaudeBuiltInAgent } from 'cs/platform/agentHost/node/agents/claude/claudeBuiltInAgent';
+import {
+	CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+	CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+	CLAUDE_AGENT_AVAILABILITY,
+	CLAUDE_AGENT_PACKAGE_ID,
+	CLAUDE_AGENT_PACKAGE_DEFINITION,
+} from 'cs/platform/agentHost/node/agents/claude/claudeAgentDefinition';
+import { createCodexBuiltInAgent } from 'cs/platform/agentHost/node/agents/codex/codexBuiltInAgent';
+import {
+	CODEX_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+	CODEX_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+	CODEX_AGENT_AVAILABILITY,
+	CODEX_AGENT_PACKAGE_ID,
+	CODEX_AGENT_PACKAGE_DEFINITION,
+} from 'cs/platform/agentHost/node/agents/codex/codexAgentDefinition';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('3');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('4');
 const localAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('3');
 const cometSessionType = createAgentSessionTypeId('comet');
 const maximumPreparedToolSets = 4_096;
@@ -156,8 +174,11 @@ export interface ILocalAgentHostMainOptions {
 	readonly providerApiKeySecretStorage: IProviderApiKeySecretStorage;
 	readonly contentMaterializationRoot: string;
 	readonly bundledArtifactPath: string;
-	readonly agentPackageProducts: readonly ILocalAgentPackageProduct[];
+	readonly externalAgentPackageProducts: readonly ILocalAgentPackageProduct[];
 	readonly packageArtifactPort: IAgentPackageArtifactPort;
+	readonly agentSdkCacheRoot: string;
+	readonly agentSdkProducts: Readonly<Record<string, IAgentSdkProductConfiguration>>;
+	readonly agentStateRoot: string;
 	readonly channelServer: ILocalAgentHostChannelServer;
 	readonly fetch: (url: string, init: RequestInit) => Promise<Response>;
 	readonly now: () => number;
@@ -369,6 +390,32 @@ function randomIdentity(): string {
 	return randomUUID().replaceAll('-', '');
 }
 
+async function removeBuiltInAgentsFromExternalPackageState(
+	store: ApplicationStorageAgentPackageStateStore,
+): Promise<void> {
+	const state = await store.read();
+	if (state === undefined) {
+		return;
+	}
+	const builtInPackages = new Set([CLAUDE_AGENT_PACKAGE_ID, CODEX_AGENT_PACKAGE_ID]);
+	const changed = state.installedPackages.some(pkg => builtInPackages.has(pkg.packageId))
+		|| state.activeRegistrations.some(registration => builtInPackages.has(registration.packageId))
+		|| state.operations.some(operation => builtInPackages.has(operation.packageId))
+		|| state.materializedBackings.some(identity => builtInPackages.has(identity.packageId));
+	if (!changed) {
+		return;
+	}
+	await store.commit(state.revision, Object.freeze({
+		...state,
+		revision: state.revision + 1,
+		catalogRevision: state.catalogRevision + 1,
+		operations: Object.freeze(state.operations.filter(operation => !builtInPackages.has(operation.packageId))),
+		installedPackages: Object.freeze(state.installedPackages.filter(pkg => !builtInPackages.has(pkg.packageId))),
+		activeRegistrations: Object.freeze(state.activeRegistrations.filter(registration => !builtInPackages.has(registration.packageId))),
+		materializedBackings: Object.freeze(state.materializedBackings.filter(identity => !builtInPackages.has(identity.packageId))),
+	}));
+}
+
 /** Owns the local Agent Host, its IPC channel, and its shutdown ordering. */
 export class LocalAgentHostMain extends Disposable {
 	private authority: AgentHostAuthority | undefined;
@@ -398,11 +445,28 @@ export class LocalAgentHostMain extends Disposable {
 	private async initialize(): Promise<void> {
 		const bundledPackage = await createCurrentBundledCometPackage(this.options.bundledArtifactPath);
 		const runtimeRegistration = createAgentRuntimeRegistrationRevision('comet.embedded.v2');
-		const agentPackages = this.options.agentPackageProducts;
+		const agentPackages = this.options.externalAgentPackageProducts;
+		const builtInCredentialBindings: readonly IAgentPackageCredentialBinding[] = Object.freeze([
+			Object.freeze({
+				provider: CLAUDE_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+				scope: 'llm',
+				reference: CLAUDE_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+				privilege: 'configured.model.api-key',
+			}),
+			Object.freeze({
+				provider: CODEX_AGENT_API_KEY_CREDENTIAL_PROVIDER,
+				scope: 'llm',
+				reference: CODEX_AGENT_API_KEY_CREDENTIAL_REFERENCE,
+				privilege: 'configured.model.api-key',
+			}),
+		]);
 		const credentials = new AgentCredentialService(
 			new LocalAgentCredentialSecretSource(
 				this.options.providerApiKeySecretStorage,
-				Object.freeze(agentPackages.flatMap(product => product.credentialBindings)),
+				Object.freeze([
+					...builtInCredentialBindings,
+					...agentPackages.flatMap(product => product.credentialBindings),
+				]),
 			),
 		);
 		const modelCatalog = this.createModelCatalog(credentials);
@@ -434,6 +498,38 @@ export class LocalAgentHostMain extends Disposable {
 			reportUnexpectedError: onUnexpectedError,
 			maximumCallRecords: maximumToolCallRecords,
 		});
+		const sdkDownloader = this._register(new AgentSdkDownloader({
+			cacheRoot: this.options.agentSdkCacheRoot,
+			products: this.options.agentSdkProducts,
+			fetch: this.options.fetch,
+			now: this.options.now,
+		}));
+		const builtInAgents = this._register(new BuiltInAgentRegistry(Object.freeze([
+			Object.freeze({
+				availability: CLAUDE_AGENT_AVAILABILITY,
+				create: async () => {
+					const agent = await createClaudeBuiltInAgent({
+						downloader: sdkDownloader,
+						stateRoot: this.options.agentStateRoot,
+						toolExecution,
+						credentialResolver: credentials,
+					});
+					return Object.freeze({ agent, lifetime: agent });
+				},
+			}),
+			Object.freeze({
+				availability: CODEX_AGENT_AVAILABILITY,
+				create: async () => {
+					const agent = await createCodexBuiltInAgent({
+						downloader: sdkDownloader,
+						stateRoot: this.options.agentStateRoot,
+						toolExecution,
+						credentialResolver: credentials,
+					});
+					return Object.freeze({ agent, lifetime: agent });
+				},
+			}),
+		])));
 		const cometAgent = new CometAgent({
 			runtimeRegistration,
 			requiresAgentAuthentication: false,
@@ -460,6 +556,7 @@ export class LocalAgentHostMain extends Disposable {
 				})]),
 			},
 		});
+		await removeBuiltInAgentsFromExternalPackageState(packageStateStore);
 		const activationRegistry = this._register(new AgentPackageActivationRegistry({
 			bundledAgents: Object.freeze([Object.freeze({
 				offerings: Object.freeze([bundledPackage.verifiedPackage.offering]),
@@ -521,6 +618,18 @@ export class LocalAgentHostMain extends Disposable {
 				resolveRegistrationRevision: product.definition.resolveRegistrationRevision,
 				resolve: product.definition.resolveSessionType,
 			})),
+			Object.freeze({
+				packageId: CLAUDE_AGENT_PACKAGE_DEFINITION.packageId,
+				agentId: CLAUDE_AGENT_PACKAGE_DEFINITION.agentId,
+				resolveRegistrationRevision: CLAUDE_AGENT_PACKAGE_DEFINITION.resolveRegistrationRevision,
+				resolve: CLAUDE_AGENT_PACKAGE_DEFINITION.resolveSessionType,
+			}),
+			Object.freeze({
+				packageId: CODEX_AGENT_PACKAGE_DEFINITION.packageId,
+				agentId: CODEX_AGENT_PACKAGE_DEFINITION.agentId,
+				resolveRegistrationRevision: CODEX_AGENT_PACKAGE_DEFINITION.resolveRegistrationRevision,
+				resolve: CODEX_AGENT_PACKAGE_DEFINITION.resolveSessionType,
+			}),
 		]));
 		const host = this._register(await AgentHostAuthority.create({
 			authority: localAgentHostAuthority,
@@ -530,6 +639,7 @@ export class LocalAgentHostMain extends Disposable {
 			implementation: Object.freeze({ name: 'comet.desktop.main', build: 'agent-host.v2' }),
 			sessionTypeCatalog,
 			agentRuntimes: activationRegistry,
+			builtInAgents,
 			packageLifecycle,
 			credentials,
 			catalogStore,

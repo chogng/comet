@@ -270,6 +270,7 @@ function createRootState(): IAgentHostRootState {
 			automaticExecutionPreset: automaticPreset,
 			toolPolicy: { kind: 'all' },
 		}],
+		builtInAgents: [],
 	};
 }
 
@@ -447,10 +448,10 @@ class TestAgentHostConnection implements IAgentHostConnection {
 
 	async initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {
 		assert.deepStrictEqual(request.subscriptions, [getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]);
-		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('3')]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('4')]);
 		this.replaceActiveSubscriptions(request.subscriptions);
 		return {
-			protocolVersion: createAgentHostProtocolVersion('3'),
+			protocolVersion: createAgentHostProtocolVersion('4'),
 			capabilities: [],
 			implementation: { name: 'test-host', build: '1' },
 			hostSequence: createAgentHostSequence(this.sequence),
@@ -753,6 +754,65 @@ function waitForSessionsChange(provider: AgentHostSessionsProvider) {
 }
 
 suite('AgentHostSessionsProvider', { concurrency: false }, () => {
+	test('prepares a cold built-in Session type before exposing its active descriptor', async () => {
+		const { connection, chatService } = createFixture();
+		const readyRoot = connection.root;
+		const descriptor = readyRoot.sessionTypes[0];
+		connection.root = {
+			...readyRoot,
+			capabilities: { ...readyRoot.capabilities, supportsCreateSession: false },
+			agents: [],
+			agentRegistrations: [],
+			agentDefaults: [],
+			sessionTypes: [],
+			builtInAgents: [{
+				packageId,
+				agentId,
+				sessionType: descriptor,
+				state: 'cold',
+			}],
+		};
+		connection.mutateRequest = async request => {
+			assert.deepStrictEqual(request.payload, {
+				kind: 'prepareBuiltInAgent',
+				agent: agentId,
+			});
+			connection.sequence += 1;
+			connection.root = {
+				...readyRoot,
+				builtInAgents: [{
+					packageId,
+					agentId,
+					sessionType: descriptor,
+					state: 'ready',
+				}],
+			};
+			return {
+				kind: 'succeeded',
+				result: {
+					kind: 'prepareBuiltInAgent',
+					operation: request.operation,
+					digest: request.digest,
+					hostSequence: createAgentHostSequence(connection.sequence),
+					revisions: [],
+					agent: agentId,
+					registration: registrationRevision,
+				},
+			};
+		};
+		const provider = await createProvider(connection, chatService);
+		try {
+			assert.deepStrictEqual(provider.sessionTypes.map(type => type.id), [sessionType]);
+			await provider.prepareSessionType(sessionType);
+			assert.equal(connection.mutationRequests.length, 1);
+			assert.deepStrictEqual(provider.sessionTypes.map(type => type.id), [sessionType]);
+			await provider.prepareSessionType(sessionType);
+			assert.equal(connection.mutationRequests.length, 1);
+		} finally {
+			provider.dispose();
+		}
+	});
+
 	test('rejects a root snapshot with non-exact runtime registration fields', async () => {
 		const { connection, chatService } = createFixture();
 		connection.root = {

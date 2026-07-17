@@ -88,21 +88,22 @@ ISessionsManagementService
     → IAgentHostConnection
     → Agent Host
     → IAgent
+        ├── product-built-in orchestration layer
         ├── product-maintained Host Agent
         └── external connected Agent through IAgentRuntimeConnection
 ```
 
 Local and remote are Host placements, not Agent identities. The built-in
-`CometAgent` integration has stable Agent ID `comet`; its orchestration may be
-implemented directly in the Host or supplied by an external connected Agent.
-Comet is the only bundled and default-installed Agent package. Claude, Codex,
-and other optional Agents are absent until the user explicitly installs their
-package for the addressed Host. A product-maintained SDK package activates a
-direct Host `IAgent`; a genuinely external package activates a connected
-Agent. Every Agent owns its SDK or model-provider calls, event conversion,
-truthful capabilities, and opaque resume data and never imports Sessions or
-Workbench Chat. Package execution form does not create another Sessions
-provider. See
+Comet, Claude, and Codex integrations have stable Agent IDs and App-compiled
+`IAgent` behavior mappings. Comet is active at product startup. Claude and
+Codex are available selections before their exact SDK bytes are local; the
+provider explicitly prepares a cold selection before draft creation. Their
+SDK caches are reproducible product dependencies, not Agent installation
+state. Genuinely external Agents remain absent until the user explicitly
+installs their package for the addressed Host. Every Agent owns its SDK or
+model-provider calls, event conversion, truthful capabilities, and opaque
+resume data and never imports Sessions or Workbench Chat. Agent execution form
+does not create another Sessions provider. See
 [Agent Host architecture](AGENT_HOST.md),
 [Remote Agent Host architecture](REMOTE_AGENT_HOST.md),
 [Remote foundation architecture](../platform/remote/REMOTE.md),
@@ -474,7 +475,10 @@ import `ChatWidget` or inspect its DOM.
 ```text
 new-session action
     → ISessionsService.openNewSession(options)
-    → management service validates an activated Agent selection and asks the
+    → management service asks the selected provider to prepare its Session type
+    → provider returns only after a cold built-in Agent has published its exact
+      active registration and model-backed Session type
+    → management service validates the prepared Agent selection and asks the
       selected provider for a draft
     → view service activates the draft
     → user submits one captured composer revision
@@ -491,10 +495,13 @@ new-session action
     → management and view services reconcile the committed identity atomically
 ```
 
-Only an Agent in the addressed Host's active Agent registry can own the
-draft. An installable-but-absent package may be shown through a separate
+Only an Agent in the addressed Host's active Agent registry can own the draft.
+A cold product-built-in Session type is a valid selection but must complete its
+explicit preparation before the provider creates that draft. An
+installable-but-absent external package may be shown through a separate
 explicit install action, but it is not a valid Agent selection. Draft creation,
-Session commit, and first send never install a package or download an SDK.
+Session commit, and first send never install a package. SDK download belongs
+only to the explicit preparation that precedes draft creation.
 
 A draft-to-committed transition is explicit. Session selection, input history,
 view state, and provider ownership move with that transition in one operation.
@@ -629,10 +636,13 @@ its visual contract.
 - One Agent Host connection maps to one provider instance.
 - Local and remote identify Host placement; Agent identity remains independent
   of placement.
-- `CometAgent` is the built-in Agent integration and has stable Agent ID
-  `comet`; its runtime packaging is not Sessions state. The bundled `comet`
-  package is the only default-installed Agent package.
-- Optional Agents appear as executable selections only after an explicit
+- Comet, Claude, and Codex are product-built-in Agent integrations with stable
+  Agent IDs. Their availability is product state, not external package
+  installation state.
+- A cold built-in Agent becomes executable only after explicit preparation has
+  atomically published its exact active registration. SDK cache presence is
+  not Agent availability or installation.
+- External Agents appear as executable selections only after an explicit
   per-Host user install operation has atomically activated their package.
   Installable catalog entries are not Agent registrations.
 - Session identity is globally unique across providers.
@@ -658,7 +668,9 @@ its visual contract.
 - Providers carry the normalized execution selection to Agent Host; they do not
   resolve Agent profiles or construct SDK-native configuration themselves.
 - Sessions, provider draft creation, Session creation, and send operations
-  never install, update, uninstall, or inspect an Agent SDK package.
+  never install, update, or uninstall an external Agent package. Sessions may
+  request explicit built-in preparation but never inspect or resolve SDK
+  bytes.
 - Providers do not import Sessions UI, Parts, or shell layout.
 - Host protocol models and Agent backend clients stay in Platform Agent Host.
   Provider connection state and Host-to-Sessions mapping stay in the Agent Host
@@ -705,22 +717,25 @@ an alternative mutable source of truth.
 
 ## Adding Agent execution
 
-Add a new optional Agent as an explicitly installed Agent package, not as a
-Sessions contribution. Its manifest declares exact Agent IDs and one runtime
-entry point. The user-installed runtime implements the language-neutral Agent
+Add a product-built-in orchestration layer by compiling its direct `IAgent`
+behavior mapping into Agent Host, publishing stable built-in availability, and
+giving any runtime SDK dependency one exact product-selected preparation and
+cache path. Do not add another Sessions provider or expose its SDK types above
+Agent Host. Comet-specific orchestration follows
+[Comet Agent architecture](COMET_AGENT.md).
+
+Add a genuinely external Agent as an explicitly installed Agent package, not
+as a Sessions contribution. Its manifest declares exact Agent IDs and one
+runtime entry point. A connected runtime implements the language-neutral Agent
 Runtime Protocol and joins through `IAgentRuntimeConnection`; it never loads
 inside the Host process. Register stable identities and truthful capabilities,
 Tool projection limits, resume schemas, and migration edges only when the
 package transaction commits. Keep orchestration, SDK or model-provider types,
-clients, caches, event conversion, and resume values inside that runtime. Do
-not add the Agent to the default installed set, a Sessions provider, Chat view,
-automatic installation path, dual runtime registration, or fallback path.
-
-Comet is the sole bundled exception: its package is activated by product
-composition and its embedded or Rust connected runtime follows
-[Comet Agent architecture](COMET_AGENT.md). Package discovery, installation,
-activation, update, uninstall, and retained-state rules are defined in
-[Agent package architecture](AGENT_PACKAGES.md).
+clients, caches, event conversion, and resume values inside its implementation.
+Do not add the Agent to a Sessions provider, Chat view, automatic installation
+path, dual runtime registration, or fallback path. Package discovery,
+installation, activation, update, uninstall, and retained-state rules are
+defined in [Agent package architecture](AGENT_PACKAGES.md).
 
 Add a non-remote Host placement by implementing `IAgentHostConnection` and
 registering one shared `AgentHostSessionsProvider` for each stable connection.

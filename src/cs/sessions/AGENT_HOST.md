@@ -17,8 +17,9 @@ Sessions application
         └── remote Agent Host connection
     → Agent Host
     → IAgent Host-facing port
-        ├── product-bundled Comet Agent
-        ├── product-maintained SDK Agent
+        ├── product-built-in Comet Agent
+        ├── product-built-in SDK Agent
+        ├── direct external Host Agent
         └── connected Agent projection over IAgentRuntimeConnection
 ```
 
@@ -69,11 +70,10 @@ Agent Host keeps the following identities distinct:
 | Turn ID | One accepted user request and Agent response lifecycle | Agent Host |
 | Operation ID | One retry-safe mutating protocol operation | operation owner |
 
-The built-in Comet Agent has Agent ID `comet` and is supplied by the bundled
-package whose package ID is also `comet`. The strings occupy separate identity
-namespaces. `CometAgent` names its Host-facing Agent integration; it does not
-imply a separate provider process. Host placement and package execution are not
-part of its Agent identity.
+The built-in Comet Agent has Agent ID `comet`. `CometAgent` names its
+Host-facing Agent integration; it does not imply an external package or a
+separate provider process. Host placement and execution binding are not part
+of its Agent identity.
 
 The local Host has one stable provider identity. Each remote Host authority has
 its own provider identity derived from its stable authority. Agent IDs remain
@@ -176,7 +176,7 @@ not invent another request or auto-answer it through a generic fallback.
 Comet's native model-and-Tool orchestration loop. Its loop is not a template
 for Claude, Codex, or another SDK integration.
 
-Product-bundled Comet and product-maintained SDK Agents implement `IAgent`
+Product-built-in Comet and SDK Agents implement `IAgent`
 directly in Agent Host Node. A genuinely external endpoint connects through
 `IAgentRuntimeConnection`. The connected Agent Runtime Protocol is the
 language-neutral wire projection of the same `IAgent` semantics, not a second
@@ -196,11 +196,12 @@ another endpoint after materialization fails.
 An Agent that uses an SDK additionally owns its SDK bindings, exhaustive
 request, event, and interaction mapping, native control calls, contributed
 Tool projection, native Tool activity mapping, aliases, callbacks, caches, and
-SDK resume data after its package is installed and activated. Package discovery,
-verification, installation, update, and uninstall belong to Agent Host rather
-than the Agent. SDK types never escape the Agent. Direct or connected execution
-does not change its Agent, Session, Chat, Turn, Tool,
-attachment, or permission semantics.
+SDK resume data. A built-in Agent resolves its exact product SDK cache during
+explicit preparation; an external Agent resolves dependencies only from its
+activated package. External package discovery, verification, installation,
+update, and uninstall belong to Agent Host rather than the Agent. SDK types
+never escape the Agent. Direct or connected execution does not change its
+Agent, Session, Chat, Turn, Tool, attachment, or permission semantics.
 
 An Agent does not register an `ISessionsProvider`, create a Workbench Chat
 model, manipulate Sessions services, access UI, own an Agent Host client
@@ -209,7 +210,7 @@ content-resource contracts.
 
 ### Comet Agent
 
-The bundled `comet` package binds Agent ID `comet` to exactly one `CometAgent`
+Product composition binds Agent ID `comet` to exactly one `CometAgent`
 implementation of `IAgent`.
 
 The Comet Agent owns prompt construction, exact model configuration,
@@ -385,7 +386,7 @@ Port.
 
 ### Product SDK configuration projections
 
-The product-owned Copilot, Claude, and Codex packages publish the following
+The product-owned Copilot, Claude, and Codex integrations publish the following
 canonical Agent-owned properties. Host-default properties seed new Sessions;
 Session properties are persisted in the addressed Session configuration; model
 properties are resolved independently for the selected model. The addressed
@@ -779,7 +780,7 @@ interface IAgentChats {
 
 These are Host-side contracts, not Workbench services. Concrete contract files
 live under `cs/platform/agentHost/common` and use only lower-layer types. The
-product-bundled Comet and product-maintained SDK Agents implement them directly.
+product-built-in Comet and SDK Agents implement them directly.
 A connected Agent receives and emits their canonical protocol values through
 `IAgentRuntimeConnection`; the generic connection owns framing and correlation
 without introducing Agent-specific semantics. Every mutating call carries
@@ -1059,9 +1060,9 @@ src/cs/platform/agentHost/
     │   └── generic connected-runtime negotiation, correlation, and lifecycle
     └── agents/
         ├── comet/
-        │   └── bundled Comet Agent
+        │   └── product-built-in Comet Agent
         └── <agent>/
-            └── product-maintained SDK-specific IAgent behavior
+            └── product-built-in or direct external IAgent behavior
 
 build/agent-sdk/agents/<agent>/      exact SDK pin, dependency lock, and
                                      target-specific package build inputs

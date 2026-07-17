@@ -97,6 +97,7 @@ import {
 	IAgentHostChatState,
 	IAgentHostChatStateAction,
 	IAgentHostChatSummary,
+	IAgentHostBuiltInAgentAvailability,
 	IAgentHostCommittedChannelRevision,
 	IAgentHostCreateSessionChatRequest,
 	IAgentHostInitializeRequest,
@@ -193,6 +194,19 @@ export interface IAgentHostRuntimeResolver {
 	): IAgent;
 }
 
+export interface IPreparedBuiltInAgent {
+	readonly agent: IAgent;
+	commit(): void;
+	rollback(): void;
+}
+
+/** Owns product-built-in Agent availability and exact cold runtime preparation. */
+export interface IAgentHostBuiltInAgentRegistry {
+	readonly availability: readonly Omit<IAgentHostBuiltInAgentAvailability, 'state'>[];
+	prepare(agent: AgentId): Promise<IPreparedBuiltInAgent>;
+	owns(packageId: string, agent: AgentId): boolean;
+}
+
 /** Describes one active Agent entry available to the Host Session type catalog. */
 export interface IAgentHostActiveAgentCatalogEntry {
 	readonly registration: IAgentRuntimeRegistration;
@@ -217,6 +231,7 @@ export interface IAgentHostAuthorityOptions {
 	readonly implementation: IAgentHostInitializeResult['implementation'];
 	readonly sessionTypeCatalog: IAgentHostSessionTypeCatalog;
 	readonly agentRuntimes: IAgentHostRuntimeResolver;
+	readonly builtInAgents: IAgentHostBuiltInAgentRegistry;
 	readonly packageLifecycle: AgentPackageLifecycle;
 	readonly authentication?: IAgentAuthenticationPort;
 	readonly credentials?: IAgentCredentialAuthority;
@@ -831,10 +846,10 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			mutation = await this.acquirePackageMutation(packageOperation, request.payloadDigest, agentIds);
 			await this.cancelTurnsForShutdown(request);
 			await mutation.drain();
-			const packageSnapshot = this.options.packageLifecycle.snapshot();
-			const materializedKeys = new Set(packageSnapshot.materializedBackings.map(identity => this.backingIdentityKey(identity)));
-			const records = Object.freeze(packageSnapshot.retainedBackingRecords.filter(record => (
-				materializedKeys.has(this.backingIdentityKey(record.identity))
+			const records = Object.freeze(this.packageBackingState(this.sessions, false).retainedBackingRecords.filter(record => (
+				record.identity.chatId === undefined
+					? this.requireSession(record.identity.sessionId).materialized
+					: this.requireChat(this.requireSession(record.identity.sessionId), record.identity.chatId).materialized
 			)));
 			await mutation.checkpointAndRelease(records);
 			await this.commitHostAndBackingState(
@@ -1312,8 +1327,28 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		}
 		assertDisplayText(this.options.label, 'label');
 		const active = this.options.packageLifecycle.snapshot().activeRegistrations;
+		const builtInAgentIds = new Set<AgentId>();
+		const builtInSessionTypeIds = new Set<string>();
+		for (const availability of this.options.builtInAgents.availability) {
+			if (
+				builtInAgentIds.has(availability.agentId)
+				|| builtInSessionTypeIds.has(availability.sessionType.id)
+				|| availability.packageId !== availability.sessionType.packageId
+				|| availability.agentId !== availability.sessionType.agentId
+				|| !this.options.builtInAgents.owns(availability.packageId, availability.agentId)
+			) {
+				throw new Error(`Agent Host has invalid built-in Agent availability '${availability.agentId}'`);
+			}
+			assertDisplayText(availability.sessionType.displayName, `builtInAgents.${availability.agentId}.displayName`);
+			assertDisplayText(availability.sessionType.description, `builtInAgents.${availability.agentId}.description`);
+			builtInAgentIds.add(availability.agentId);
+			builtInSessionTypeIds.add(availability.sessionType.id);
+		}
 		if (new Set(active.map(registration => registration.agentId)).size !== active.length) {
 			throw new Error('Activated Agent registrations contain duplicate Agent IDs');
+		}
+		if (active.some(registration => builtInAgentIds.has(registration.agentId))) {
+			throw new Error('Product-built-in Agent identity conflicts with an activated external package');
 		}
 		for (const registration of active) {
 			const agent = this.resolveAgentRuntime(registration);
@@ -1334,8 +1369,9 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 
 	private resolveSessionTypeCatalog(
 		descriptors: ReadonlyMap<AgentId, IAgentDescriptor>,
+		agents: ReadonlyMap<AgentId, IAgent> = this.agents,
 	): Map<string, IAgentHostSessionTypeDescriptor> {
-		const activeAgents = Object.freeze([...this.agents].map(([agentId, agent]) => {
+		const activeAgents = Object.freeze([...agents].map(([agentId, agent]) => {
 			const descriptor = descriptors.get(agentId);
 			if (descriptor === undefined) {
 				throw new Error(`Agent Host Session type catalog has no descriptor for active Agent '${agentId}'`);
@@ -1381,12 +1417,13 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	private validateRootConfiguration(
 		descriptors: ReadonlyMap<AgentId, IAgentDescriptor>,
 		sessionTypes: readonly IAgentHostSessionTypeDescriptor[],
+		agents: ReadonlyMap<AgentId, IAgent> = this.agents,
 	): AgentConfigurationSchemaRegistry {
 		const modelConfigurationSchemas = cloneConfigurationSchemaRegistry(this.modelConfigurationSchemas);
-		if (descriptors.size !== this.agents.size) {
+		if (descriptors.size !== agents.size) {
 			throw new Error('Agent Host root configuration does not describe every active Agent');
 		}
-		for (const [agentId, agent] of this.agents) {
+		for (const [agentId, agent] of agents) {
 			const descriptor = descriptors.get(agentId);
 			if (
 				descriptor === undefined
@@ -1412,7 +1449,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				throw new Error(`Duplicate Agent Host Session type '${sessionType.id}'`);
 			}
 			typeIds.add(sessionType.id);
-			const agent = this.agents.get(sessionType.agentId);
+			const agent = agents.get(sessionType.agentId);
 			if (!agent || agent.registration.packageId !== sessionType.packageId) {
 				throw new Error(`Agent Host Session type '${sessionType.id}' has no exact Agent registration`);
 			}
@@ -1573,6 +1610,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 	private async reconcilePackageSessionAvailability(
 		affected: ReadonlySet<AgentId>,
 		sessionTypes: ReadonlyMap<string, IAgentHostSessionTypeDescriptor>,
+		agents: ReadonlyMap<AgentId, IAgent> = this.agents,
 	): Promise<{
 		readonly sessions: ReadonlyMap<AgentSessionId, IRuntimeSessionRecord>;
 		readonly actions: readonly HostStateAction[];
@@ -1586,7 +1624,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			if (session.materialized || [...session.chats.values()].some(chat => chat.materialized)) {
 				throw new Error(`Package mutation did not release retained Session '${sessionId}'`);
 			}
-			const activeAgent = this.agents.get(session.state.agentId);
+			const activeAgent = agents.get(session.state.agentId);
 			const lifecycle = activeAgent?.registration.packageId === session.state.packageId
 				? 'released' as const
 				: 'unavailable' as const;
@@ -1665,11 +1703,25 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				configuration.schema,
 				`Persisted Session '${record.state.id}'`,
 			);
-			sessions.set(record.state.id, {
-				state: record.state,
+			const coldBuiltIn = this.options.builtInAgents.owns(record.state.packageId, record.state.agentId);
+			const chats = new Map(record.chats.map(chat => {
+				const state = coldBuiltIn && chat.state.lifecycle !== 'unavailable'
+					? freezeChatState({ ...chat.state, lifecycle: 'unavailable' })
+					: chat.state;
+				return [state.id, { ...chat, state, materialized: false }] as const;
+			}));
+			const state = coldBuiltIn && record.state.lifecycle !== 'unavailable'
+				? Object.freeze({
+					...record.state,
+					lifecycle: 'unavailable' as const,
+					chats: Object.freeze([...chats.values()].map(chat => chatSummary(chat.state))),
+				})
+				: record.state;
+			sessions.set(state.id, {
+				state,
 				resume: record.resume,
 				materialized: false,
-				chats: new Map(record.chats.map(chat => [chat.state.id, { ...chat, materialized: false }])),
+				chats,
 			});
 		}
 		this.sessions = sessions;
@@ -1807,6 +1859,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		),
 		sessionTypes: ReadonlyMap<string, IAgentHostSessionTypeDescriptor> = this.sessionTypes,
 		agentDefaults: ReadonlyMap<AgentId, IAgentConfigurationState> = this.agentDefaults,
+		agents: ReadonlyMap<AgentId, IAgent> = this.agents,
 	): IAgentHostRootState {
 		return Object.freeze({
 			authority: this.options.authority,
@@ -1818,9 +1871,13 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			}),
 			packages: this.createPackageCatalogState(),
 			agents: Object.freeze([...descriptors.values()]),
-			agentRegistrations: Object.freeze([...this.agents.values()].map(agent => agent.registration)),
+			agentRegistrations: Object.freeze([...agents.values()].map(agent => agent.registration)),
 			agentDefaults: Object.freeze([...agentDefaults.values()]),
 			sessionTypes: Object.freeze([...sessionTypes.values()]),
+			builtInAgents: Object.freeze(this.options.builtInAgents.availability.map(availability => Object.freeze({
+				...availability,
+				state: agents.has(availability.agentId) ? 'ready' as const : 'cold' as const,
+			}))),
 		});
 	}
 
@@ -1934,7 +1991,10 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			&& registration.packageId === agent.registration.packageId
 			&& registration.revision === agent.registration.revision
 		));
-		if (active === undefined) {
+		if (
+			active === undefined
+			&& !this.options.builtInAgents.owns(agent.registration.packageId, agent.id)
+		) {
 			throw operationFailure('agentUnavailable', `Agent '${agentId}' registration is not active`);
 		}
 		return agent;
@@ -1942,6 +2002,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 
 	private runtimeMutationAgent(payload: IAgentHostMutationRequest['payload']): AgentId | undefined {
 		switch (payload.kind) {
+			case 'prepareBuiltInAgent':
 			case 'renameSession':
 			case 'renameChat':
 			case 'setSessionArchived':
@@ -2405,7 +2466,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			throw operationFailure('invalidState', 'Session configuration finalization requires reconciliation');
 		}
 		const execute = () => {
-				switch (request.payload.kind) {
+			switch (request.payload.kind) {
+				case 'prepareBuiltInAgent': return this.prepareBuiltInAgent(request);
 				case 'createSession': return this.createSession(connection, request);
 				case 'updateAgentDefaults': return this.updateAgentDefaults(request);
 				case 'updateSessionConfiguration': return this.updateSessionConfiguration(request);
@@ -2430,6 +2492,82 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		};
 		const agentId = this.runtimeMutationAgent(request.payload);
 		return agentId === undefined ? execute() : this.runLifecycleActivity(agentId, execute);
+	}
+
+	private async prepareBuiltInAgent(request: IAgentHostMutationRequest): Promise<IMutationExecution> {
+		const payload = request.payload;
+		if (payload.kind !== 'prepareBuiltInAgent') {
+			throw new Error('Mismatched built-in Agent preparation mutation');
+		}
+		const active = this.agents.get(payload.agent);
+		if (active !== undefined) {
+			if (!this.options.builtInAgents.owns(active.registration.packageId, active.id)) {
+				throw operationFailure('conflict', `Agent '${payload.agent}' is owned by an external package`);
+			}
+			return this.simpleMutationResult(request, {
+				hostSequence: this.catalog.hostSequence,
+				revisions: Object.freeze([]),
+			}, {
+				kind: 'prepareBuiltInAgent',
+				agent: active.id,
+				registration: active.registration.revision,
+			});
+		}
+
+		const prepared = await this.options.builtInAgents.prepare(payload.agent);
+		let committed = false;
+		try {
+			const agent = prepared.agent;
+			if (
+				agent.id !== payload.agent
+				|| !this.options.builtInAgents.owns(agent.registration.packageId, agent.id)
+				|| this.agents.has(agent.id)
+			) {
+				throw operationFailure('conflict', `Built-in Agent '${payload.agent}' preparation returned invalid ownership`);
+			}
+			const agents = new Map(this.agents);
+			agents.set(agent.id, agent);
+			const descriptors = new Map([...agents].map(([agentId, candidate]) => [agentId, candidate.descriptor.get()]));
+			const sessionTypes = this.resolveSessionTypeCatalog(descriptors, agents);
+			const agentDefaults = new Map(this.agentDefaults);
+			const [initialDefaults] = createInitialAgentDefaults(Object.freeze([agent.registration]));
+			agentDefaults.set(agent.id, initialDefaults);
+			const modelConfigurationSchemas = this.validateRootConfiguration(
+				descriptors,
+				Object.freeze([...sessionTypes.values()]),
+				agents,
+			);
+			const reconciled = await this.reconcilePackageSessionAvailability(
+				new Set([agent.id]),
+				sessionTypes,
+				agents,
+			);
+			const state = this.createRootState(descriptors, sessionTypes, agentDefaults, agents);
+			const hostCommit = await this.commitHostState(
+				reconciled.sessions,
+				[this.rootAction(state), ...reconciled.actions],
+				this.operationCause(request),
+				() => {
+					this.agents.set(agent.id, agent);
+					this.subscribeAgentActions(agent);
+					this.modelConfigurationSchemas = modelConfigurationSchemas;
+					this.replaceSessionTypes(sessionTypes);
+					prepared.commit();
+					committed = true;
+				},
+				this.catalog.backingRemovalOperations,
+				agentDefaults,
+			);
+			return this.simpleMutationResult(request, hostCommit, {
+				kind: 'prepareBuiltInAgent',
+				agent: agent.id,
+				registration: agent.registration.revision,
+			});
+		} finally {
+			if (!committed) {
+				prepared.rollback();
+			}
+		}
 	}
 
 	private async reconcileSessionConfigurationFinalization(
@@ -4366,13 +4504,25 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 
 	private packageBackingState(
 		sessions: ReadonlyMap<AgentSessionId, IRuntimeSessionRecord>,
+		externalOnly = true,
 	): {
 		readonly retainedBackingRecords: readonly IAgentPackageBackingRecord[];
 		readonly materializedBackings: readonly IAgentBackingIdentity[];
 	} {
 		const retainedBackingRecords: IAgentPackageBackingRecord[] = [];
 		const materializedBackings: IAgentBackingIdentity[] = [];
+		const externalAgents = externalOnly
+			? new Set(this.options.packageLifecycle.snapshot().activeRegistrations.map(registration => (
+				`${registration.packageId}\u0000${registration.agentId}`
+			)))
+			: undefined;
 		for (const session of sessions.values()) {
+			if (
+				externalAgents !== undefined
+				&& !externalAgents.has(`${session.state.packageId}\u0000${session.state.agentId}`)
+			) {
+				continue;
+			}
 			const sessionIdentity: IAgentBackingIdentity = Object.freeze({
 				packageId: session.state.packageId,
 				agentId: session.state.agentId,

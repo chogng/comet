@@ -15,7 +15,6 @@ import {
 	createAgentConfigurationStateRevision,
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
-	createAgentPackageContentDigest,
 	createAgentPackageRevision,
 	createAgentSessionId,
 	createAgentSubmissionId,
@@ -61,17 +60,6 @@ import {
 	CODEX_AGENT_WEB_SEARCH_MODE_PROPERTY,
 	createCodexAgentRegistrationRevision,
 } from 'cs/platform/agentHost/node/agents/codex/codexAgentDefinition';
-import {
-	CODEX_AGENT_SDK_EXECUTABLE_TARGET,
-	CODEX_AGENT_SDK_PROTOCOL_TARGET,
-	createCodexAgentPackageProduct,
-} from 'cs/platform/agentHost/node/agents/codex/codexAgentPackage';
-import { CODEX_AGENT_SDK_VERSION } from 'cs/platform/agentHost/node/agents/agentSdkProducts';
-import {
-	CODEX_GENERATED_PROTOCOL_FILE_COUNT,
-	CODEX_GENERATED_PROTOCOL_SDK_VERSION,
-	CODEX_GENERATED_PROTOCOL_SOURCE_DIGEST,
-} from 'cs/platform/agentHost/node/agents/codex/protocol/protocolMetadata';
 
 const packageRevision = createAgentPackageRevision('codex.app-server.test');
 const session = createAgentSessionId('codex-sdk-session');
@@ -412,49 +400,6 @@ async function createCodexTurnFixture(factory: TestCodexFactory, suffix: string)
 	};
 	return { agent, request, fixtureSession, fixtureChat, fixtureTurn };
 }
-
-test('Codex product binds Host execution to its exact native SDK and protocol dependencies', () => {
-	assert.equal(CODEX_AGENT_SDK_VERSION, CODEX_GENERATED_PROTOCOL_SDK_VERSION);
-	assert.ok(CODEX_GENERATED_PROTOCOL_FILE_COUNT > 0);
-	assert.match(CODEX_GENERATED_PROTOCOL_SOURCE_DIGEST, /^sha256:[0-9a-f]{64}$/);
-
-	const executableDigest = createAgentPackageContentDigest(`sha256:${'a'.repeat(64)}`);
-	const protocolDigest = createAgentPackageContentDigest(`sha256:${'c'.repeat(64)}`);
-	const product = createCodexAgentPackageProduct(
-		{ operatingSystem: 'darwin', architecture: 'arm64' },
-		{
-			contentDigest: createAgentPackageContentDigest(`sha256:${'b'.repeat(64)}`),
-			executable: { source: 'file:///verified/codex', contentDigest: executableDigest },
-			protocol: { source: 'file:///verified/codex-protocol.json', contentDigest: protocolDigest },
-		},
-		'/tmp/comet-codex-product-state',
-	);
-
-	assert.equal(product.execution, 'host');
-	assert.deepEqual(product.verifiedPackage.manifest.execution, { kind: 'host' });
-	assert.deepEqual(product.verifiedPackage.dependencyClosure.map(dependency => ({
-		target: dependency.target,
-		digest: dependency.digest,
-		executable: dependency.executable,
-		immutable: dependency.immutable,
-	})), [{
-		target: CODEX_AGENT_SDK_EXECUTABLE_TARGET,
-		digest: executableDigest,
-		executable: true,
-		immutable: true,
-	}, {
-		target: CODEX_AGENT_SDK_PROTOCOL_TARGET,
-		digest: protocolDigest,
-		executable: false,
-		immutable: true,
-	}]);
-	assert.deepEqual(product.credentialBindings, [{
-		provider: CODEX_AGENT_API_KEY_CREDENTIAL_PROVIDER,
-		scope: 'llm',
-		reference: CODEX_AGENT_API_KEY_CREDENTIAL_REFERENCE,
-		privilege: 'configured.model.api-key',
-	}]);
-});
 
 test('Codex Agent rejects empty and duplicate SDK model snapshots without a maintained fallback', async () => {
 	for (const [name, data] of [

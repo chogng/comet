@@ -189,7 +189,7 @@ class TestSessionsManagementService implements ISessionsManagementService {
 		}
 		return undefined;
 	}
-	createSessionDraft(_providerId: string, _options: ISessionDraftOptions): ISession {
+	async createSessionDraft(_providerId: string, _options: ISessionDraftOptions): Promise<ISession> {
 		const draft = this.createDraft?.();
 		if (!draft) { throw new Error('No draft configured.'); }
 		this.draftSession.set(draft, undefined);
@@ -300,7 +300,7 @@ test('Sessions view service is registered exactly once', () => {
 	assert.equal(registrations.length, 1);
 });
 
-test('SessionsService drives the explicit new slot and honors preserveFocus', () => {
+test('SessionsService drives the explicit new slot and honors preserveFocus', async () => {
 	const session = createSession('open');
 	const { store, part, service } = createHarness([session.model]);
 	try {
@@ -313,7 +313,7 @@ test('SessionsService drives the explicit new slot and honors preserveFocus', ()
 		assert.equal(part.focusCalls.at(-1), active);
 
 		const focusCount = part.focusCalls.length;
-		service.openNewSession({ kind: OpenNewSessionKind.Empty, preserveFocus: true });
+		await service.openNewSession({ kind: OpenNewSessionKind.Empty, preserveFocus: true });
 		assert.equal(service.activeSession.get(), undefined);
 		assert.equal(part.focusCalls.length, focusCount);
 		assert.throws(
@@ -328,12 +328,12 @@ test('SessionsService drives the explicit new slot and honors preserveFocus', ()
 	}
 });
 
-test('SessionsService owns explicit draft creation, restoration, and discard', () => {
+test('SessionsService owns explicit draft creation, restoration, and discard', async () => {
 	const draft = createSession('draft', SessionStatus.Draft);
 	const { store, management, service } = createHarness();
 	management.createDraft = () => draft.model;
 	try {
-		assert.equal(service.openNewSession({
+		assert.equal(await service.openNewSession({
 			kind: OpenNewSessionKind.Draft,
 			providerId: 'provider.test',
 			draft: {
@@ -348,7 +348,7 @@ test('SessionsService owns explicit draft creation, restoration, and discard', (
 			() => service.closeChat(visibleDraft, draft.chat),
 			/must be discarded instead of closing its Chat/,
 		);
-		service.openNewSession({ kind: OpenNewSessionKind.Empty });
+		await service.openNewSession({ kind: OpenNewSessionKind.Empty });
 		assert.equal(service.activeSession.get(), visibleDraft);
 		service.closeSession(visibleDraft);
 		assert.deepEqual(management.discardedDrafts, [draft.model]);
@@ -358,7 +358,7 @@ test('SessionsService owns explicit draft creation, restoration, and discard', (
 	}
 });
 
-test('SessionsService rejects a draft without exactly one explicit User Chat', () => {
+test('SessionsService rejects a draft without exactly one explicit User Chat', async () => {
 	const empty = createSession('draft-empty', SessionStatus.Draft);
 	empty.chats.set([], undefined);
 	const multiple = createSession('draft-multiple', SessionStatus.Draft);
@@ -379,7 +379,7 @@ test('SessionsService rejects a draft without exactly one explicit User Chat', (
 		const { store, management, service } = createHarness();
 		management.createDraft = () => draft.model;
 		try {
-			assert.throws(() => service.openNewSession({
+			await assert.rejects(service.openNewSession({
 				kind: OpenNewSessionKind.Draft,
 				providerId: 'provider.test',
 				draft: {
@@ -395,13 +395,13 @@ test('SessionsService rejects a draft without exactly one explicit User Chat', (
 	}
 });
 
-test('SessionsService preserves the visible wrapper across explicit draft replacement', () => {
+test('SessionsService preserves the visible wrapper across explicit draft replacement', async () => {
 	const draft = createSession('replace', SessionStatus.Draft);
 	const committed = createSession('replace', SessionStatus.Running);
 	const { store, management, service } = createHarness();
 	management.createDraft = () => draft.model;
 	try {
-		service.openNewSession({
+		await service.openNewSession({
 			kind: OpenNewSessionKind.Draft,
 			providerId: 'provider.test',
 			draft: {
@@ -508,7 +508,7 @@ test('SessionsService retains the visible Session when its only Chat is deleted 
 	}
 });
 
-test('SessionsService focuses the authoritative fallback after provider and draft removal', () => {
+test('SessionsService focuses the authoritative fallback after provider and draft removal', async () => {
 	const first = createSession('fallback-first');
 	const second = createSession('fallback-second');
 	const draft = createSession('fallback-draft', SessionStatus.Draft);
@@ -531,7 +531,7 @@ test('SessionsService focuses the authoritative fallback after provider and draf
 		assert.equal(part.focusCalls.at(-1), firstVisible);
 		assert.deepEqual(part.calls.slice(-2), ['update', 'focus']);
 
-		service.openNewSession({
+		await service.openNewSession({
 			kind: OpenNewSessionKind.Draft,
 			providerId: 'provider.test',
 			draft: {
@@ -546,7 +546,7 @@ test('SessionsService focuses the authoritative fallback after provider and draf
 		assert.equal(part.focusCalls.length, focusCountBeforeDraftClose + 1);
 		assert.equal(part.focusCalls.at(-1), firstVisible);
 
-		service.openNewSession({
+		await service.openNewSession({
 			kind: OpenNewSessionKind.Draft,
 			providerId: 'provider.test',
 			draft: {

@@ -122,7 +122,7 @@ const modelId = createAgentModelId('model-a');
 const modelRevision = createAgentModelDescriptorRevision('model-a.v1');
 const toolSchema = createAgentToolSchemaProfileId('comet.tools.v1');
 const presetId = createAgentExecutionPresetId('automatic');
-const protocolVersion = createAgentHostProtocolVersion('3');
+const protocolVersion = createAgentHostProtocolVersion('4');
 const authorityId = createAgentHostAuthorityId('local');
 const optionalPackageId = createAgentPackageId('optional-agent');
 const optionalAgentId = createAgentId('optional-agent');
@@ -908,6 +908,11 @@ async function createAuthority(
 	contentResources: Pick<IAgentContentResourcePort, 'open' | 'release'> = new TestTurnContentResources(),
 	authentication?: IAgentAuthenticationPort,
 	sessionTypeCatalog: IAgentHostAuthorityOptions['sessionTypeCatalog'] = createSessionTypeCatalog(),
+	builtInAgents: IAgentHostAuthorityOptions['builtInAgents'] = {
+		availability: Object.freeze([]),
+		prepare: async requested => { throw new Error(`Unexpected built-in Agent preparation '${requested}'.`); },
+		owns: () => false,
+	},
 ): Promise<AgentHostAuthority> {
 	const lifecycle = packageLifecycle ?? await createPackageLifecycle();
 	return AgentHostAuthority.create({
@@ -931,6 +936,7 @@ async function createAuthority(
 				return resolved;
 			},
 		},
+		builtInAgents,
 		packageLifecycle: lifecycle,
 		...(authentication === undefined ? {} : { authentication }),
 		catalogStore: store,
@@ -1032,6 +1038,97 @@ function referenceAttachment(connection: ReturnType<typeof createAgentHostClient
 }
 
 suite('AgentHostAuthority', { concurrency: false }, () => {
+	test('publishes cold built-in availability and atomically prepares its exact runtime', async () => {
+		const store = new MemoryCatalogStore();
+		const cometAgent = new TestAgent(registration, descriptor);
+		const optionalAgent = new TestAgent(optionalRegistrationV1, optionalDescriptor);
+		let createCount = 0;
+		let commitCount = 0;
+		let rollbackCount = 0;
+		const builtInAgents: IAgentHostAuthorityOptions['builtInAgents'] = {
+			availability: Object.freeze([Object.freeze({
+				packageId: optionalSessionType.packageId,
+				agentId: optionalSessionType.agentId,
+				sessionType: Object.freeze({
+					id: optionalSessionType.id,
+					packageId: optionalSessionType.packageId,
+					agentId: optionalSessionType.agentId,
+					displayName: optionalSessionType.displayName,
+					description: optionalSessionType.description,
+					capabilities: optionalSessionType.capabilities,
+				}),
+			})]),
+			owns: (owner, agent) => owner === optionalSessionType.packageId && agent === optionalAgentId,
+			prepare: async requested => {
+				assert.equal(requested, optionalAgentId);
+				createCount += 1;
+				return Object.freeze({
+					agent: optionalAgent,
+					commit: () => { commitCount += 1; },
+					rollback: () => { rollbackCount += 1; },
+				});
+			},
+		};
+		const authority = await createAuthority(
+			store,
+			cometAgent,
+			32,
+			undefined,
+			new TestToolTurnAuthority(),
+			Object.freeze([cometAgent]),
+			new TestTurnContentResources(),
+			undefined,
+			createSessionTypeCatalog(),
+			builtInAgents,
+		);
+		const connection = await initialize(authority, 'built-in-client', [getAgentHostRootChannelId()]);
+		try {
+			const initial = await connection.setSubscriptions({
+				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
+			});
+			const initialRoot = initial.snapshots[0];
+			assert.equal(initialRoot?.kind, 'root');
+			if (initialRoot?.kind !== 'root') {
+				throw new Error('Built-in Agent initial root snapshot is missing.');
+			}
+			assert.equal(initialRoot.state.builtInAgents[0].state, 'cold');
+			assert.equal(initialRoot.state.sessionTypes.some(type => type.agentId === optionalAgentId), false);
+
+			const prepared = await mutate(connection, 'prepare-built-in', Object.freeze({
+				kind: 'prepareBuiltInAgent',
+				agent: optionalAgentId,
+			}));
+			assert.equal(prepared.outcome.kind, 'succeeded');
+			assert.equal(createCount, 1);
+			assert.equal(commitCount, 1);
+			assert.equal(rollbackCount, 0);
+
+			const ready = await connection.setSubscriptions({
+				subscriptions: Object.freeze([getAgentHostRootChannelId()]),
+			});
+			const readyRoot = ready.snapshots[0];
+			assert.equal(readyRoot?.kind, 'root');
+			if (readyRoot?.kind !== 'root') {
+				throw new Error('Built-in Agent ready root snapshot is missing.');
+			}
+			assert.equal(readyRoot.state.builtInAgents[0].state, 'ready');
+			assert.equal(readyRoot.state.sessionTypes.some(type => type.agentId === optionalAgentId), true);
+			assert.equal(readyRoot.state.packages.installedPackages.some(pkg => pkg.packageId === optionalSessionType.packageId), false);
+
+			const repeated = await mutate(connection, 'prepare-built-in-repeated', Object.freeze({
+				kind: 'prepareBuiltInAgent',
+				agent: optionalAgentId,
+			}));
+			assert.equal(repeated.outcome.kind, 'succeeded');
+			assert.equal(createCount, 1);
+		} finally {
+			await authority.close({
+				operation: createAgentHostOperationId('close-built-in-test'),
+				payloadDigest: createAgentHostPayloadDigest(`sha256:${'9'.repeat(64)}`),
+			});
+		}
+	});
+
 	test('rejects duplicate Session types resolved by the active Agent catalog', async () => {
 		const agent = new TestAgent();
 		await assert.rejects(createAuthority(

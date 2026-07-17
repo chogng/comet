@@ -5,7 +5,6 @@ import path from 'node:path';
 
 import * as esbuild from 'esbuild';
 
-import { packageAgentSdks } from '../agent-sdk/package.ts';
 import { resolveProjectPath } from './util.ts';
 
 type PackageJson = {
@@ -106,13 +105,11 @@ async function createElectronBuildOptions(plugins: esbuild.Plugin[] = []) {
 }
 
 export async function buildElectron() {
-  await packageAgentSdks();
   await fsPromises.rm(distElectronDir, { force: true, recursive: true });
   await esbuild.build(await createElectronBuildOptions());
 }
 
 export async function watchElectronBuild(onBuildSuccess: () => void) {
-  await packageAgentSdks();
   await fsPromises.rm(distElectronDir, { force: true, recursive: true });
 
   const initialBuilds = new Set<number>();

@@ -86,12 +86,6 @@
     "extraMetadata": {
       "main": "dist-electron/code/electron-main/main.js"
     },
-    "extraResources": [
-      {
-        "from": "dist-agent-sdk",
-        "to": "agent-sdk"
-      }
-    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
