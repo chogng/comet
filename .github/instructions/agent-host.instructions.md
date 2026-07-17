@@ -93,10 +93,15 @@ binding, target-backed Tools, or lazy Feature operations.
   values resolve only through that active Turn authority, are never copied into
   configuration, profiles, catalogs, logs, or diagnostics, and have no
   alternate credential source.
-- Agent implementations own their execution strategy, capabilities, opaque resume
-  data, SDK or model-provider calls, event conversion, and Tool projection.
-  The Comet Agent owns Comet's model and Tool orchestration loop. Agents
-  never import Sessions, Workbench Chat, UI, or Agent Host client-connection
+- Agent implementations own their execution strategy, capabilities, opaque
+  resume data, native control operations, event conversion, and Tool
+  projection. An SDK-backed Agent treats its installed SDK's orchestration as
+  authoritative: it does not recreate the SDK's model loop, native Tool loop,
+  planning, tasks, subagents, background work, compaction, or retry behavior.
+  It maps those native behaviors into canonical Comet behavior state and maps
+  addressed Host interactions back into the exact native request. The Comet
+  Agent alone owns Comet's model and Tool orchestration loop. Agents never
+  import Sessions, Workbench Chat, UI, or Agent Host client-connection
   implementations.
 - Before attachment and Tool-set preparation, resolve the normalized user or
   product execution selection through the common `IAgent` execution-profile
@@ -105,12 +110,17 @@ binding, target-backed Tools, or lazy Feature operations.
   secret, Tool set, executor, runtime endpoint, Host deadline, cancellation
   identity, resume state, or SDK-native object. Comet, Copilot, Claude, Codex,
   and later Agents use this same port.
-- The exact accepted Tool-set revision travels with the Turn request. Do not
-  add a mutable client-origin Tool list beside the Turn. Agent implementations project
-  the canonical set internally; the Comet Agent consumes it directly and
-  invokes Tools through the Host Tool Execution Port. SDK aliases, dynamic
-  functions, private MCP bridges, and model-provider formats never change
-  canonical Tool identity or executor.
+- The exact accepted Comet-contributed Tool-set revision travels with the Turn
+  request. Do not add a mutable client-origin Tool list beside the Turn. Agent
+  implementations project that contributed set through the SDK's supported
+  extension surface; the Comet Agent consumes it directly and invokes Tools
+  through the Host Tool Execution Port. SDK aliases, dynamic functions,
+  private MCP bridges, and model-provider formats never change the canonical
+  identity or executor of a contributed Tool. SDK-native Tools and reserved
+  orchestration operations are not fabricated as contributed registrations:
+  the SDK remains their execution owner and the Agent maps their observable
+  lifecycle, approval, input, result, and side effects into canonical Comet
+  behavior state.
 - Editor, Article, Browser, and other higher-layer capabilities cross the Host
   boundary only through typed bounded context, content-resource operations, or
   canonical Tool calls. Their implementations remain with the Feature owner.
@@ -159,10 +169,12 @@ binding, target-backed Tools, or lazy Feature operations.
 - Tool input and output use versioned Comet Tool Schema Profiles. Agents and
   Comet model implementations declare exact projection capabilities; lossy
   schema conversion or silent constraint removal is forbidden.
-- Every model-visible Tool, including fixed SDK-native Tools, appears in that
-  canonical Tool set. An Agent declares whether it supports per-Turn Tool sets,
-  requires private SDK rebinding, or exposes a fixed set, and incompatible
-  selection fails explicitly.
+- Every Comet-contributed model-visible Tool appears in the accepted canonical
+  Tool set. An Agent declares whether it supports per-Turn contributed Tool
+  sets or requires private SDK rebinding, and incompatible selection fails
+  explicitly. SDK-native Tools remain in the SDK-native capability surface;
+  disabling or replacing them to make them resemble Host registrations is
+  forbidden.
 - One Host Tool Execution Port routes every call to its exact registered
   executor. Connected client executors publish and consume only canonical Tool
   data; they are not an SDK conversion layer. The client connection carries

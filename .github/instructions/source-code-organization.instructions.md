@@ -144,8 +144,11 @@ product-maintained Claude or Codex SDK integrations implement it directly under
 implement the language-neutral Agent Runtime Protocol and join through
 `IAgentRuntimeConnection`; generic connection code lives under
 `cs/platform/agentHost/node/runtime`, not in Agent-specific Sessions or Feature
-code. SDK and model-provider Tool formats, aliases, call conversion, result
-encoding, and Comet orchestration remain inside their owning Agent. No
+code. An SDK-backed Agent maps its SDK-owned orchestration and native behavior
+into the common Comet behavior substrate; only `CometAgent` owns Comet
+orchestration. SDK and model-provider Tool formats, aliases, call conversion,
+result encoding, and native event correlation remain inside their owning
+Agent. No
 parallel Tool conversion or execution layer exists in Feature contributions.
 Agent Host contracts, connected-runtime support, and the in-repository
 Host Agents belong in this subsystem rather than a parallel

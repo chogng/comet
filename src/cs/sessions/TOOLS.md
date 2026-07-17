@@ -2,8 +2,10 @@
 
 ## Overview
 
-A Tool is Comet's canonical model-facing function contract. Tool semantics,
-Agent integration, and execution location are independent:
+A Comet-contributed Tool is Comet's canonical model-facing function contract.
+It is added to an Agent through the Agent's supported extension surface and
+executes through an exact Comet-owned executor. Tool semantics, Agent
+integration, and execution location are independent:
 
 ```text
 Tool contribution registers canonical semantics and one exact executor
@@ -17,9 +19,15 @@ Tool contribution registers canonical semantics and one exact executor
     → owning runtime returns the result to the model execution
 ```
 
-The architecture defines one Tool model and one execution lifecycle. `client`,
-`host`, `agent`, and `mcp` identify executor routes; they do not define parallel
-Tool types.
+The architecture defines one model and execution lifecycle for
+Comet-contributed Tools. `client`, `host`, `agent`, and `mcp` identify executor
+routes; they do not define parallel Tool types.
+
+SDK-native Tools and reserved harness operations are a separate ownership
+case. The SDK selects, orchestrates, and executes them. Their observable
+lifecycle, permissions, input, output, terminal and file effects map into
+canonical Comet Turn behavior, but they do not acquire a Host registration or
+executor merely because Comet displays them as Tool activity.
 
 ## Terms
 
@@ -47,7 +55,7 @@ is the other one's transport or lifecycle owner.
 
 ## Independent axes
 
-The addressed Agent determines how canonical Tools reach the model:
+The addressed Agent determines how Comet-contributed Tools reach the model:
 
 - the Codex runtime projects them into Codex-native functions;
 - the Claude runtime projects them into Claude-native or private MCP Tools;
@@ -65,6 +73,13 @@ The Tool registration independently determines where a call executes:
 Adding an Agent runtime does not change Feature Tool descriptors or
 executors. Adding a Tool or executor does not add SDK-format conversion outside
 the owning Agent runtime.
+
+The SDK independently determines its native Tool catalog and reserved
+orchestration operations. An SDK-backed Agent does not disable, replace, or
+reimplement that catalog to force it through the contributed Tool registry.
+Comet policy may constrain native execution through the SDK's own permission,
+sandbox, hook, or configuration surface, and Comet records the resulting
+canonical activity and side effects without claiming to be the executor.
 
 ## Canonical Tool contract
 
@@ -199,10 +214,11 @@ synchronization, rebinding, or restart performs it inside its Agent
 before starting that Turn. A runtime that cannot enforce the exact accepted set
 rejects execution explicitly.
 
-Every model-visible Tool appears in the accepted canonical snapshot. Fixed
-SDK-native Tools also require canonical descriptors and registrations. An Agent
-never adds, omits, or replaces a Tool based on its own identity or an SDK
-default.
+Every Comet-contributed model-visible Tool appears in the accepted canonical
+snapshot. An Agent never adds, omits, or replaces a contributed Tool based on
+its own identity or an SDK default. SDK-native Tools do not enter that snapshot;
+their availability is part of the Agent's native behavior capability and
+configuration, and their runtime activity maps into canonical Turn state.
 
 ## Agent integration
 
@@ -216,14 +232,18 @@ that boundary.
 
 An Agent that uses an SDK owns:
 
-- lossless projection into the SDK's native function, Tool, or private MCP
-  surface;
+- preservation of the SDK-owned orchestration and native Tool surface;
+- lossless projection of Comet-contributed Tools into the SDK's dynamic
+  function, extension Tool, or private MCP surface;
 - deterministic SDK-visible aliases that satisfy its naming rules;
 - a bijective mapping from aliases to exact canonical registrations;
 - package-private SDK loading, session binding, rebind, restart, and lifetime
   mechanics after the owning Agent package is activated;
 - normalization of SDK call identity, input, progress, and cancellation;
 - conversion of canonical results into the matching SDK call;
+- normalization of SDK-native Tool activity, permissions, user input, output,
+  terminal state, and side effects into canonical Comet behavior without
+  assigning a contributed registration or Host executor;
 - truthful projection capabilities and limits.
 
 SDK descriptors, callbacks, call handles, and result objects remain inside the
@@ -246,7 +266,8 @@ define product Tool identity, policy, execution routing, or Host call state.
 
 ## Tool Execution Port
 
-Agent Host owns one canonical Tool Execution Port for every executor kind. It:
+Agent Host owns one canonical Tool Execution Port for every executor kind of a
+Comet-contributed Tool. It:
 
 - validates the exact Turn, Tool set, descriptor, registration, input schema,
   target, permission, deadline, and call identity;
@@ -260,6 +281,14 @@ Agent Host owns one canonical Tool Execution Port for every executor kind. It:
 Host, Agent, MCP, and connected-client executors implement this same semantic
 contract. Transport and lifetime mechanics may differ behind the port, but
 there is no executor-specific Tool call or result model.
+
+An SDK-native Tool does not pass through this port. The SDK remains its
+execution owner. When the SDK requests permission or user input, the owning
+Agent maps that interaction to the dedicated Host contract and returns the
+exact answer to the same native request. When the SDK reports command output,
+file changes, progress, or a result, the Agent maps those events into canonical
+Turn behavior. The Host validates and persists that behavior but does not
+execute the native Tool a second time.
 
 When the addressed Agent runtime is connected, its canonical call reaches the
 Host through the Agent Runtime Protocol and its canonical result returns over
@@ -338,7 +367,7 @@ contract. Private encoding does not decide product semantics.
 |---|---|---|
 | Trigger | explicit Add to Chat | model or Agent invocation during an accepted Turn |
 | Purpose | immutable message context | explicit read, mutation, or external operation |
-| Agent visibility | normalized message input | accepted canonical Tool set |
+| Agent visibility | normalized message input | accepted canonical contributed Tool set |
 | Content timing | version binds before Host acceptance | result exists only when the call executes |
 | Permission | publication and bounded read lease | per-call safety and confirmation policy |
 | Persistence | stored with the user message | call and result stored in Turn history |
@@ -349,10 +378,14 @@ The complete attachment contract is defined in
 
 ## Persistence and privacy
 
-Canonical history stores Tool ID, descriptor and Tool-set revisions,
-registration and executor attribution, bounded auditable input, confirmation
-outcome, terminal result, errors, and target metadata. SDK aliases, native Tool
-objects, callbacks, credentials, connection-local handles, and provider event
+Canonical history for contributed Tools stores Tool ID, descriptor and
+Tool-set revisions, registration and executor attribution, bounded auditable
+input, confirmation outcome, terminal result, errors, and target metadata.
+Canonical native Tool activity stores its Agent-owned native activity kind,
+stable canonical activity identity, bounded display and audit data,
+interaction outcomes, terminal state, and side-effect references without a
+fabricated registration or executor. SDK aliases, native Tool objects,
+callbacks, credentials, connection-local handles, and raw provider event
 payloads remain private.
 
 Tool schemas, inputs, outputs, and target metadata are untrusted and bounded.
@@ -403,10 +436,14 @@ Workbench Feature implementation.
 ## Invariants
 
 - Tool semantics, Agent projection, and execution location are separate.
-- The architecture has no executor-specific Tool descriptor, call, or result
-  type.
-- Every model-visible Tool belongs to one accepted canonical Tool-set revision.
-- Every model call maps bijectively to one exact canonical registration.
+- The architecture has no executor-specific contributed Tool descriptor, call,
+  or result type.
+- Every Comet-contributed model-visible Tool belongs to one accepted canonical
+  Tool-set revision.
+- Every contributed Tool call maps bijectively to one exact canonical
+  registration.
+- SDK-native Tools remain SDK-owned and map to canonical Tool activity without
+  fabricated Host registrations or execution through the Tool Execution Port.
 - SDK-specific formats remain inside the owning Agent runtime.
 - Agent package installation is separate from Tool preparation and execution;
   neither a Tool nor a Turn can auto-install an SDK-backed Agent.

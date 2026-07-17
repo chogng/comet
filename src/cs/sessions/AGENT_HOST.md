@@ -2,9 +2,11 @@
 
 ## Overview
 
-Agent Host is Comet's common execution boundary for every Agent. It separates
-Host placement, Agent package execution, Agent strategy, product
-Session and Chat models, and Workbench Chat presentation.
+Agent Host is Comet's common behavior and execution boundary for every Agent.
+It supplies the product substrate for identity, state, interaction,
+persistence, connection, and presentation while keeping each Agent's
+orchestration authority separate from Host placement, package execution,
+product Session and Chat models, and Workbench Chat presentation.
 
 ```text
 Sessions application
@@ -94,7 +96,8 @@ The environment-neutral protocol and Node Agent Host own:
 - the Session catalog and each Session's Chat catalog;
 - normalized canonical turn state and ordered action history;
 - explicit create, materialize, release, and delete lifecycle;
-- request routing, queuing, cancellation, steering, and state publication;
+- request routing, committed queue state, addressed cancellation and steering
+  dispatch, and state publication;
 - dynamic Agent and Session configuration;
 - Agent authentication requests, tool calls, permission requests, terminals,
   resources, and changesets;
@@ -114,11 +117,60 @@ endpoint owns its execution strategy:
 - resolve a normalized execution selection into one bounded immutable execution
   profile before Host request preparation;
 - consume normalized Host Turn requests, including the exact Tool-set revision;
-- emit ordered canonical Agent Host actions;
+- emit ordered canonical Agent Host behavior actions and addressed interactive
+  requests;
 - expose models, configuration, authentication requirements, and capabilities;
 - persist or reconstruct Agent-specific history and opaque resume data;
 - integrate Tool calls, results, permissions, and input requests through Host
   contracts.
+
+### Behavior substrate and orchestration authority
+
+The common Agent Host contract is a behavior substrate, not a common Agent
+loop. It represents the product-visible semantics needed by Sessions, Chat,
+persistence, replay, remote connections, and UI without prescribing how an
+Agent decides its next step.
+
+An SDK-backed Agent treats the installed SDK as the authority for its model
+loop, native Tools, planning, tasks, subagents, background work, compaction,
+retry behavior, context management, and terminal outcome. Its direct `IAgent`
+implementation performs a bidirectional semantic mapping:
+
+```text
+Host Turn and addressed user operations
+    → exact SDK-native session, turn, control, permission, and input calls
+        → SDK-owned orchestration
+            → native messages, notifications, callbacks, and requests
+                → canonical Comet behavior actions and interactions
+```
+
+The mapping preserves stable native-to-canonical identity for every Session,
+Chat, Turn, response part, Tool activity, task, child Chat, permission, and
+input request that requires correlation. Semantic native events are mapped or
+rejected explicitly; they are never silently discarded, flattened into
+generic text, or reinterpreted by a Host-owned reasoning loop. Bounded
+display-only or diagnostic events may remain ephemeral only when the mapping
+declares that classification for the exact SDK version.
+
+Canonical behavior includes durable Turn state, structured response parts,
+native and contributed Tool activity, plans, tasks, child Chats, terminal and
+file activity, permissions, user input, usage, context and compaction state,
+background activity, status, errors, and terminal outcomes. The contract is
+the product union of supported Agent behavior, not the least common
+denominator of the currently installed Agents. Capabilities declare which
+control operations one Agent supports; Host and UI code do not branch on Agent
+ID to interpret behavior.
+
+Interactive mapping is bidirectional. A native permission, confirmation, or
+user-input request blocks on one canonical Host request carrying both stable
+Host identity and private native correlation. The exact Host answer returns to
+that same SDK request. Cancellation, terminal Turn state, release,
+reconnection, and process loss retire or reconcile the same request; they do
+not invent another request or auto-answer it through a generic fallback.
+
+`CometAgent` is a peer on this substrate, but unlike an SDK-backed Agent it owns
+Comet's native model-and-Tool orchestration loop. Its loop is not a template
+for Claude, Codex, or another SDK integration.
 
 Product-bundled Comet and product-maintained SDK Agents implement `IAgent`
 directly in Agent Host Node. A genuinely external endpoint connects through
@@ -137,9 +189,10 @@ it through a declared edge inside the package update transaction. Host code
 never hands opaque state to an unqualified package or Agent and never tries
 another endpoint after materialization fails.
 
-An Agent that uses an SDK additionally owns its SDK bindings, request and event
-mapping, Tool projection, aliases, callbacks, caches, and SDK resume
-data after its package is installed and activated. Package discovery,
+An Agent that uses an SDK additionally owns its SDK bindings, exhaustive
+request, event, and interaction mapping, native control calls, contributed
+Tool projection, native Tool activity mapping, aliases, callbacks, caches, and
+SDK resume data after its package is installed and activated. Package discovery,
 verification, installation, update, and uninstall belong to Agent Host rather
 than the Agent. SDK types never escape the Agent. Direct or connected execution
 does not change its Agent, Session, Chat, Turn, Tool,
@@ -781,10 +834,10 @@ package ownership from the currently active Agent registry alone.
 bound interaction targets, and one immutable Host Turn execution binding. That
 binding contains the resolved Agent execution profile, complete model
 configuration, and exact authorized credential references, and is the sole
-authority for the Agent registration, Tool-set revision, deadline,
+authority for the Agent registration, contributed Tool-set revision, deadline,
 cancellation identity, output constraints, and optional resume state. An Agent
-receives that one common request and projects it into its SDK, model provider,
-or internal orchestration engine. Neither a direct nor connected Agent queries
+receives that one common request and maps it into its SDK-owned orchestration,
+model provider, or native Comet engine. Neither a direct nor connected Agent queries
 Workbench state or reconstructs the
 profile, model configuration, credentials, or Tool set from Agent identity.
 
@@ -927,6 +980,14 @@ typed substate within the addressed Turn. A terminal action closes the Turn
 stream. Later SDK events for that Turn are rejected and reported; they do not
 reopen or mutate it.
 
+For an SDK-backed Agent, queued, running, waiting, cancelling, and terminal
+transitions are projections of the SDK's native state and interactions. Agent
+Host commits, validates, persists, and publishes those transitions; it does
+not run a second scheduler or infer completion because a Host call returned.
+The native terminal event remains authoritative unless an exact Host
+cancellation or process-loss contract produces the canonical cancelled or
+failed outcome.
+
 Chat descriptors declare whether an active Turn may coexist with queued user
 turns and whether steering is supported. Without queue capability, another
 submission while a Turn is active is rejected before acceptance. A queued user
@@ -1036,11 +1097,16 @@ Agent's only Host-facing surface is the Agent Runtime Protocol.
    external implementation.
 4. Define truthful descriptors, configuration schemas, model configuration,
    capabilities, Tool Schema Profiles, and resume schemas. Keep Agent-specific
-   SDK or model-provider types, clients, native configuration, caches, event
-   mapping, authentication, and resume data inside the Agent.
-5. Consume the exact Turn-bound Tool set. The Agent owns lossless projection,
-   deterministic aliases, call normalization, result encoding, and invocation
-   through the Host Tool Execution Port.
+   SDK or model-provider types, clients, native configuration, caches,
+   exhaustive behavior mapping, native correlation, authentication, and resume
+   data inside the Agent.
+5. Preserve the SDK's orchestration and native Tool surface. Map its semantic
+   events and interactive requests into canonical behavior, and call its
+   supported control operations directly. Consume the exact Turn-bound
+   Comet-contributed Tool set through the SDK's extension surface; the Agent
+   owns lossless projection, deterministic aliases, call normalization, result
+   encoding, and invocation through the Host Tool Execution Port for that
+   contributed set.
 6. Activate the package transaction atomically; the Host registry rejects
    duplicate, partial, undeclared, or dual-form Agent registrations.
 7. Add package lifecycle and Agent contract tests for install, package-wide
@@ -1122,13 +1188,18 @@ Agent's only Host-facing surface is the Agent Runtime Protocol.
   identities, and SDK or model-provider types never escape their owning
   Agent.
 - Every Agent owns its Tool projection. The Comet Agent consumes
-  canonical Tools and projects them only at its model-provider boundary.
-  Feature and executor implementations never convert Tools into
-  model-provider or SDK formats.
+  canonical contributed Tools and projects them only at its model-provider
+  boundary. SDK-backed Agents preserve SDK-native Tools and project only
+  Comet-contributed Tools through the SDK's supported extension surface.
+  Feature and executor implementations never convert Tools into model-provider
+  or SDK formats.
 - `IAgentHostConnection` and `IAgentRuntimeConnection` are distinct protocol
   boundaries and never substitute for one another.
-- Every model-visible Tool is represented in the accepted canonical Tool-set
-  revision; an Agent never silently adds or omits a Tool.
+- Every Comet-contributed model-visible Tool is represented in the accepted
+  canonical Tool-set revision; an Agent never silently adds or omits a
+  contributed Tool. SDK-native Tools remain in the native orchestration
+  surface and map to canonical Tool activity without being claimed as Host
+  registrations.
 - Higher-layer Feature objects cross the Host boundary only as normalized
   bounded context, content-resource operations, or model-facing Tool calls.
 - Attachments never register or expose Tools or grant mutation authority.

@@ -171,6 +171,38 @@ migration preserves that boundary for later product-maintained SDKs:
 `src/cs/code` contains application startup only, with no forwarding module,
 provider runtime entry, or root-`node_modules` package construction.
 
+The current Claude and Codex implementations nevertheless use the wrong
+semantic boundary. They reduce both SDKs to a Comet-shaped model-and-Tool loop:
+the common Agent action contract represents only coarse Turn state, text,
+reasoning, contributed Tool calls and terminal state; Claude disables its
+native Tool, Skill, and setting surfaces and ignores most SDK messages; Codex
+subscribes to only a small event subset and answers native command, file, and
+permission requests without an addressed Comet interaction. Forking and
+steering are reported unsupported even where the installed SDK exposes native
+operations. This is removed directly rather than extended as a compatibility
+path.
+
+Claude Agent SDK and Codex app-server are orchestration authorities, not model
+providers inside a Comet-owned loop. The remaining migration establishes
+Comet as their common behavior substrate and gives each direct Agent an
+exhaustive bidirectional mapping over its exact pinned SDK version:
+
+| Native behavior family | Canonical Comet ownership |
+|---|---|
+| SDK Session or thread, Turn, resume, fork, steer, interrupt, and terminal outcome | Agent maps native identity and controls; Host owns canonical identity, committed state, persistence, and routing |
+| streamed message, reasoning, status, retry, usage, context, and compaction | Agent maps native events into ordered canonical Turn behavior |
+| SDK-native Tool, command, file change, search, MCP, and reserved harness operation | SDK owns orchestration and execution; Agent maps activity, interaction, output, and side effects into canonical Turn behavior |
+| Comet-contributed Tool | Host owns descriptor, registration, executor, and result; Agent adds it through the SDK extension surface and correlates the native call |
+| permission, approval, elicitation, and structured user input | Agent maps one native request to one addressed Host interaction and returns the exact answer to the same request |
+| plan, task, subagent, teammate, and background work | Agent maps native lifecycle into canonical plan, task, child-Chat, and background state |
+| SDK-only display or diagnostic event | Agent classifies it explicitly for the pinned version; semantic events are never silently discarded |
+
+The common behavior model is the product union required to present and persist
+these Agents, not the least common denominator of their current partial
+implementations. Host, Sessions, Chat, and UI consume canonical behavior kinds
+and never branch on Agent ID. Only the bundled `CometAgent` owns Comet's native
+model-and-Tool orchestration loop.
+
 The repository currently has no project-owned Remote authority, persistent
 management connection, Remote Server, remote resource, or bidirectional
 channel foundation under `src/cs`. Its tunnel layer contains only proxy
@@ -203,6 +235,11 @@ Agent Host Protocol over each route without introducing a second Agent API.
 - `IAgent` is the single Host-side semantic port. Comet and product-maintained
   SDK Agents implement it directly; genuinely external Agents project it
   through `IAgentRuntimeConnection`.
+- Agent Host is the common behavior, interaction, persistence, connection, and
+  presentation substrate. An SDK-backed Agent preserves its installed SDK as
+  the orchestration authority and maps native behavior bidirectionally; it does
+  not recreate the SDK's model, Tool, planning, task, subagent, background,
+  compaction, or retry loop.
 - One Host authority accepts one active registration per Agent ID. The
   registration declares exact descriptor, capability, Tool Schema Profile, and
   resume-schema revisions and migration edges; runtime failure never selects
@@ -257,7 +294,8 @@ Agent Host Protocol over each route without introducing a second Agent API.
   Sessions provider. Product-bundled Comet and product-maintained SDK Agents
   implement the interface directly, while genuinely external Agents receive
   its canonical values through the Agent Runtime Protocol. Each Agent projects
-  the exact Turn-bound canonical Tool set.
+  the exact Turn-bound Comet-contributed Tool set through its supported
+  extension surface while preserving SDK-native Tools under SDK ownership.
   Connected clients publish canonical Tool executors rather than a separate
   Tool type.
 - Every Agent resolves normalized execution selections through one common
@@ -360,11 +398,13 @@ names. No target registration imports or dispatches through the legacy path.
    the content owner and read through the Host content-resource protocol,
    rather than treating Article detail as complete text or requiring a model
    Tool call. Define `client`, `host`, `agent`, and `mcp` as executor bindings
-   over one canonical Tool descriptor, call, and result lifecycle. Do not add
-   executor-specific Tool types. Define versioned Comet Tool Schema Profiles
-   and require lossless projection. Each Agent runtime owns its native
-   function, dynamic Tool, fixed Tool, alias, call, result, and private
-   MCP-bridge conversion without changing canonical identity or executor.
+   over one canonical contributed Tool descriptor, call, and result lifecycle.
+   Do not add executor-specific Tool types. Define versioned Comet Tool Schema
+   Profiles and require lossless projection. Each Agent runtime owns
+   projection of Comet-contributed functions, dynamic Tools, aliases, calls,
+   results, and private MCP bridges without changing canonical identity or
+   executor. SDK-native Tools remain owned and executed by their SDK and map
+   into canonical Tool activity without fabricated registrations.
    The Comet runtime consumes the canonical set through its orchestration loop
    and projects only at its internal model-provider boundary. A connected
    runtime receives the same Tool-set revision and returns canonical calls and
@@ -403,7 +443,12 @@ names. No target registration imports or dispatches through the legacy path.
    `src/cs/platform/agentHost/node/agents/<agent>/`. Keep Code files as thin
    application entry points and composition only; delete package definitions
    and provider Agent implementations from Code after updating their call
-   sites.
+   sites. Replace the current reduced Claude and Codex loops with exhaustive
+   mappings for the pinned SDK versions. Preserve native Tools, Skills,
+   settings, plans, tasks, subagents, background work, context management,
+   compaction, retry, and terminal authority. Map native permission and input
+   requests bidirectionally, and call native resume, fork, steer, interrupt,
+   and supported configuration operations directly.
 6. Implement the local desktop `IAgentHostConnection` and route it to the Agent
    Host runtime without retaining the `run_main_agent_turn` command boundary.
 7. Implement the project-owned Remote and Remote Tunnel foundations under
@@ -555,6 +600,9 @@ registration, catch-and-try-next logic, or a legacy command path.
 - tool execution, evidence results, and Editor patch proposals;
 - completed and failed transcript state;
 - cancellation and disposal of active requests;
+- native permission, input, Tool, plan, task, subagent, background, context,
+  compaction, resume, fork, steering, and cancellation behavior exposed by an
+  installed SDK;
 - rename and delete behavior advertised by capabilities;
 - locale changes for provider, Session type, and draft presentation;
 - durable restoration of committed Sessions and Chats;
@@ -600,8 +648,14 @@ The migration is complete only when:
    product-maintained SDK Agents implement `IAgent` directly; genuinely
    external Agents negotiate the Agent Runtime Protocol through
    `IAgentRuntimeConnection`. Every Agent projects the exact Turn-bound
-   canonical Tool set internally. Comet model-provider formats remain inside
-   the Comet Agent. Every Turn resolves one bounded
+   Comet-contributed Tool set internally while SDK-backed Agents preserve and
+   map SDK-native orchestration and Tools. Claude and Codex do not contain a
+   Comet-owned replacement model loop; every semantic native event and request
+   is mapped, explicitly diagnostic, or explicitly unsupported for the pinned
+   version. Permissions and user input retain exact native and Host
+   correlation, and supported resume, fork, steer, interrupt, and
+   configuration controls invoke the native operation directly. Comet
+   model-provider formats remain inside the Comet Agent. Every Turn resolves one bounded
    immutable execution-profile envelope through the common Agent port before
    attachment and Tool-set preparation. Feature executors contain no SDK or
    model-provider conversion. One Host Tool Execution Port carries canonical
