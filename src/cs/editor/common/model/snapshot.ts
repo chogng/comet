@@ -3,30 +3,14 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { URI } from 'cs/base/common/uri';
-import type { CanonicalJsonValue } from 'cs/editor/common/core/canonicalJson';
-import { encodeCanonicalUri } from 'cs/editor/common/core/canonicalUri';
 import type {
 	ContentHash,
 	EntityId,
 	NodeId,
 	RevisionId,
 } from 'cs/editor/common/core/identifiers';
-import type { SemanticPosition } from 'cs/editor/common/core/semanticPosition';
-import {
-	manuscriptHashDomains,
-	type ManuscriptHashDomain,
-} from 'cs/editor/common/core/hashPreimage';
-import { hashCanonicalJson } from 'cs/editor/common/core/sha256';
-import type {
-	AcademicGraphSnapshot,
-	ClaimEntity,
-	ClaimEvidenceRelation,
-	EvidenceLink,
-	EvidenceLocator,
-	ReferenceSnapshot,
-} from 'cs/editor/common/model/academicGraph';
-import type { ActorRef } from 'cs/editor/common/model/actor';
+import { manuscriptHashDomains } from 'cs/editor/common/core/hashPreimage';
+import type { AcademicGraphSnapshot } from 'cs/editor/common/model/academicGraph';
 import {
 	createDocumentIndex,
 	type IDocumentIndexLimits,
@@ -37,27 +21,36 @@ import {
 	type DocumentSemanticSettings,
 	type ManuscriptMetadata,
 	type ManuscriptNode,
-	type Mark,
 } from 'cs/editor/common/model/manuscript';
 import {
 	ManuscriptMerkleVector,
 	manuscriptMerkleVectorRoles,
 	type ManuscriptMerkleVectorHashCall,
 	type ManuscriptMerkleVectorHashCallObserver,
-	type ManuscriptMerkleVectorPayload,
 } from 'cs/editor/common/model/merkleVector';
+import {
+	createAcademicClaimHashPayload,
+	createAcademicEvidenceHashPayload,
+	createAcademicGraphHashPayload,
+	createAcademicReferenceHashPayload,
+	createAcademicRelationHashPayload,
+	createDocumentMerkleHashPayload,
+	createDocumentNodeHashPayload,
+	createMerkleVectorDescriptor,
+	createMetadataAuthorHashPayload,
+	createMetadataKeywordHashPayload,
+	createMetadataRootHashPayload,
+	createMetadataTextHashPayload,
+	createSettingsHashPayload,
+	hashRevisionMerklePayload,
+	type AcademicEntityHashPayload,
+	type RevisionMerkleHashCallObserver,
+} from 'cs/editor/common/model/revisionHashPayload';
 
 export const documentFormat = 'nireco-document';
 export const documentFormatVersion = '1';
 export const manuscriptSchemaId = 'nireco.manuscript';
 export const manuscriptSchemaVersion = '1';
-
-export const manuscriptNodeHashAlgorithm = 'nireco-manuscript-node-1';
-export const academicEntityHashAlgorithm = 'nireco-academic-entity-1';
-export const academicGraphHashAlgorithm = 'nireco-academic-graph-1';
-export const manuscriptMetadataHashAlgorithm = 'nireco-manuscript-metadata-1';
-export const manuscriptSettingsHashAlgorithm = 'nireco-manuscript-settings-1';
-export const documentMerkleHashAlgorithm = 'nireco-document-merkle-1';
 
 export interface DocumentContent {
 	readonly format: typeof documentFormat;
@@ -74,167 +67,6 @@ export interface DocumentSnapshot extends DocumentContent {
 	readonly revisionId: RevisionId;
 	readonly documentHash: ContentHash;
 }
-
-export interface IMerkleVectorDescriptor {
-	readonly count: number;
-	readonly hash: ContentHash;
-}
-
-export type CanonicalManuscriptMark =
-	| {
-		readonly type: Exclude<Mark['type'], 'link'>;
-	}
-	| {
-		readonly type: 'link';
-		readonly href: string;
-		readonly title?: string;
-	};
-
-export type ManuscriptNodeHashPayload =
-	| {
-		readonly algorithm: typeof manuscriptNodeHashAlgorithm;
-		readonly id: NodeId;
-		readonly type: 'text';
-		readonly value: string;
-		readonly marks: readonly CanonicalManuscriptMark[];
-	}
-	| {
-		readonly algorithm: typeof manuscriptNodeHashAlgorithm;
-		readonly id: NodeId;
-		readonly type: Exclude<DocumentNode['type'], 'text'>;
-		readonly attrs: Readonly<Record<string, CanonicalJsonValue>>;
-		readonly children?: IMerkleVectorDescriptor;
-	};
-
-export type ManuscriptMetadataHashPayload =
-	| {
-		readonly algorithm: typeof manuscriptMetadataHashAlgorithm;
-		readonly kind: 'text-field';
-		readonly field: 'title' | 'abstract';
-		readonly value: string;
-	}
-	| {
-		readonly algorithm: typeof manuscriptMetadataHashAlgorithm;
-		readonly kind: 'author';
-		readonly id?: EntityId;
-		readonly name: string;
-		readonly given?: string;
-		readonly family?: string;
-		readonly orcid?: string;
-		readonly affiliations?: readonly string[];
-	}
-	| {
-		readonly algorithm: typeof manuscriptMetadataHashAlgorithm;
-		readonly kind: 'keyword';
-		readonly value: string;
-	}
-	| {
-		readonly algorithm: typeof manuscriptMetadataHashAlgorithm;
-		readonly titleHash: ContentHash;
-		readonly authors: IMerkleVectorDescriptor;
-		readonly abstractHash: ContentHash;
-		readonly keywords: IMerkleVectorDescriptor;
-	};
-
-export interface ManuscriptSettingsHashPayload {
-	readonly algorithm: typeof manuscriptSettingsHashAlgorithm;
-	readonly language: string;
-	readonly citationStyle: string;
-	readonly headingNumbering: boolean;
-	readonly bibliographyEnabled: boolean;
-}
-
-export interface ICanonicalPersistentAnchor {
-	readonly document: {
-		readonly resource: string;
-		readonly revisionId: RevisionId;
-	};
-	readonly primary: SemanticPosition;
-	readonly targetNodeId?: NodeId;
-	readonly textQuote?: {
-		readonly exact: string;
-		readonly prefix?: string;
-		readonly suffix?: string;
-	};
-	readonly pathHint?: readonly NodeId[];
-}
-
-export type AcademicEntityHashPayload =
-	| {
-		readonly algorithm: typeof academicEntityHashAlgorithm;
-		readonly id: EntityId;
-		readonly type: 'reference-snapshot';
-		readonly externalUri?: string;
-		readonly cslJson: Readonly<Record<string, CanonicalJsonValue>>;
-		readonly capturedAt: string;
-		readonly sourceProvider?: string;
-	}
-	| {
-		readonly algorithm: typeof academicEntityHashAlgorithm;
-		readonly id: EntityId;
-		readonly type: 'evidence-link';
-		readonly sourceUri: string;
-		readonly sourceContentHash: ContentHash;
-		readonly locator: EvidenceLocator;
-		readonly excerpt?: string;
-		readonly verificationStatus: EvidenceLink['verificationStatus'];
-		readonly verifiedBy?: ActorRef;
-		readonly verifiedAt?: string;
-	}
-	| {
-		readonly algorithm: typeof academicEntityHashAlgorithm;
-		readonly id: EntityId;
-		readonly type: 'claim';
-		readonly anchor: ICanonicalPersistentAnchor;
-		readonly textSnapshot: string;
-	}
-	| {
-		readonly algorithm: typeof academicEntityHashAlgorithm;
-		readonly type: 'claim-evidence-relation';
-		readonly claimId: EntityId;
-		readonly evidenceId: EntityId;
-		readonly relation: ClaimEvidenceRelation['relation'];
-		readonly assessedBy: ActorRef;
-		readonly confidence?: number;
-	};
-
-export interface AcademicGraphHashPayload {
-	readonly algorithm: typeof academicGraphHashAlgorithm;
-	readonly referenceSnapshots: IMerkleVectorDescriptor;
-	readonly evidenceLinks: IMerkleVectorDescriptor;
-	readonly claims: IMerkleVectorDescriptor;
-	readonly claimEvidenceRelations: IMerkleVectorDescriptor;
-}
-
-export interface DocumentMerklePayload {
-	readonly algorithm: typeof documentMerkleHashAlgorithm;
-	readonly schemaId: typeof manuscriptSchemaId;
-	readonly schemaVersion: typeof manuscriptSchemaVersion;
-	readonly metadataHash: ContentHash;
-	readonly rootNodeHash: ContentHash;
-	readonly academicGraphHash: ContentHash;
-	readonly settingsHash: ContentHash;
-}
-
-export type RevisionMerkleHashPayload =
-	| ManuscriptMerkleVectorPayload
-	| ManuscriptNodeHashPayload
-	| ManuscriptMetadataHashPayload
-	| ManuscriptSettingsHashPayload
-	| AcademicEntityHashPayload
-	| AcademicGraphHashPayload
-	| DocumentMerklePayload;
-
-export interface IRevisionMerkleHashCall {
-	readonly domain: ManuscriptHashDomain;
-	readonly payload: RevisionMerkleHashPayload;
-	readonly canonicalJson: string;
-	readonly hash: ContentHash;
-}
-
-export type RevisionMerkleHashCallObserver = (
-	call: IRevisionMerkleHashCall,
-) => void;
 
 export interface RevisionMerkleState {
 	readonly documentHash: ContentHash;
@@ -394,8 +226,7 @@ export function rebuildRevisionMerkleState(
 		entityHashesById,
 		observer,
 	);
-	const documentPayload: DocumentMerklePayload = Object.freeze({
-		algorithm: documentMerkleHashAlgorithm,
+	const documentPayload = createDocumentMerkleHashPayload({
 		schemaId: content.schemaId,
 		schemaVersion: content.schemaVersion,
 		metadataHash: metadata.hash,
@@ -403,7 +234,7 @@ export function rebuildRevisionMerkleState(
 		academicGraphHash: academicGraph.hash,
 		settingsHash,
 	});
-	const documentHash = hashPayload(
+	const documentHash = hashRevisionMerklePayload(
 		manuscriptHashDomains.documentContent,
 		documentPayload,
 		observer,
@@ -479,8 +310,23 @@ function rebuildNodeMerkleState(
 			childVectorsById.set(frame.node.id, childVector);
 		}
 
-		const payload = createNodeHashPayload(frame.node, childVector);
-		const hash = hashPayload(
+		let payload;
+		if (frame.node.type === 'text') {
+			payload = createDocumentNodeHashPayload(frame.node);
+		} else if ('children' in frame.node) {
+			if (childVector === undefined) {
+				throw new Error(
+					`Missing child Merkle vector for container Node ${frame.node.id}.`,
+				);
+			}
+			payload = createDocumentNodeHashPayload(
+				frame.node,
+				createMerkleVectorDescriptor(childVector),
+			);
+		} else {
+			payload = createDocumentNodeHashPayload(frame.node);
+		}
+		const hash = hashRevisionMerklePayload(
 			manuscriptHashDomains.node,
 			payload,
 			observer,
@@ -498,76 +344,20 @@ function rebuildNodeMerkleState(
 		childVectorsById,
 	};
 }
-
-function createNodeHashPayload(
-	node: DocumentNode,
-	childVector: ManuscriptMerkleVector | undefined,
-): ManuscriptNodeHashPayload {
-	if (node.type === 'text') {
-		return Object.freeze({
-			algorithm: manuscriptNodeHashAlgorithm,
-			id: node.id,
-			type: node.type,
-			value: node.value,
-			marks: Object.freeze(node.marks.map(encodeMark)),
-		});
-	}
-
-	const attrs = encodeCanonicalRecord(node.attrs);
-	return Object.freeze({
-		algorithm: manuscriptNodeHashAlgorithm,
-		id: node.id,
-		type: node.type,
-		attrs,
-		...(childVector === undefined
-			? {}
-			: { children: vectorDescriptor(childVector) }),
-	});
-}
-
-function encodeMark(mark: Mark): CanonicalManuscriptMark {
-	if (mark.type !== 'link') {
-		return Object.freeze({
-			type: mark.type,
-		});
-	}
-	return Object.freeze({
-		type: mark.type,
-		href: encodeRuntimeUri(mark.href),
-		...(mark.title === undefined ? {} : { title: mark.title }),
-	});
-}
-
 function rebuildMetadataMerkleState(
 	metadata: ManuscriptMetadata,
 	observer: RevisionMerkleHashCallObserver | undefined,
 ): IMetadataMerkleBuild {
-	const titlePayload: ManuscriptMetadataHashPayload = Object.freeze({
-		algorithm: manuscriptMetadataHashAlgorithm,
-		kind: 'text-field',
-		field: 'title',
-		value: metadata.title,
-	});
-	const titleHash = hashPayload(
+	const titlePayload = createMetadataTextHashPayload('title', metadata.title);
+	const titleHash = hashRevisionMerklePayload(
 		manuscriptHashDomains.documentContent,
 		titlePayload,
 		observer,
 	);
 
 	const authorHashes = metadata.authors.map(author => {
-		const payload: ManuscriptMetadataHashPayload = Object.freeze({
-			algorithm: manuscriptMetadataHashAlgorithm,
-			kind: 'author',
-			...(author.id === undefined ? {} : { id: author.id }),
-			name: author.name,
-			...(author.given === undefined ? {} : { given: author.given }),
-			...(author.family === undefined ? {} : { family: author.family }),
-			...(author.orcid === undefined ? {} : { orcid: author.orcid }),
-			...(author.affiliations === undefined
-				? {}
-				: { affiliations: Object.freeze([...author.affiliations]) }),
-		});
-		const hash = hashPayload(
+		const payload = createMetadataAuthorHashPayload(author);
+		const hash = hashRevisionMerklePayload(
 			manuscriptHashDomains.documentContent,
 			payload,
 			observer,
@@ -580,25 +370,19 @@ function rebuildMetadataMerkleState(
 		toMerkleObserver(observer),
 	);
 
-	const abstractPayload: ManuscriptMetadataHashPayload = Object.freeze({
-		algorithm: manuscriptMetadataHashAlgorithm,
-		kind: 'text-field',
-		field: 'abstract',
-		value: metadata.abstract,
-	});
-	const abstractHash = hashPayload(
+	const abstractPayload = createMetadataTextHashPayload(
+		'abstract',
+		metadata.abstract,
+	);
+	const abstractHash = hashRevisionMerklePayload(
 		manuscriptHashDomains.documentContent,
 		abstractPayload,
 		observer,
 	);
 
 	const keywordHashes = metadata.keywords.map(keyword => {
-		const payload: ManuscriptMetadataHashPayload = Object.freeze({
-			algorithm: manuscriptMetadataHashAlgorithm,
-			kind: 'keyword',
-			value: keyword,
-		});
-		return hashPayload(
+		const payload = createMetadataKeywordHashPayload(keyword);
+		return hashRevisionMerklePayload(
 			manuscriptHashDomains.documentContent,
 			payload,
 			observer,
@@ -610,15 +394,14 @@ function rebuildMetadataMerkleState(
 		toMerkleObserver(observer),
 	);
 
-	const payload: ManuscriptMetadataHashPayload = Object.freeze({
-		algorithm: manuscriptMetadataHashAlgorithm,
+	const payload = createMetadataRootHashPayload(
 		titleHash,
-		authors: vectorDescriptor(authorsVector),
+		createMerkleVectorDescriptor(authorsVector),
 		abstractHash,
-		keywords: vectorDescriptor(keywordsVector),
-	});
+		createMerkleVectorDescriptor(keywordsVector),
+	);
 	return {
-		hash: hashPayload(
+		hash: hashRevisionMerklePayload(
 			manuscriptHashDomains.documentContent,
 			payload,
 			observer,
@@ -634,14 +417,8 @@ function rebuildSettingsHash(
 	settings: DocumentSemanticSettings,
 	observer: RevisionMerkleHashCallObserver | undefined,
 ): ContentHash {
-	const payload: ManuscriptSettingsHashPayload = Object.freeze({
-		algorithm: manuscriptSettingsHashAlgorithm,
-		language: settings.language,
-		citationStyle: settings.citationStyle,
-		headingNumbering: settings.headingNumbering,
-		bibliographyEnabled: settings.bibliographyEnabled,
-	});
-	return hashPayload(
+	const payload = createSettingsHashPayload(settings);
+	return hashRevisionMerklePayload(
 		manuscriptHashDomains.documentContent,
 		payload,
 		observer,
@@ -655,7 +432,7 @@ function rebuildAcademicGraphMerkleState(
 ): IAcademicGraphMerkleBuild {
 	const referenceSnapshotHashes = graph.referenceSnapshots.map(reference => {
 		const hash = hashAcademicPayload(
-			createReferenceHashPayload(reference),
+			createAcademicReferenceHashPayload(reference),
 			observer,
 		);
 		setEntityHash(entityHashesById, reference.id, hash);
@@ -669,7 +446,7 @@ function rebuildAcademicGraphMerkleState(
 
 	const evidenceLinkHashes = graph.evidenceLinks.map(evidenceLink => {
 		const hash = hashAcademicPayload(
-			createEvidenceLinkHashPayload(evidenceLink),
+			createAcademicEvidenceHashPayload(evidenceLink),
 			observer,
 		);
 		setEntityHash(entityHashesById, evidenceLink.id, hash);
@@ -683,7 +460,7 @@ function rebuildAcademicGraphMerkleState(
 
 	const claimHashes = graph.claims.map(claim => {
 		const hash = hashAcademicPayload(
-			createClaimHashPayload(claim),
+			createAcademicClaimHashPayload(claim),
 			observer,
 		);
 		setEntityHash(entityHashesById, claim.id, hash);
@@ -704,7 +481,7 @@ function rebuildAcademicGraphMerkleState(
 			);
 		}
 		const hash = hashAcademicPayload(
-			createRelationHashPayload(relation),
+			createAcademicRelationHashPayload(relation),
 			observer,
 		);
 		relationHashesByKey.set(key, hash);
@@ -716,15 +493,14 @@ function rebuildAcademicGraphMerkleState(
 		toMerkleObserver(observer),
 	);
 
-	const payload: AcademicGraphHashPayload = Object.freeze({
-		algorithm: academicGraphHashAlgorithm,
-		referenceSnapshots: vectorDescriptor(referenceSnapshotsVector),
-		evidenceLinks: vectorDescriptor(evidenceLinksVector),
-		claims: vectorDescriptor(claimsVector),
-		claimEvidenceRelations: vectorDescriptor(claimEvidenceRelationsVector),
-	});
+	const payload = createAcademicGraphHashPayload(
+		createMerkleVectorDescriptor(referenceSnapshotsVector),
+		createMerkleVectorDescriptor(evidenceLinksVector),
+		createMerkleVectorDescriptor(claimsVector),
+		createMerkleVectorDescriptor(claimEvidenceRelationsVector),
+	);
 	return {
-		hash: hashPayload(
+		hash: hashRevisionMerklePayload(
 			manuscriptHashDomains.documentContent,
 			payload,
 			observer,
@@ -737,99 +513,11 @@ function rebuildAcademicGraphMerkleState(
 	};
 }
 
-function createReferenceHashPayload(
-	reference: ReferenceSnapshot,
-): Extract<AcademicEntityHashPayload, { readonly type: 'reference-snapshot' }> {
-	return Object.freeze({
-		algorithm: academicEntityHashAlgorithm,
-		id: reference.id,
-		type: reference.type,
-		...(reference.externalUri === undefined
-			? {}
-			: { externalUri: encodeRuntimeUri(reference.externalUri) }),
-		cslJson: encodeCanonicalRecord(reference.cslJson),
-		capturedAt: reference.capturedAt,
-		...(reference.sourceProvider === undefined
-			? {}
-			: { sourceProvider: reference.sourceProvider }),
-	});
-}
-
-function createEvidenceLinkHashPayload(
-	evidenceLink: EvidenceLink,
-): Extract<AcademicEntityHashPayload, { readonly type: 'evidence-link' }> {
-	return Object.freeze({
-		algorithm: academicEntityHashAlgorithm,
-		id: evidenceLink.id,
-		type: evidenceLink.type,
-		sourceUri: encodeRuntimeUri(evidenceLink.sourceUri),
-		sourceContentHash: evidenceLink.sourceContentHash,
-		locator: Object.freeze({ ...evidenceLink.locator }),
-		...(evidenceLink.excerpt === undefined
-			? {}
-			: { excerpt: evidenceLink.excerpt }),
-		verificationStatus: evidenceLink.verificationStatus,
-		...(evidenceLink.verifiedBy === undefined
-			? {}
-			: { verifiedBy: cloneActor(evidenceLink.verifiedBy) }),
-		...(evidenceLink.verifiedAt === undefined
-			? {}
-			: { verifiedAt: evidenceLink.verifiedAt }),
-	});
-}
-
-function createClaimHashPayload(
-	claim: ClaimEntity,
-): Extract<AcademicEntityHashPayload, { readonly type: 'claim' }> {
-	const anchor: ICanonicalPersistentAnchor = Object.freeze({
-		document: Object.freeze({
-			resource: encodeRuntimeUri(claim.anchor.document.resource),
-			revisionId: claim.anchor.document.revisionId,
-		}),
-		primary: Object.freeze({ ...claim.anchor.primary }),
-		...(claim.anchor.targetNodeId === undefined
-			? {}
-			: { targetNodeId: claim.anchor.targetNodeId }),
-		...(claim.anchor.textQuote === undefined
-			? {}
-			: { textQuote: Object.freeze({ ...claim.anchor.textQuote }) }),
-		...(claim.anchor.pathHint === undefined
-			? {}
-			: { pathHint: Object.freeze([...claim.anchor.pathHint]) }),
-	});
-	return Object.freeze({
-		algorithm: academicEntityHashAlgorithm,
-		id: claim.id,
-		type: claim.type,
-		anchor,
-		textSnapshot: claim.textSnapshot,
-	});
-}
-
-function createRelationHashPayload(
-	relation: ClaimEvidenceRelation,
-): Extract<
-	AcademicEntityHashPayload,
-	{ readonly type: 'claim-evidence-relation' }
-> {
-	return Object.freeze({
-		algorithm: academicEntityHashAlgorithm,
-		type: relation.type,
-		claimId: relation.claimId,
-		evidenceId: relation.evidenceId,
-		relation: relation.relation,
-		assessedBy: cloneActor(relation.assessedBy),
-		...(relation.confidence === undefined
-			? {}
-			: { confidence: relation.confidence }),
-	});
-}
-
 function hashAcademicPayload(
 	payload: AcademicEntityHashPayload,
 	observer: RevisionMerkleHashCallObserver | undefined,
 ): ContentHash {
-	return hashPayload(
+	return hashRevisionMerklePayload(
 		manuscriptHashDomains.academicEntity,
 		payload,
 		observer,
@@ -851,94 +539,8 @@ function relationKey(claimId: EntityId, evidenceId: EntityId): string {
 	return `${claimId}\0${evidenceId}`;
 }
 
-function cloneActor(actor: ActorRef): ActorRef {
-	return actor.type === 'system'
-		? Object.freeze({
-			type: actor.type,
-			id: actor.id,
-			role: actor.role,
-		})
-		: Object.freeze({
-			type: actor.type,
-			id: actor.id,
-		});
-}
-
 function nodeOwnsChildren(node: DocumentNode): boolean {
 	return 'children' in node;
-}
-
-function vectorDescriptor(
-	vector: ManuscriptMerkleVector,
-): IMerkleVectorDescriptor {
-	return Object.freeze({
-		count: vector.count,
-		hash: vector.rootHash,
-	});
-}
-
-function encodeCanonicalRecord(
-	value: object,
-): Readonly<Record<string, CanonicalJsonValue>> {
-	const prototype = Reflect.getPrototypeOf(value);
-	if (prototype !== Object.prototype && prototype !== null) {
-		throw new TypeError('Document hash payload has an unsupported record prototype.');
-	}
-	const result: Record<string, CanonicalJsonValue> = Object.create(
-		Object.prototype,
-	);
-	for (const key of Reflect.ownKeys(value)) {
-		if (typeof key !== 'string') {
-			throw new TypeError('Document hash payload has a symbol key.');
-		}
-		const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-		if (
-			descriptor === undefined
-			|| !descriptor.enumerable
-			|| !('value' in descriptor)
-		) {
-			throw new TypeError('Document hash payload has an unsafe property.');
-		}
-		const item = encodeCanonicalValue(
-			descriptor.value,
-		);
-		Object.defineProperty(result, key, {
-			value: item,
-			enumerable: true,
-			configurable: true,
-			writable: true,
-		});
-	}
-	return Object.freeze(result);
-}
-
-function encodeCanonicalValue(value: unknown): CanonicalJsonValue {
-	if (
-		value === null
-		|| typeof value === 'string'
-		|| typeof value === 'boolean'
-		|| typeof value === 'number'
-	) {
-		return value;
-	}
-	if (URI.isUri(value)) {
-		return encodeRuntimeUri(value);
-	}
-	if (Array.isArray(value)) {
-		return Object.freeze(value.map(encodeCanonicalValue));
-	}
-	if (value !== null && typeof value === 'object') {
-		return encodeCanonicalRecord(value);
-	}
-	throw new TypeError('Document hash payload contains a non-canonical value.');
-}
-
-function encodeRuntimeUri(value: URI): string {
-	const encoded = encodeCanonicalUri(value);
-	if (encoded === undefined) {
-		throw new TypeError('Document hash payload contains a non-canonical URI.');
-	}
-	return encoded;
 }
 
 function toMerkleObserver(
@@ -947,22 +549,4 @@ function toMerkleObserver(
 	return observer === undefined
 		? undefined
 		: (call: ManuscriptMerkleVectorHashCall) => observer(call);
-}
-
-function hashPayload(
-	domain: ManuscriptHashDomain,
-	payload: RevisionMerkleHashPayload,
-	observer: RevisionMerkleHashCallObserver | undefined,
-): ContentHash {
-	const result = hashCanonicalJson(domain, payload);
-	if (result.type === 'error') {
-		throw new TypeError(`Document hash payload is not canonical JSON at ${result.path}.`);
-	}
-	observer?.(Object.freeze({
-		domain,
-		payload,
-		canonicalJson: result.canonicalJson,
-		hash: result.hash,
-	}));
-	return result.hash;
 }

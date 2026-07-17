@@ -28,29 +28,54 @@ import { parseUtf16Offset } from 'cs/editor/common/core/semanticPosition';
 import type {
 	AcademicGraphSnapshot,
 	ClaimEntity,
+	ClaimEvidenceRelation,
+	EvidenceLink,
+	EvidenceLocator,
+	ReferenceSnapshot,
 } from 'cs/editor/common/model/academicGraph';
+import type { ActorRef } from 'cs/editor/common/model/actor';
 import type {
 	BodyNode,
+	DocumentNode,
 	ManuscriptNode,
+	ManuscriptAuthor,
+	Mark,
 	ParagraphNode,
 	TextNode,
 } from 'cs/editor/common/model/manuscript';
 import {
 	academicEntityHashAlgorithm,
 	academicGraphHashAlgorithm,
-	documentFormat,
-	documentFormatVersion,
+	createAcademicClaimHashPayload,
+	createAcademicEvidenceHashPayload,
+	createAcademicGraphHashPayload,
+	createAcademicReferenceHashPayload,
+	createAcademicRelationHashPayload,
+	createCanonicalManuscriptMark,
+	createDocumentMerkleHashPayload,
+	createDocumentNodeHashPayload,
+	createDocumentNodeLocalComparisonPayload,
+	createMerkleVectorDescriptor,
+	createMetadataAuthorHashPayload,
+	createMetadataKeywordHashPayload,
+	createMetadataRootHashPayload,
+	createMetadataTextHashPayload,
+	createSettingsHashPayload,
 	documentMerkleHashAlgorithm,
 	manuscriptMetadataHashAlgorithm,
 	manuscriptNodeHashAlgorithm,
+	manuscriptSettingsHashAlgorithm,
+	type IRevisionMerkleHashCall,
+	type RevisionMerkleHashCallObserver,
+} from 'cs/editor/common/model/revisionHashPayload';
+import {
+	documentFormat,
+	documentFormatVersion,
 	manuscriptSchemaId,
 	manuscriptSchemaVersion,
-	manuscriptSettingsHashAlgorithm,
 	rebuildRevisionMerkleState,
 	type DocumentContent,
 	type DocumentSnapshot,
-	type IRevisionMerkleHashCall,
-	type RevisionMerkleHashCallObserver,
 	type RevisionMerkleState,
 } from 'cs/editor/common/model/snapshot';
 
@@ -366,6 +391,477 @@ suite('Document Snapshot Merkle state', () => {
 			'nireco-manuscript-settings-1',
 		);
 		assert.equal(documentMerkleHashAlgorithm, 'nireco-document-merkle-1');
+	});
+
+	test('owns every node, Mark, metadata, and settings payload shape', () => {
+		const fixture = createFixture();
+		const linkWithoutTitle: Mark = {
+			type: 'link',
+			href: URI.from({
+				scheme: 'https',
+				authority: 'example.test',
+				path: '/without title',
+			}),
+		};
+		const linkWithTitle: Mark = {
+			type: 'link',
+			href: URI.from({
+				scheme: 'https',
+				authority: 'example.test',
+				path: '/with title',
+			}),
+			title: 'Named source',
+		};
+		const plainMarks: readonly Mark[] = [
+			{ type: 'bold' },
+			{ type: 'italic' },
+			{ type: 'underline' },
+			{ type: 'strike' },
+			{ type: 'code' },
+			{ type: 'subscript' },
+			{ type: 'superscript' },
+		];
+		assert.deepStrictEqual(
+			[
+				...plainMarks.map(createCanonicalManuscriptMark),
+				createCanonicalManuscriptMark(linkWithoutTitle),
+				createCanonicalManuscriptMark(linkWithTitle),
+			],
+			[
+				{ type: 'bold' },
+				{ type: 'italic' },
+				{ type: 'underline' },
+				{ type: 'strike' },
+				{ type: 'code' },
+				{ type: 'subscript' },
+				{ type: 'superscript' },
+				{
+					type: 'link',
+					href: 'https://example.test/without%20title',
+				},
+				{
+					type: 'link',
+					href: 'https://example.test/with%20title',
+					title: 'Named source',
+				},
+			],
+		);
+
+		const text: TextNode = {
+			...fixture.text,
+			marks: [...plainMarks, linkWithoutTitle, linkWithTitle],
+		};
+		const textLocalPayload = createDocumentNodeLocalComparisonPayload(text);
+		assert.deepStrictEqual(textLocalPayload, {
+			id: text.id,
+			type: 'text',
+			value: text.value,
+			marks: [
+				{ type: 'bold' },
+				{ type: 'italic' },
+				{ type: 'underline' },
+				{ type: 'strike' },
+				{ type: 'code' },
+				{ type: 'subscript' },
+				{ type: 'superscript' },
+				{
+					type: 'link',
+					href: 'https://example.test/without%20title',
+				},
+				{
+					type: 'link',
+					href: 'https://example.test/with%20title',
+					title: 'Named source',
+				},
+			],
+		});
+
+		const paragraphLocalPayload =
+			createDocumentNodeLocalComparisonPayload(fixture.paragraph);
+		assert.equal(Object.hasOwn(paragraphLocalPayload, 'children'), false);
+		const children = createMerkleVectorDescriptor({
+			count: 1,
+			rootHash: contentHash(401),
+		});
+		const paragraphPayload = createDocumentNodeHashPayload(
+			fixture.paragraph,
+			children,
+		);
+		assert.deepStrictEqual(paragraphPayload, {
+			algorithm: manuscriptNodeHashAlgorithm,
+			id: fixture.paragraph.id,
+			type: 'paragraph',
+			attrs: {
+				alignment: 'start',
+			},
+			children: {
+				count: 1,
+				hash: contentHash(401),
+			},
+		});
+
+		const hardBreak = {
+			id: nodeId(406),
+			type: 'hardBreak',
+			attrs: {},
+		} as const;
+		assert.throws(
+			() => (createDocumentNodeHashPayload as (
+				node: DocumentNode,
+				children?: ReturnType<typeof createMerkleVectorDescriptor>,
+			) => unknown)(fixture.paragraph),
+			/require a child descriptor/u,
+		);
+		assert.throws(
+			() => (createDocumentNodeHashPayload as (
+				node: DocumentNode,
+				children?: ReturnType<typeof createMerkleVectorDescriptor>,
+			) => unknown)(hardBreak, children),
+			/cannot contain a child descriptor/u,
+		);
+		assert.throws(
+			() => (createDocumentNodeHashPayload as (
+				node: DocumentNode,
+				children?: ReturnType<typeof createMerkleVectorDescriptor>,
+			) => unknown)(text, children),
+			/cannot contain a child descriptor/u,
+		);
+		if (false) {
+			// @ts-expect-error Container nodes require an exact child descriptor.
+			createDocumentNodeHashPayload(fixture.paragraph);
+			// @ts-expect-error Leaf nodes reject child descriptors.
+			createDocumentNodeHashPayload(hardBreak, children);
+			// @ts-expect-error Text nodes reject child descriptors.
+			createDocumentNodeHashPayload(text, children);
+		}
+
+		const minimalAuthor: ManuscriptAuthor = {
+			name: 'Minimal Author',
+		};
+		const completeAuthor = fixture.content.metadata.authors[0];
+		assert.ok(completeAuthor !== undefined);
+		assert.deepStrictEqual(
+			createMetadataAuthorHashPayload(minimalAuthor),
+			{
+				algorithm: manuscriptMetadataHashAlgorithm,
+				kind: 'author',
+				name: 'Minimal Author',
+			},
+		);
+		assert.deepStrictEqual(
+			createMetadataAuthorHashPayload(completeAuthor),
+			{
+				algorithm: manuscriptMetadataHashAlgorithm,
+				kind: 'author',
+				id: fixture.authorId,
+				name: 'Ada Lovelace',
+				given: 'Ada',
+				family: 'Lovelace',
+				orcid: '0000-0000-0000-0001',
+				affiliations: ['Analytical Society', 'Royal Society'],
+			},
+		);
+		assert.deepStrictEqual(
+			createMetadataTextHashPayload('title', 'Title'),
+			{
+				algorithm: manuscriptMetadataHashAlgorithm,
+				kind: 'text-field',
+				field: 'title',
+				value: 'Title',
+			},
+		);
+		assert.deepStrictEqual(
+			createMetadataTextHashPayload('abstract', 'Abstract'),
+			{
+				algorithm: manuscriptMetadataHashAlgorithm,
+				kind: 'text-field',
+				field: 'abstract',
+				value: 'Abstract',
+			},
+		);
+		assert.deepStrictEqual(
+			createMetadataKeywordHashPayload('determinism'),
+			{
+				algorithm: manuscriptMetadataHashAlgorithm,
+				kind: 'keyword',
+				value: 'determinism',
+			},
+		);
+		assert.deepStrictEqual(
+			createMetadataRootHashPayload(
+				contentHash(402),
+				createMerkleVectorDescriptor({
+					count: 2,
+					rootHash: contentHash(403),
+				}),
+				contentHash(404),
+				createMerkleVectorDescriptor({
+					count: 3,
+					rootHash: contentHash(405),
+				}),
+			),
+			{
+				algorithm: manuscriptMetadataHashAlgorithm,
+				titleHash: contentHash(402),
+				authors: {
+					count: 2,
+					hash: contentHash(403),
+				},
+				abstractHash: contentHash(404),
+				keywords: {
+					count: 3,
+					hash: contentHash(405),
+				},
+			},
+		);
+		assert.deepStrictEqual(
+			createSettingsHashPayload(fixture.content.settings),
+			{
+				algorithm: manuscriptSettingsHashAlgorithm,
+				language: 'en-US',
+				citationStyle: 'apa',
+				headingNumbering: true,
+				bibliographyEnabled: true,
+			},
+		);
+		assertDeepFrozen(textLocalPayload);
+		assertDeepFrozen(paragraphPayload);
+	});
+
+	test('owns every Academic URI, Actor, anchor, locator, and optional payload shape', () => {
+		const fixture = createFixture();
+		const reference = fixture.content.academicGraph.referenceSnapshots[0];
+		const evidence = fixture.content.academicGraph.evidenceLinks[0];
+		const claim = fixture.content.academicGraph.claims[0];
+		const relation =
+			fixture.content.academicGraph.claimEvidenceRelations[0];
+		assert.ok(reference !== undefined);
+		assert.ok(evidence !== undefined);
+		assert.ok(claim !== undefined);
+		assert.ok(relation !== undefined);
+
+		const minimalReference: ReferenceSnapshot = {
+			id: reference.id,
+			type: 'reference-snapshot',
+			cslJson: {},
+			capturedAt: reference.capturedAt,
+		};
+		assert.deepStrictEqual(
+			createAcademicReferenceHashPayload(minimalReference),
+			{
+				algorithm: academicEntityHashAlgorithm,
+				id: reference.id,
+				type: 'reference-snapshot',
+				cslJson: {},
+				capturedAt: reference.capturedAt,
+			},
+		);
+		assert.deepStrictEqual(
+			createAcademicReferenceHashPayload(reference),
+			{
+				algorithm: academicEntityHashAlgorithm,
+				id: reference.id,
+				type: 'reference-snapshot',
+				externalUri: 'https://example.test/paper%20one',
+				cslJson: {
+					title: 'Reference title',
+					author: ['Ada'],
+				},
+				capturedAt: reference.capturedAt,
+				sourceProvider: 'fixture',
+			},
+		);
+
+		const locatorVectors: readonly EvidenceLocator[] = [
+			{ kind: 'page', page: 7 },
+			{ kind: 'page', page: 7, pageLabel: 'vii' },
+			{ kind: 'section', section: 'Methods' },
+			{ kind: 'text-quote', exact: 'minimal quote' },
+			{
+				kind: 'text-quote',
+				exact: 'bounded quote',
+				prefix: 'before',
+				suffix: 'after',
+			},
+			{ kind: 'time', startSeconds: 1.5 },
+			{ kind: 'time', startSeconds: 1.5, endSeconds: 4.5 },
+			{ kind: 'record', recordKey: 'row-42' },
+		];
+		for (const locator of locatorVectors) {
+			const vectorEvidence: EvidenceLink = {
+				id: evidence.id,
+				type: 'evidence-link',
+				sourceUri: evidence.sourceUri,
+				sourceContentHash: evidence.sourceContentHash,
+				locator,
+				verificationStatus: evidence.verificationStatus,
+			};
+			const payload = createAcademicEvidenceHashPayload(vectorEvidence);
+			assert.deepStrictEqual(payload.locator, locator);
+			assert.equal(Object.hasOwn(payload, 'excerpt'), false);
+			assert.equal(Object.hasOwn(payload, 'verifiedBy'), false);
+			assert.equal(Object.hasOwn(payload, 'verifiedAt'), false);
+			assertDeepFrozen(payload);
+		}
+
+		const actorVectors: readonly ActorRef[] = [
+			{ type: 'human', id: 'human-1' },
+			{ type: 'agent', id: 'agent-1' },
+			{
+				type: 'system',
+				id: 'system-1',
+				role: 'recovery',
+			},
+		];
+		for (const actor of actorVectors) {
+			const completeEvidence: EvidenceLink = {
+				...evidence,
+				locator: {
+					kind: 'text-quote',
+					exact: 'bounded quote',
+					prefix: 'before',
+					suffix: 'after',
+				},
+				verifiedBy: actor,
+			};
+			const payload = createAcademicEvidenceHashPayload(completeEvidence);
+			assert.equal(
+				payload.sourceUri,
+				'https://example.test/evidence%20one',
+			);
+			assert.deepStrictEqual(payload.verifiedBy, actor);
+			assert.equal(payload.excerpt, 'Evidence excerpt.');
+			assert.equal(payload.verifiedAt, '2026-07-16T01:00:00.000Z');
+			assertDeepFrozen(payload);
+		}
+
+		const fullClaimPayload = createAcademicClaimHashPayload(claim);
+		assert.deepStrictEqual(fullClaimPayload.anchor, {
+			document: {
+				resource: fixture.resource.toString(),
+				revisionId: fixture.anchorRevisionId,
+			},
+			primary: {
+				kind: 'text',
+				textNodeId: fixture.text.id,
+				utf16Offset: 8,
+				affinity: 'after',
+			},
+			targetNodeId: fixture.paragraph.id,
+			textQuote: {
+				exact: 'backed',
+				prefix: 'Evidence-',
+				suffix: ' text.',
+			},
+			pathHint: [
+				fixture.root.id,
+				fixture.body.id,
+				fixture.paragraph.id,
+				fixture.text.id,
+			],
+		});
+		const minimalClaim: ClaimEntity = {
+			id: claim.id,
+			type: 'claim',
+			anchor: {
+				document: {
+					resource: fixture.resource,
+					revisionId: fixture.anchorRevisionId,
+				},
+				primary: {
+					kind: 'node-boundary',
+					parentNodeId: fixture.body.id,
+					childIndex: 0,
+					affinity: 'before',
+				},
+			},
+			textSnapshot: '',
+		};
+		const minimalClaimPayload =
+			createAcademicClaimHashPayload(minimalClaim);
+		assert.deepStrictEqual(minimalClaimPayload.anchor.primary, {
+			kind: 'node-boundary',
+			parentNodeId: fixture.body.id,
+			childIndex: 0,
+			affinity: 'before',
+		});
+		assert.equal(
+			Object.hasOwn(minimalClaimPayload.anchor, 'targetNodeId'),
+			false,
+		);
+		assert.equal(
+			Object.hasOwn(minimalClaimPayload.anchor, 'textQuote'),
+			false,
+		);
+		assert.equal(
+			Object.hasOwn(minimalClaimPayload.anchor, 'pathHint'),
+			false,
+		);
+
+		for (const [index, actor] of actorVectors.entries()) {
+			const actorRelation: ClaimEvidenceRelation = {
+				...relation,
+				assessedBy: actor,
+				...(index === 0 ? { confidence: 0.5 } : { confidence: undefined }),
+			};
+			const payload = createAcademicRelationHashPayload(actorRelation);
+			assert.deepStrictEqual(payload.assessedBy, actor);
+			assert.equal(
+				Object.hasOwn(payload, 'confidence'),
+				index === 0,
+			);
+			assertDeepFrozen(payload);
+		}
+
+		const descriptors = [
+			createMerkleVectorDescriptor({
+				count: 1,
+				rootHash: contentHash(406),
+			}),
+			createMerkleVectorDescriptor({
+				count: 2,
+				rootHash: contentHash(407),
+			}),
+			createMerkleVectorDescriptor({
+				count: 3,
+				rootHash: contentHash(408),
+			}),
+			createMerkleVectorDescriptor({
+				count: 4,
+				rootHash: contentHash(409),
+			}),
+		] as const;
+		assert.deepStrictEqual(
+			createAcademicGraphHashPayload(...descriptors),
+			{
+				algorithm: academicGraphHashAlgorithm,
+				referenceSnapshots: descriptors[0],
+				evidenceLinks: descriptors[1],
+				claims: descriptors[2],
+				claimEvidenceRelations: descriptors[3],
+			},
+		);
+		assert.deepStrictEqual(
+			createDocumentMerkleHashPayload({
+				schemaId: manuscriptSchemaId,
+				schemaVersion: manuscriptSchemaVersion,
+				metadataHash: contentHash(410),
+				rootNodeHash: contentHash(411),
+				academicGraphHash: contentHash(412),
+				settingsHash: contentHash(413),
+			}),
+			{
+				algorithm: documentMerkleHashAlgorithm,
+				schemaId: manuscriptSchemaId,
+				schemaVersion: manuscriptSchemaVersion,
+				metadataHash: contentHash(410),
+				rootNodeHash: contentHash(411),
+				academicGraphHash: contentHash(412),
+				settingsHash: contentHash(413),
+			},
+		);
+		assertDeepFrozen(fullClaimPayload);
+		assertDeepFrozen(minimalClaimPayload);
 	});
 
 	test('hashes every exact payload and runtime URI canonically', () => {
