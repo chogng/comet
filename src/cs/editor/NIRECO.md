@@ -54,7 +54,10 @@ src/cs/editor/
 ├── NIRECO.md
 ├── common/
 │   ├── core/
+│   │   ├── boundedClosedJson.ts
 │   │   ├── canonicalJson.ts
+│   │   ├── canonicalTimestamp.ts
+│   │   ├── canonicalUri.ts
 │   │   ├── identifiers.ts
 │   │   ├── hashPreimage.ts
 │   │   ├── sha256.ts
@@ -67,6 +70,7 @@ src/cs/editor/
 │   │   ├── manuscript.ts
 │   │   ├── manuscriptSchema.ts
 │   │   ├── snapshot.ts
+│   │   ├── snapshotDecoder.ts
 │   │   ├── documentIndex.ts
 │   │   ├── merkleVector.ts
 │   │   ├── academicGraph.ts
@@ -415,9 +419,9 @@ interface IManuscriptModel extends IDisposable {
 ```typescript
 interface DocumentSnapshot {
 	readonly format: 'nireco-document';
-	readonly formatVersion: string;
-	readonly schemaId: string;
-	readonly schemaVersion: string;
+	readonly formatVersion: '1';
+	readonly schemaId: 'nireco.manuscript';
+	readonly schemaVersion: '1';
 	readonly revisionId: RevisionId;
 	readonly documentHash: ContentHash;
 	readonly metadata: ManuscriptMetadata;
@@ -578,9 +582,103 @@ interface Transaction {
 
 `createdAt` 与所有 ID 在可信构造边界注入；reducer 不读取时间。
 
-Transaction-level precondition 针对 base Snapshot，至少包含 document hash、node exists/hash、entity exists/hash 和 schema version。重复或互相冲突的 precondition 直接拒绝，不 normalize。Operation expected hash 针对前序 Operation 已生效后的 ordered draft state。
+`createdAt`、Reference `capturedAt`、Evidence `verifiedAt` 和 Revision
+`createdAt` 使用唯一 UTC millisecond 形式
+`YYYY-MM-DDTHH:mm:ss.sssZ`。Decoder 必须执行真实 calendar validation 和
+`Date` ISO round-trip exact check；不接受 offset、缺失 milliseconds、非法日期或
+normalize 后才相等的输入。
 
-Transaction 的持久 payload 带 exact `format` 和 `formatVersion`，resource 编码为 canonical URI string；Transaction hash 针对该 closed payload 计算。WAL 直接保存这份 payload。Editor Transaction metadata 不包含 Agent session/grant、Tool call/idempotency、Task 或 debug transport identity。
+`TransactionMetadata` 是 closed discriminated union：
+
+```typescript
+type TransactionMetadata =
+	| {
+		readonly source:
+			| 'human-input'
+			| 'command'
+			| 'import'
+			| 'migration'
+			| 'validator-fix';
+	}
+	| {
+		readonly source: 'proposal-accept';
+		readonly proposalId: ProposalId;
+		readonly proposalRevision: number;
+		readonly proposalChangeGroupId: ProposalChangeGroupId;
+	}
+	| {
+		readonly source: 'undo' | 'redo';
+		readonly targetTransactionId: TransactionId;
+		readonly targetRevisionId: RevisionId;
+	};
+```
+
+Metadata 不提供 optional extension bag。Agent session、grant、Tool invocation、
+idempotency、Task、model、workflow、debug correlation、UI label 和 transport
+identity 不得进入 Transaction。
+
+`TransactionPrecondition` 的 exact union 只有：
+
+```typescript
+type TransactionPrecondition =
+	| {
+		readonly kind: 'document-hash';
+		readonly expectedDocumentHash: ContentHash;
+	}
+	| {
+		readonly kind: 'schema-version';
+		readonly expectedSchemaVersion: string;
+	}
+	| {
+		readonly kind: 'node-exists';
+		readonly nodeId: NodeId;
+	}
+	| {
+		readonly kind: 'node-hash';
+		readonly nodeId: NodeId;
+		readonly expectedNodeHash: ContentHash;
+	}
+	| {
+		readonly kind: 'entity-exists';
+		readonly entityId: EntityId;
+	}
+	| {
+		readonly kind: 'entity-hash';
+		readonly entityId: EntityId;
+		readonly expectedEntityHash: ContentHash;
+	};
+```
+
+每个 Transaction 恰有一个 document-hash 和一个 schema-version
+precondition。冲突键固定为 `document`、`schema`、`node:<NodeId>` 和
+`entity:<EntityId>`；同键重复或使用另一 kind/expected value 都直接拒绝。
+Decoder 不排序、不去重、不 normalize，输入顺序原样参与 Transaction hash。
+
+Transaction-level precondition 针对 base Snapshot；Operation expected hash
+针对前序 Operation 已生效后的 ordered draft state。
+
+Transaction 的持久 envelope 是 exact
+`{ format: 'nireco-transaction', formatVersion: 1, transaction: ... }`，
+resource 编码为 canonical manuscript URI string，每个 Operation 使用其完整 V1
+持久 envelope；没有旧 `target`、raw Operation、derived hash 或 extension
+字段。Transaction hash 针对完整 closed envelope 计算，WAL 直接保存这份
+payload。
+
+Operation envelope 自身不重复保存顶层 manuscript resource，因此
+`encodePersistedOperationV1` 和 `decodePersistedOperationV1` 都必须接收明确的
+expected resource；不存在无 context overload。Transaction codec 把自己的
+resource 传入每个 Operation codec，后者用它校验 Claim Anchor 等嵌套资源绑定，
+避免同一个 Operation envelope 在另一文稿中被接受。
+
+Strict Transaction codec 在 schema 前以 non-recursive descriptor-safe capture
+执行绝对上限：canonical UTF-8 不超过 16 MiB、JSON value 不超过 262,144、
+depth 不超过 256、Operation 为 1..1,024、precondition 为 2..4,096。它拒绝
+accessor、symbol、non-enumerable field、非 plain prototype、sparse/污染 array、
+cycle、非法 Unicode 和 Proxy inspection failure；不调用 caller getter、
+iterator 或 `map`，也不把 caller-owned object/array 交给 `JSON.stringify`
+或 `structuredClone`。Transaction 内重复
+Operation ID 在 codec 边界拒绝，跨历史 Transaction/Operation ID 重用由
+model authority 和 recovery used-ID set 拒绝。
 
 模型维护已提交 Transaction ID 和 Operation ID 集合。任何 Transaction 内重复 Operation ID、跨历史重用 Transaction/Operation ID 或 recovery 后重放重复 ID 都显式拒绝；同一个 Operation ID 原样贯穿 compile、hash、WAL、replay 和 Semantic Diff。
 
@@ -673,18 +771,27 @@ interface IManuscriptModelService {
 `IManuscriptModelResolverService` 负责资源解析和引用生命周期：
 
 ```typescript
+interface IManuscriptModelReference extends IDisposable {
+	readonly model: IManuscriptModel;
+}
+
 interface IManuscriptModelResolverService {
 	readonly _serviceBrand: undefined;
 	createModelReference(
 		resource: URI,
 		token: CancellationToken,
-	): Promise<IReference<IResolvedManuscriptModel>>;
+	): Promise<IManuscriptModelReference>;
 	registerContentProvider(
 		scheme: string,
 		provider: IManuscriptModelContentProvider,
 	): IDisposable;
 }
 ```
+
+Comet 当前没有通用 `IReference<T>` / `ReferenceCollection` 基座；Editor
+因此只定义上述领域 reference，不新建一套通用引用框架，也不复制上游的
+reference collection。Reference 的唯一可观察值是模型本身，引用计数和
+retention bookkeeping 留在 resolver 私有实现。
 
 Resolver 首先复用现有活动模型；不存在时只调用精确 scheme provider。Provider 返回受校验的 Snapshot 或 typed failure，不返回 `null` 表示“尝试其他路径”。最后一个 reference 释放后，resolver 可以按明确 retention policy 卸载模型。
 

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { URI } from 'cs/base/common/uri';
+import { cloneCanonicalRuntimeUri } from 'cs/editor/common/core/canonicalUri';
 import { isCanonicalUuidV7 } from 'cs/editor/common/core/identifiers';
 
 export const manuscriptDraftScheme = 'comet-draft';
@@ -53,35 +54,43 @@ export function parseManuscriptResource(value: string): ManuscriptResourceResult
 }
 
 export function validateManuscriptResource(resource: URI): ManuscriptResourceResult {
-	if (resource.scheme !== manuscriptDraftScheme) {
+	const captured = cloneCanonicalRuntimeUri(resource);
+	if (captured === undefined) {
+		return {
+			type: 'invalid',
+			reason: 'invalid-uri',
+		};
+	}
+
+	if (captured.scheme !== manuscriptDraftScheme) {
 		return {
 			type: 'invalid',
 			reason: 'unsupported-scheme',
 		};
 	}
 
-	if (resource.authority.length !== 0) {
+	if (captured.authority.length !== 0) {
 		return {
 			type: 'invalid',
 			reason: 'authority-not-allowed',
 		};
 	}
 
-	if (!isCanonicalUuidV7(resource.path)) {
+	if (!isCanonicalUuidV7(captured.path)) {
 		return {
 			type: 'invalid',
 			reason: 'invalid-path',
 		};
 	}
 
-	if (resource.query.length !== 0) {
+	if (captured.query.length !== 0) {
 		return {
 			type: 'invalid',
 			reason: 'query-not-allowed',
 		};
 	}
 
-	if (resource.fragment.length !== 0) {
+	if (captured.fragment.length !== 0) {
 		return {
 			type: 'invalid',
 			reason: 'fragment-not-allowed',
@@ -90,8 +99,8 @@ export function validateManuscriptResource(resource: URI): ManuscriptResourceRes
 
 	return {
 		type: 'valid',
-		resource,
-		canonical: resource.toString(true),
+		resource: captured,
+		canonical: captured.toString(),
 	};
 }
 

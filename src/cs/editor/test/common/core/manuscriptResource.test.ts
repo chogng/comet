@@ -88,6 +88,23 @@ suite('Manuscript resource', () => {
 		);
 	});
 
+	test('captures runtime URI components without invoking accessors', () => {
+		const runtime = createManuscriptDraftResource(uuidV7);
+		const proxied = new Proxy(runtime, {
+			getOwnPropertyDescriptor(target, property) {
+				if (property === 'path') {
+					throw new Error('inspection failed');
+				}
+				return Reflect.getOwnPropertyDescriptor(target, property);
+			},
+		});
+
+		assert.deepStrictEqual(validateManuscriptResource(proxied), {
+			type: 'invalid',
+			reason: 'invalid-uri',
+		});
+	});
+
 	test('refuses to create a resource from a non-UUIDv7 path', () => {
 		assert.throws(
 			() => createManuscriptDraftResource('01234567-89ab-8001-8203-040506070809'),
