@@ -72,13 +72,19 @@ src/cs/editor/
 │   │   ├── manuscriptSchema.ts
 │   │   ├── snapshot.ts
 │   │   ├── snapshotDecoder.ts
+│   │   ├── manuscriptDraft.ts
 │   │   ├── documentIndex.ts
 │   │   ├── merkleVector.ts
 │   │   ├── revisionMerkleState.ts
+│   │   ├── revisionHashPayload.ts
 │   │   ├── academicGraph.ts
 │   │   ├── operation.ts
+│   │   ├── operationReducer.ts
+│   │   ├── normalization.ts
 │   │   ├── transaction.ts
+│   │   ├── transactionIdentityAuthority.ts
 │   │   ├── transactionKernel.ts
+│   │   ├── transactionWal.ts
 │   │   ├── positionMap.ts
 │   │   ├── inverse.ts
 │   │   ├── revision.ts
@@ -124,7 +130,17 @@ src/cs/editor/
     └── browser/
 ```
 
-`editor.all.ts` 是 Editor-owned browser registration 的唯一聚合入口。Workbench shell 只加载该入口，不直接 side-effect import Editor 内部 service 或 contribution。`common/model.ts` 定义 `IManuscriptModel` 及其公共事件和结果，`common/model/**` 保存纯领域值与确定性变换，`common/services/model.ts` 定义 DI 服务契约，`modelService.ts` 管理活动模型，`resolverService.ts` 管理资源到引用计数模型引用的解析。
+`editor.all.ts` 是 Editor-owned browser registration 的唯一聚合入口。
+Workbench shell 的 production composition 只 side-effect import 这个入口；它可以直接
+import `editor/common` 契约和由调用方显式构造的 side-effect-free widget/value
+模块，但不得直接 import `editor/browser/services` 实现、Editor
+`.contribution` 入口或其他注册模块。所有 Editor-owned singleton、opener、
+command、style 和 contribution registration 都只从 `editor.all.ts` 可达，不迁到
+Workbench contribution。测试需要注册环境时显式 bootstrap `editor.all.ts`。
+`common/model.ts` 定义 `IManuscriptModel` 及其公共事件和结果，
+`common/model/**` 保存纯领域值与确定性变换，`common/services/model.ts` 定义
+DI 服务契约，`modelService.ts` 管理活动模型，`resolverService.ts` 管理资源到
+引用计数模型引用的解析。
 
 目录职责遵循上游 Monaco Editor 的组织规则，而不是复制一棵平行的 Nireco 子树：
 
@@ -134,7 +150,16 @@ src/cs/editor/
 - 当前没有独立发布的 Comet standalone editor，因此不创建空的 `standalone`、API facade 或打包入口；将来只有真实 standalone distribution 才能拥有该目录，且其他目录不得依赖它；
 - 测试镜像被测层：环境无关测试在 `test/common`，真实 DOM、Selection、IME 和 input 测试在 `test/browser`，contribution 测试随 feature 放置。
 
-现有 `browser/text` 是待删除的旧 Writing Editor/ProseMirror 实现，不是目标基座。新实现直接进入 `browser/controller`、`browser/input`、`browser/view` 和 `browser/widget`；迁移完成时删除旧目录及全部 ProseMirror 依赖。Formatting toolbar、style presets、figure resize handles 等可移除能力迁入对应 `contrib`，不会进入 browser core。
+现有 `browser/text` 是待原子删除的旧 Writing Editor/ProseMirror authority，
+不是目标基座，也不是可复用的兼容层。原生实现直接进入
+`browser/controller`、`browser/input`、`browser/view` 和 `browser/widget`；
+这些目录和 `editor.all.ts` 在切换前都不得 import、包装、适配、镜像或 dual-run
+旧 authority。只有全部原生能力和 production consumer 已就绪后，才在同一个
+cutover commit 中切换所有消费者，并删除 `browser/text`、
+`WritingEditorDocument`、全部 ProseMirror 依赖和 vendor chunk。不存在部分注册、
+桥接 facade 或随后再清理旧 authority 的中间生产状态。Formatting toolbar、
+style presets、figure resize handles 等可移除能力迁入对应 `contrib`，不会进入
+browser core。
 
 不增加 `index.ts`、公共 barrel、`nireco.ts` facade、兼容 re-export 或内部包入口。调用方直接导入拥有该契约的具体模块。
 
@@ -468,10 +493,12 @@ strict decode
 → compare declared documentHash
 ```
 
-Reducer 只从已完整验证的 base Revision state copy-on-write 更新明确 changed
-ID 和 ancestor path。Read service 的 `nodeHash` 直接读取该 Revision state。
-禁止 Snapshot trust marker、整份 canonical string substring patch 或完整
-Snapshot UTF-8 cache。
+Reducer 对 draft owner 提供的 candidate content/index/state 执行
+copy-on-write，只更新明确 changed ID 和 ancestor path；它返回的 candidate 或
+transition 本身不证明 base provenance。只有 draft owner 能把 transition 消费
+到与其绑定的 exact base 上，并同步推进 incremental index 与 Merkle state。
+Read service 的 `nodeHash` 直接读取已安装 Revision state。禁止 Snapshot trust
+marker、整份 canonical string substring patch 或完整 Snapshot UTF-8 cache。
 
 ### Change Group identity
 
@@ -548,13 +575,64 @@ interface DocumentSnapshot {
 
 Snapshot 顶层不包含 manuscript URI、DOM、Selection、ViewState、durability、provider、网络句柄、缓存或临时索引。URI 由模型和 revision-bound reference 提供。相同 Snapshot 可以用于持久化、导出和 conformance，但在线操作始终携带资源与 Revision。
 
-运行时 node attribute、Reference、Evidence 和 Anchor 中的资源值使用 Comet `URI`；版本化持久 DTO 和 hash payload 使用经过其拥有层校验的 canonical string。`decodeDocumentSnapshot(value, expectedResource, limits)` 从 `unknown` 做一次 descriptor-safe closed decode，校验所有 URI、ID、预算、schema、graph reference、anchor resource 和 declared hash，并返回 Snapshot、DocumentIndex 与独立重建的 Revision Merkle state。
+运行时 node attribute、Reference、Evidence 和 Anchor 中的资源值使用 Comet
+`URI`；版本化持久 DTO 和 hash payload 使用经过其拥有层校验的 canonical
+string。`decodeDocumentSnapshot(value, expectedResource, limits)` 从
+`unknown` 做一次 descriptor-safe closed decode，校验所有 URI、ID、预算、
+schema、graph reference、anchor resource 和 declared hash，并返回一个
+`IDecodedDocumentSnapshotCandidateV1`：Snapshot、DocumentIndex 与独立重建的
+Revision Merkle state。这个结构只是完整验证的 codec candidate，不是在线
+provenance authority。
+
+`manuscriptDraft.ts` 拥有唯一在线 base provenance authority。
+`decodeManuscriptDraft(value, expectedResource, limits)` 必须在自己的 authority
+入口内部调用上述 strict decoder；成功后 mint 一个 frozen、null-prototype、
+zero-field token，并在 module-private `WeakMap` 中一次性绑定：
+
+- exact canonical resource；
+- exact committed base Snapshot；
+- Snapshot 的 `format`、`formatVersion`、`schemaId`、`schemaVersion`、
+  `metadata`、`root`、`academicGraph`、`settings` 八个 exact content
+  value/reference；
+- 同一次 strict decode 产生的 exact DocumentIndex 和 Revision Merkle state；以及
+- 初始为空的 ordered transition sequence。
+
+不存在接收 caller-supplied `{ snapshot, index, merkleState }`、generic decoder
+candidate、builder 结果或各部分拼装后 mint authority 的 adoption/factory。
+一个 runtime Snapshot 若仍是 closed canonical input，只能重新经过完整 strict
+decode 并产生独立 token、index 和 Merkle state；这不是采用旧 candidate。
+Public draft read view 只暴露 immutable primitive summary 和每次新建的 canonical
+`URI` clone，不暴露 Snapshot、content、index、Merkle state、transition 或内部
+URI lazy cache。token clone、Proxy、prototype lookalike 和 candidate splice 都不
+获得 authority。
 
 `createDocumentIndex` 只构造 revision-local derived lookup，不颁发 content
 authority。Generic caller 即使为同一 root 构造出结构相同的 index，也不能替代
-由 draft/transition owner 绑定的 exact Snapshot index。Index concrete class、
-constructor token 和 topology stores 都是 module-private；parent lookup 直接读取
-构建时的 immutable map，禁止在查询热路径重新扫描 parent children。
+由 draft owner 绑定的 exact Snapshot index。Committed base index 的 concrete
+class、constructor token 和 topology stores 都是 module-private；每个 node 的
+parent ID 与 ordinal 直接来自构建时 immutable map。
+
+Transaction draft 的 index overlay 也必须保持 exact identity，并用 module-private
+chunked persistent、versioned parent ordinal log 表达结构编辑；不得为每次 append
+复制完整 flat log。每个 parent 的 exact override 记录其已知 version，lookup 由该
+version 只收集覆盖后续区间的 chunks，并从首个重叠 chunk 内的 exact offset
+开始 replay，不从 log head 扫描。Same-parent move 是一个 removal-relative
+semantic move/version，不能膨胀成超过 Transaction Operation 上限的两条无界
+历史；cross-parent move 在两个 parent 各记录一个 edit。Delete 只在 replay
+ordinal 与删除 ordinal 相等时删除该旧 location，之后的 ordinal 按规则平移；
+插入、split、join、head/middle/tail edit 遵守同一版本规则。
+
+Draft index cache 只属于一个 immutable overlay identity，不跨新 overlay 继承。
+删除 parent/subtree 时同步 prune 它的 version、ordinal log、parent override 和
+cache；合法重新插入相同 draft-local ID 时从 fresh version zero 建立 exact
+locations。`getParentLocation`、path collection 和 path replacement 都只使用
+index ordinal 直接索引并验证 parent/child identity，禁止扫描 parent children
+寻找 Node ID。Wide-parent lookup 的 payload reads 必须为零，成本只与该 node
+已知 version 之后的 edit count 有关。
+
+Draft 可在显式上限处 compact chunked logs；commit 前必须把最终 topology
+compact 成新的 immutable revision-local base map，并丢弃 draft log、cache 和
+temporary overrides。已安装 Revision 不携带前一 Transaction 的 overlay history。
 
 Immutable installation 只冻结 Manuscript 自己拥有的 plain record 和 array。不得递归 freeze `URI`，因为它是 Comet 基座值对象并拥有惰性内部缓存；不得把“已经 frozen”当成已验证证据。
 
@@ -686,6 +764,29 @@ type Operation =
 
 `InsertNode` 携带 step-local `expectedParentHash`，插入 subtree 的全部 Node ID 已预分配；修改已有 node/entity 的 operation 携带执行前 draft state 的 `expectedNodeHash` 或 `expectedEntityHash`。`SplitText` 显式携带预分配的右 Text ID；`JoinText` 保留左 ID 并记录右 ID alias/tombstone。Marks 属于完整 TextNode，范围格式化编译为 `SplitText + SetTextMarks`，不存在无法确定 ID 的 range add/remove mark。Academic entity 更新使用完整 typed replacement，不提供 arbitrary field patch 或 generic link/unlink relation。
 
+`operationReducer.ts` 的成功值是
+`ManuscriptOperationTransition`，不是可拼装 structural result。token 必须
+frozen、null-prototype、zero-field；module-private `WeakMap` 绑定 exact canonical
+resource、exact Operation identity、generated-against Revision、exact candidate
+base content wrapper 及其八个字段引用、index/Merkle state、next
+content/index、captured limits、touch set、capture 和 PositionMap fragments。
+所有 view/transfer lookup 都先按 token identity 查询 WeakMap，不在验证前读取
+receiver，因此 clone、Proxy、derived object 和 same-shape object 都失败且不
+触发 caller trap。
+
+Public transition view 是 non-authoritative primitive summary：只包含每次 fresh
+canonical `URI`、canonical resource string、Operation/Revision identity、Operation
+kind 和必要计数，不暴露 limits、touch set、fragments、candidate object 或内部
+URI instance。Draft owner 在同一个同步调用栈内部完成 transfer，transition 绝不
+交给 kernel、Browser 或 Workbench；transfer 只能成功一次，重复、Proxy 或
+lookalike 都失败。Transferred candidate 仍不具安装 authority，只有拥有 exact
+base provenance 的 draft owner 能核对 resource、Operation identity、content 八个
+field references、index 和 Merkle state 后推进 draft。禁止 production caller
+直接导入 structural transfer API，并由 layer check 只允许 `manuscriptDraft.ts`
+和对应 reducer tests 使用。禁止
+`isTrustedCapture`、`isTrustedTouchSet`、standalone registrar、structural trusted
+predicate 或任何把这些部分重新组合成 authority 的 factory。
+
 `ReplaceAcademicEntity` 保留同一个 `EntityId`，但允许 Reference Snapshot、
 Evidence Link 和 Claim 之间的 typed replacement。Reducer 从旧 canonical
 collection 移除并按 ID 插入新 collection；由此产生的临时 dangling relation
@@ -813,6 +914,11 @@ model authority 和 recovery used-ID set 拒绝。
 
 模型维护已提交 Transaction ID 和 Operation ID 集合。任何 Transaction 内重复 Operation ID、跨历史重用 Transaction/Operation ID 或 recovery 后重放重复 ID 都显式拒绝；同一个 Operation ID 原样贯穿 compile、hash、WAL、replay 和 Semantic Diff。
 
+`DocumentSnapshot` 只表示已提交 Revision。Ordered Operations 之间使用 draft
+owner 私有的 `DraftCheckpoint`，绑定 current content、exact index、exact Merkle
+state 和已消费 transition sequence；不得通过 spread changed content、复用 base
+Revision ID 或伪造 `DocumentSnapshot` 表示中间状态。
+
 原子应用顺序：
 
 ```text
@@ -833,11 +939,21 @@ decode closed input
 → bind Snapshot, PositionMap and inverse plan to Revision
 → encode and verify the complete WAL record
 → install one in-memory commit
-→ publish immutable commit event
+→ publish immutable commit event with listener isolation
 → enqueue durability
 ```
 
-内存 commit 之前的任一步失败都不改变模型、事件、history 或 durability queue。一旦 Revision 安装到内存，取消不回滚该 Revision；`applyTransaction` 返回该 commit，后续 durability wait 可以独立取消。
+内存 commit 之前的任一步失败都不改变模型、事件、history 或 durability queue。
+Final cancellation check 之后到 in-memory pointer swap 之间不得 `await`、调用
+listener 或执行 caller hook。Revision 一旦安装，取消和之后的错误都不能回滚；
+`applyTransaction` 返回该 memory commit，后续 durability wait 可以独立取消。
+
+Commit event listener 的异常必须逐 listener 隔离并进入诊断，不能逃逸、阻止其他
+listener、阻止 durability enqueue 或改变已安装 commit。若 enqueue 在安装后
+同步失败，Revision 与 commit event 仍保留，模型立即进入 terminal
+`durability-fault` 和 read-only；该 Revision 及所有 pending non-memory waiter
+失败，所有后续写入拒绝。这个结果不能伪装成 pre-commit Transaction failure、
+回滚为空文档或继续 writable。
 
 `PositionMap` 绑定 resource、`fromRevisionId` 和 `toRevisionId`，支持 position、node ID 和 composed mapping。结果只能是 `mapped`、`deleted`、`ambiguous` 或 `orphaned`。Rebase 在显式组合中间 maps 后重新校验 content hash、schema、academic relation 和 scope。
 
@@ -874,10 +990,23 @@ Normalization 只在所有 ordered Operations 后运行一次，只扫描 touche
 neighborhoods，不生成 ID。Operation 和 Snapshot codec 已要求 marks
 canonical；normalization 只验证整组 marks，不排序、不去重、不修复非法的
 subscript/superscript 组合。它移除 schema 明确允许移除的空 Text，并合并
-相邻相同 marks Text（保留左 ID）；输出自己的 PositionMap fragments 和有界
-reversible delta，且再次运行必须无变化。复杂度按 touched parent 的直接
-child 扫描和 changed ancestor 的 child-slot 浅拷贝计；它不遍历或 rehash
-unrelated subtree，也不把当前数组结构描述成 persistent vector。
+相邻相同 marks Text（保留左 ID），且再次运行必须无变化。
+
+Normalizer 只由 draft owner 调用，返回一个 single-use、direction-bound opaque
+transition；module-private record 精确绑定 source 与 target
+content/index/Merkle state、forward direction、delta、PositionMap fragments、
+rehash IDs 和预算。Draft owner 同步消费 forward transition 时从 forward
+record 删除它，把 non-authoritative target candidate 转入自己的 exact
+checkpoint，并将同一个 zero-field runtime token identity 登记到独立的
+restore-receipt `WeakMap`。Restore 只接受该 direction-bound receipt，入口先按
+identity 查找并立即删除，再校验 exact target 并恢复 source；它不接受 caller
+提供的 `{ root, index, delta }`。Forward 与 restore 状态使用不同 nominal brand
+和 authority map，clone、Proxy、same-shape、重复消费和跨 transition 拼接都
+失败。禁止 public trusted-delta `WeakSet` predicate、standalone reversible
+delta 或将一个可信 delta 拼接到另一 candidate。
+Normalization 复杂度按 touched parent 的直接 child 扫描和 changed ancestor
+的 child-slot 浅拷贝计；它不遍历或 rehash unrelated subtree，也不把当前数组
+结构描述成 persistent vector。
 
 Kernel 产生不含新 ID 的 `InverseDraft`。History boundary 创建 undo Transaction 时分配全新的 Transaction ID 和 Operation ID，并绑定 forward commit 的 Revision 和 post-document hash。Inverse 顺序固定为 normalization inverse，然后从最后一个 forward Operation 到第一个；undo/redo 都是普通的新 Transaction，永不复用 forward Operation ID。
 
@@ -1029,6 +1158,7 @@ append 次数反复复制已接收 bytes。Resynchronization 只在线性 magic 
 | memory commit 前取消 | 原状态 | `CancellationError` | 允许 |
 | memory commit 后取消 | Revision 保留 | commit 仍返回；独立 waiter 可取消 | 允许 |
 | WAL record encode 失败，尚未 memory commit | 原状态 | Transaction typed error | 允许 |
+| memory commit 后 durability enqueue 同步失败 | Revision 保留；`durability-fault`、read-only | commit 仍返回；该 Revision 及所有非-memory waiter 失败 | 拒绝 |
 | WAL append 或 fsync 失败 | `durability-fault`、read-only | 该 Revision 及所有非-memory waiter 失败 | 拒绝 |
 | writer fence 或 generation 失效 | `authority-lost`、read-only | 所有未完成非-memory waiter 失败 | 拒绝 |
 | Snapshot 临时写、校验或 manifest switch 失败，而 WAL 有效 | 保持 writable；记录 snapshot failure | 对应 snapshot waiter 失败 | 允许，Snapshot 可显式重试 |
@@ -1242,33 +1372,59 @@ Snapshot、WAL、clipboard、import、Agent input、Source metadata 和 URI payl
 
 ## 性能档位
 
-唯一规模定义位于 `src/cs/editor/test/common/performance/manuscriptProfiles.ts`。S 是交互基线，M 是完整目标文稿，L 是压力文稿。规范、fixture generator、benchmark 和报告都导入或读取同一份 profile，不在 package metadata、manifest 或另一份文档重复锁定数值。
+唯一规模定义位于
+`src/cs/editor/test/common/performance/manuscriptProfiles.ts`。S 是交互基线，M
+是完整目标文稿，L 是压力文稿。每个 profile 同时锁定 identity、node/entity/
+relation counts、maximum depth、maximum direct children、text UTF-8/UTF-16 bytes、
+maximum subtree、metadata authors/keywords/affiliations、Operation/precondition
+counts、touched-parent widths、viewport/projection density 和 academic collection
+shape。Wide-parent lookup、deep path 和 maximum-operation chain 是同文件拥有的
+named adversarial witnesses。规范、fixture generator、benchmark 和报告都读取
+这些 symbols，不在 package metadata、manifest、测试或另一份文档复制数值。
 
 性能约束：
 
-- S/M 局部输入到已提交模型和受影响 DOM patch 的 P95 目标小于 16 ms；
+- S/M 局部输入的 memory model commit 与受影响 DOM patch 分别报告 P95，并以
+  二者合计小于 16 ms 为交互目标；durability enqueue、WAL、fsync 和 Snapshot
+  不计入 memory commit latency；
 - 局部 Transaction 不默认 clone、serialize、hash 或 render 整棵树；
 - canonical JSON、hash、PositionMap 和 index update 不产生与无关文档大小成正比的重复工作；
 - Outline、search、diagnostics 和 Proposal validation 使用 revision-bound incremental index；
 - 大读取显式分页并报告 approximate bytes 和 truncation；
 - L profile 可以异步完成非输入关键派生工作，但结果必须标明 Revision 和 stale 状态。
 
+每个性能报告固定被测 commit、profile/witness identity、reference environment、
+warm-up 次数、sample count、Operation mix、viewport、projection density、raw
+samples 和失败/离群规则。只报告 wall-clock P95 而没有这些 identity 与结构计数
+不构成性能证据。
+
 首次 Snapshot strict decode 和独立 hash rebuild 是
 `O(W × structuralItems + metadataItems + canonical content bytes)`，其中
 formal key width `W` 对 node/entity 固定为 32、对 relation 固定为 64，因此
 相对 item count 仍为线性。Structural lookup/replace/insert/remove 最多访问
 32 或 64 个 Patricia nibble 层，每层 branching 最大为 16；这是 fixed-width
-bound，不表述为 `O(log32 N)`。Move 是有界 remove+insert，只更新常数个
-linked entry/path。Metadata 同长单项 replacement 才使用 fanout-32 positional
-path update；结构改变或完整 replacement 按实际 positional rebuild 计。
+bound，不表述为 `O(log32 N)`。只有 Merkle structural sequence 中的 Move 是
+有界 remove+insert，并只更新常数个 linked entry/path；整个 Operation 还必须
+分别计入 source/destination parent arrays、ancestor path、draft ordinal log、
+PositionMap 和 normalization 的真实工作。Metadata 同长单项 replacement 才使用
+fanout-32 positional path update；结构改变或完整 replacement 按实际 positional
+rebuild 计。
 
 当前 Snapshot 的正文、Academic Graph collection 和 metadata 使用 immutable
 array；parent children、collection 或 metadata array 的浅拷贝仍可能对对应
-array length 线性，绝不能算作 Patricia 对数更新。Full rebuild 的性能证据
-分别报告 structural item reads、Patricia visits/copies 和 hash calls；
-wall-clock 只与这些结构证据及 raw samples 一起解释。
+array length 线性，绝不能算作 Patricia 对数更新。Draft parent lookup 不扫描
+这些 arrays；其成本只与 exact override version 之后的 chunked ordinal edits
+相关，commit compaction 成本单独报告。每个 benchmark 使用 hard pre-install
+budgets 并报告：node payload reads、parent/collection child slots copied、ancestor
+nodes visited/copied、ordinal log chunks/entries allocated 与 replayed、normalization
+children scanned/copied、Merkle/Patricia visits/copies/hash calls、canonical bytes、
+DOM view parts read/patched 和 peak retained draft state。
 
-性能结论只来自被测 Comet commit、真实 Model Service、真实 projection、固定 reference environment、raw samples 和 profile identity。
+Wide-parent witness 必须证明 shifted sibling lookup 为零 child payload reads；
+maximum-operation witness 必须证明 log append/replay 受 Operation count 约束、
+不复制 flat history，并在 commit 后 compact 为无 draft history 的 immutable
+base index。Full rebuild 证据分别报告 structural item reads、Patricia
+visits/copies 和 hash calls；wall-clock 只与这些结构证据及 raw samples 一起解释。
 
 ## 验证
 
@@ -1291,8 +1447,13 @@ JSDOM 可以测试纯 DOM helper，但不能作为 IME、Selection、beforeinput
   `src/cs/editor/test/browser/**`；
 - structural empty/singleton、32/64 nibble、long prefix、last nibble、
   split/merge、order sensitivity、move-back 和 history convergence；
-- 20k structural full rebuild 证明每项只读取一次，且 fixed-width Patricia
-  visits/copies/hash calls 有界；
+- profile-owned `wideParentLookupWitness` 的 structural full rebuild 证明每项只
+  读取一次，且 fixed-width Patricia visits/copies/hash calls 有界；
+- 同一 wide-parent witness 的 head/middle/tail insert/delete、split/join、
+  same-parent removal-relative move 和 cross-parent move 证明 shifted
+  `getParentLocation` 为零 child payload reads；maximum-operation chain 证明
+  chunked edit append/replay 有界、cache identity 正确、removed parent
+  prune/reinsert 正确，并在 commit 后无 draft log；
 - incremental Merkle root 必须与每个新 Snapshot 的独立完整复算逐 Revision
   完全一致，且局部编辑的 visits/copies/hash calls 只覆盖 changed paths；
 - UUIDv7 parser/allocator、clock rollback、sequence exhaustion、UUIDv8 derivation和 Change Group exact payload；

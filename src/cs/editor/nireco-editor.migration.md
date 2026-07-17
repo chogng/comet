@@ -75,13 +75,13 @@ fields.
 
 ## Direct migration phases
 
-1. Freeze `NIRECO.md`, this migration boundary, the single performance profile, and deterministic core vectors. Split canonical JSON, hash preimage, SHA-256, identifiers, resource validation, and typed errors into their final modules. Remove Workspace, read-session, debug, governance-manifest, Preview fixture, and package-only identities from Editor core.
-2. Move Manuscript nodes, strict schema, immutable Snapshot, document index, academic graph, Semantic Position, Operation, Transaction, normalization, PositionMap, inverse, and replay into `common/model/**`. Do not connect Browser or storage yet.
+1. Continuously maintain `NIRECO.md` and this migration document as the authoritative contract while implementation evidence resolves stale assumptions. Keep the single performance profile and deterministic core vectors versioned with their owning code. Split canonical JSON, hash preimage, SHA-256, identifiers, resource validation, and typed errors into their final modules. Remove Workspace, read-session, debug, governance-manifest, Preview fixture, and package-only identities from Editor core.
+2. Move Manuscript nodes, strict schema, immutable committed Snapshot, codec candidates, `manuscriptDraft` provenance authority, document index, chunked draft ordinal overlay and commit compaction, academic graph, Semantic Position, Operation, opaque single-use Operation transition, direction-bound normalization transition, Transaction identity authority, normalization, PositionMap, inverse, and replay into `common/model/**`. Only `decodeManuscriptDraft` may establish online base provenance from its own strict decode; no caller-supplied Snapshot/index/Merkle triple, intermediate fake Snapshot, trusted-delta predicate, flat parent edit history, or parent-width lookup scan is accepted. Do not connect Browser or storage yet.
 3. Add `IManuscriptModel`, Model Service, exact-scheme resolver, reference lifecycle, Revision/history, and trusted identity service using Comet Event, Disposable, Cancellation, URI/resources, and DI.
-4. Add the generic Platform durable byte-storage port and real failure-injectable implementation, then Editor WAL/Snapshot/manifest codecs, fencing, recovery, `whenDurable`, save semantics, and terminal fault behavior.
+4. Add the generic Platform durable byte-storage port and real failure-injectable implementation, then Editor WAL/Snapshot/manifest codecs, fencing, recovery, `whenDurable`, save semantics, listener-error isolation, post-install synchronous enqueue failure, and terminal fault behavior.
 5. Add Proposal state, Semantic Edit compilation, persistent Operation IDs, Change Group UUIDv8 identity, Semantic Diff, rebase, diagnostics, and dependency-closure compilation.
-6. Complete the final-path Editor-owned controller/input/view/widget pipeline and removable formatting/Figure contributions against the real model. Complete the model-bound read, Proposal, DOCX, IPC, import, and empty-resource capabilities needed by every production consumer. These modules are tested directly but do not register a second document authority or connect a parallel Workbench path.
-7. Perform one atomic production cutover. Load native Editor registrations only through `editor.all.ts`; switch Draft Input/Pane/Service, Feature-owned Agent reads and writes, attachments, targets, presentations, Document Actions, DOCX, IPC, and legacy data handling to revision-bound Editor and Proposal services; keep Agent session, grant, scope, opaque cursor, idempotency, review controller, Tool descriptor/executor, target, and presentation ownership in Workbench; and keep Platform Agent Host Feature-neutral. In the same commit, delete `browser/text`, `WritingEditorDocument`, Input-owned document state, prop-echo sync, Browser ID allocation, invalid-to-empty behavior, every ProseMirror package and lockfile-only transitive dependency, and the Vite ProseMirror vendor chunk. No intermediate commit may delete the old authority while a production consumer still imports it.
+6. Complete the final-path Editor-owned controller/input/view/widget pipeline and removable formatting/Figure contributions against the real model. Complete the model-bound read, Proposal, DOCX, IPC, import, and trusted initial-document creation capabilities needed by every production consumer. These modules are tested directly but do not register a second document authority, import `browser/text`, enter `editor.all.ts`, or connect a parallel Workbench path before cutover.
+7. Perform one atomic production cutover. Make `editor.all.ts` the only side-effect aggregate for native Editor singleton, opener, command, style, and contribution registrations; the Workbench shell imports that aggregate but never side-effect imports an Editor implementation or `.contribution` module. In the same commit, switch Draft Input/Pane/Service, Feature-owned Agent reads and writes, attachments, targets, presentations, Document Actions, DOCX, IPC, and legacy data handling to revision-bound Editor and Proposal services; keep Agent session, grant, scope, opaque cursor, idempotency, review controller, Tool descriptor/executor, target, and presentation ownership in Workbench; and keep Platform Agent Host Feature-neutral. Also in that commit, delete `browser/text`, `WritingEditorDocument`, Input-owned document state, prop-echo sync, Browser ID allocation, invalid-to-empty behavior, every ProseMirror package and lockfile-only transitive dependency, and the Vite ProseMirror vendor chunk. No native-to-ProseMirror adapter, facade, dual run, partial registration, or intermediate production authority is permitted, and no intermediate commit may delete the old authority while a production consumer still imports it.
 8. Run real Browser input/IME/multi-view evidence, Platform durability fault/recovery evidence, Workbench direct integration, S/M/L performance, all unit runtimes, typecheck, coverage, layer checks, build, and repository verification. Remove standalone package dependencies and obsolete copied artifacts.
 
 Each phase is verified and committed before the next phase broadens the change surface. A phase commit contains final-path code only; it does not preserve a temporary facade, alias, dual authority, or fallback for later cleanup.
@@ -102,8 +102,18 @@ Each phase is verified and committed before the next phase broadens the change s
 Standalone pass labels are not inherited. The integrated implementation must newly prove:
 
 - the exact hash preimage and all golden hashes in Comet;
+- strict Snapshot codec candidates never confer online provenance; only the
+  `manuscriptDraft` authority can mint an exact base, and Operation and
+  normalization transitions reject clones, Proxies, spliced parts, repeated
+  consumption, and mismatched base identities;
 - UUIDv7 clock rollback/exhaustion, persisted Operation IDs, and exact UUIDv8 Change Group payload/order;
-- WAL append/fsync terminal behavior, Snapshot retry behavior, fence loss, orphan Snapshot, tail truncation, middle corruption, sequence/parent mismatch, and dirty/save/close behavior;
+- wide-parent shifted lookups perform zero child-payload reads, maximum-operation
+  draft ordinal logs remain chunked and bounded, and commit compaction removes all
+  draft overlay history;
+- WAL append/fsync terminal behavior, post-install enqueue failure, listener
+  isolation, Snapshot retry behavior, fence loss, orphan Snapshot, tail
+  truncation, middle corruption, sequence/parent mismatch, and dirty/save/close
+  behavior;
 - one active model per Comet resource and two independent Views over one model;
 - the Editor-owned Browser pipeline without ProseMirror, contenteditable document authority, browser-local history, or Browser-generated IDs;
 - real Browser IME, composition, beforeinput, Selection mapping, paste, undo/redo, structure, Figure, Citation, and divergence recovery;
@@ -116,6 +126,9 @@ Standalone pass labels are not inherited. The integrated implementation must new
 This migration is complete only when:
 
 - all surviving production behavior is owned by the final Comet Editor, generic Platform storage, Workbench Draft Editor, or existing Feature-neutral Agent Host boundary;
+- every Editor-owned registration is reachable only through `editor.all.ts`, and
+  Workbench production code does not side-effect import Editor implementation or
+  contribution modules;
 - Editor common imports no Browser, Node, Electron, Workbench, Sessions, or Agent Host implementation;
 - `IManuscriptModel` is the only document, Revision, Transaction, history, and durability authority;
 - every Editor Browser View and Draft Input consumes the same resolved model;
