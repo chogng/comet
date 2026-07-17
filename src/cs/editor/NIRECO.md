@@ -202,7 +202,10 @@ Revision、Transaction、Operation、Node、Entity 和 Proposal ID 使用 canoni
 - 时钟和密码学熵只在注入的 identity service 边界读取；
 - Browser seed source 只使用 `crypto.getRandomValues`；缺失时显式失败，不使用 `Math.random`；
 - 同毫秒和时钟回退时 allocator 维持 UUID 字节序单调；
-- 计数空间耗尽显式报告 `IDENTITY_SEQUENCE_EXHAUSTED`；
+- 时钟不可用、密码学熵不可用和计数空间耗尽分别报告
+  `IDENTITY_CLOCK_UNAVAILABLE`、
+  `IDENTITY_CRYPTOGRAPHIC_RANDOM_UNAVAILABLE` 和
+  `IDENTITY_SEQUENCE_EXHAUSTED`；
 - reducer、normalizer、replay、schema 和 view projection 都不生成 ID；
 - Operation ID 在 Transaction 或 Proposal 编译时分配一次，并与 Operation 一起持久化；
 - ProseMirror schema/plugin 不补 ID；
@@ -739,7 +742,7 @@ Compose 的状态规则固定为：
 - `orphaned` 永久保持 orphaned；
 - `ambiguous` 展平并稳定去重所有 candidate；全部 candidate 映射到同一值时才能收敛为 mapped，部分 candidate 删除或 orphan 时仍保持 ambiguous，全部删除时成为 deleted，无 surviving candidate 且存在 orphaned 时成为 orphaned。
 
-Normalization 只在所有 ordered Operations 后运行一次，只扫描 touched neighborhoods，不生成 ID。它 canonicalize marks，移除 schema 明确允许移除的空 Text，并合并相邻相同 marks Text（保留左 ID）；输出自己的 PositionMap fragments 和 reversible delta，且再次运行必须无变化。
+Normalization 只在所有 ordered Operations 后运行一次，只扫描 touched neighborhoods，不生成 ID。Operation 和 Snapshot codec 已要求 marks canonical；normalization 只验证整组 marks，不排序、不去重、不修复非法的 subscript/superscript 组合。它移除 schema 明确允许移除的空 Text，并合并相邻相同 marks Text（保留左 ID）；输出自己的 PositionMap fragments 和有界 reversible delta，且再次运行必须无变化。复杂度按 touched parent 的直接 child 扫描和 changed ancestor 的 child-slot 浅拷贝计；它不遍历或 rehash unrelated subtree，也不把当前数组结构描述成 persistent vector。
 
 Kernel 产生不含新 ID 的 `InverseDraft`。History boundary 创建 undo Transaction 时分配全新的 Transaction ID 和 Operation ID，并绑定 forward commit 的 Revision 和 post-document hash。Inverse 顺序固定为 normalization inverse，然后从最后一个 forward Operation 到第一个；undo/redo 都是普通的新 Transaction，永不复用 forward Operation ID。
 
@@ -1079,7 +1082,7 @@ Snapshot、WAL、clipboard、import、Agent input、Source metadata 和 URI payl
 - 大读取显式分页并报告 approximate bytes 和 truncation；
 - L profile 可以异步完成非输入关键派生工作，但结果必须标明 Revision 和 stale 状态。
 
-首次 Snapshot strict decode 和独立 hash rebuild 是 `O(nodes + academic entities + canonical content bytes)`。已存在 TextNode 的局部替换是 `O(changed text bytes + treeDepth × log32(maxSiblingCount))`，再加常数个 document aggregate hash；只有实际影响 `k` 个 Claim 时才增加 `O(k × log32(claimCount))`。性能测试通过 hash-call instrumentation 证明未访问未变 node、metadata、settings 和无关 academic entity，而不只比较总 wall-clock。
+首次 Snapshot strict decode 和独立 hash rebuild 是 `O(nodes + academic entities + canonical content bytes)`。当前 Snapshot 的正文和 Academic Graph collection 使用 immutable array；局部变化的内容 copy 成本因此按 changed ancestor path 或 changed collection 实际浅拷贝的 slot 总数计算，不伪装成 persistent-vector 对数更新。独立的 Merkle vector 更新才是每条 changed vector path 的 `O(log32(collectionCount))`，再加受影响 node ancestor hash 与常数个 document aggregate hash。性能 instrumentation 分别报告 visited node/entity、shallow-copied content slots、Merkle vector copied slots 和 hash calls，并证明不遍历、不 serialize、不 rehash unrelated subtree、metadata、settings 或 academic entity；wall-clock 只与这些结构证据和 raw samples 一起解释。
 
 性能结论只来自被测 Comet commit、真实 Model Service、真实 projection、固定 reference environment、raw samples 和 profile identity。
 
