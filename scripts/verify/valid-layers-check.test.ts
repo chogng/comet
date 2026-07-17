@@ -69,6 +69,10 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 		'editor/browser/view/invalid.ts',
 		"import 'prosemirror-state';\n",
 	);
+	writeSource(
+		'editor/editor.all.ts',
+		"import 'cs/editor/browser/text/editorDraftStyleService';\n",
+	);
 
 	const violations = findLayerViolations({
 		sourceRoot,
@@ -77,7 +81,7 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 			moduleResolution: ts.ModuleResolutionKind.Bundler,
 		},
 	});
-	assert.equal(violations.length, 10);
+	assert.equal(violations.length, 11);
 	assert.ok(violations.some(violation => violation.includes(
 		'workbench/browser/static.ts:1: lower cs layers must not import Sessions',
 	)));
@@ -101,6 +105,9 @@ test('Layer check resolves imports and enforces Editor and Sessions entry points
 	)));
 	assert.ok(violations.some(violation => violation.includes(
 		'editor/browser/view/invalid.ts:1: the native Editor pipeline must not import ProseMirror',
+	)));
+	assert.ok(violations.some(violation => violation.includes(
+		'editor/editor.all.ts:1: editor.all must not load the legacy ProseMirror surface',
 	)));
 	assert.equal(
 		violations.filter(violation => violation.includes('only Sessions entry points may load contribution entry points')).length,

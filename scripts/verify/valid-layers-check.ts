@@ -150,6 +150,16 @@ export function findLayerViolations(options: ILayerCheckOptions): readonly strin
 				);
 			}
 			if (
+				relativeFile === 'editor/editor.all.ts'
+				&& target.startsWith('cs/editor/browser/text/')
+			) {
+				report(
+					relativeFile,
+					imported,
+					'editor.all must not load the legacy ProseMirror surface',
+				);
+			}
+			if (
 				/^(?:editor\/common\/(?:core|model|services)\/|editor\/browser\/(?:controller|input|services|view|widget)\/|editor\/contrib\/)/u.test(relativeFile)
 				&& /^prosemirror(?:-|$)/u.test(target)
 			) {
