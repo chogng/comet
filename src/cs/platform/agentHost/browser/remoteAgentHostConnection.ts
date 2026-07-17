@@ -75,7 +75,7 @@ import {
 } from '../common/protocolValues.js';
 import type { IAgentClientToolPublicationSnapshot, IAgentToolExecutorEndpoint } from '../common/tools.js';
 
-const currentAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
+const currentAgentHostProtocolVersion = createAgentHostProtocolVersion('3');
 const maximumRemoteAgentHostBufferedActions = 65_536;
 
 type ProtocolRecord = Readonly<Record<string, AgentHostProtocolValue>>;

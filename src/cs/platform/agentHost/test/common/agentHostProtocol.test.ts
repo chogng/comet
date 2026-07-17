@@ -12,6 +12,7 @@ import type { IAgentHostConnection, IAgentRuntimeConnection } from 'cs/platform/
 import { AgentHostError, AgentHostErrorCode } from 'cs/platform/agentHost/common/errors';
 import {
 	AgentHostOperationId,
+	createAgentBehaviorActivityId,
 	createAgentChatId,
 	createAgentHostActionDigest,
 	createAgentHostAuthorityId,
@@ -22,9 +23,12 @@ import {
 	createAgentHostPayloadDigest,
 	createAgentHostProtocolVersion,
 	createAgentHostSequence,
+	createAgentInteractionId,
+	createAgentPlanId,
 	createAgentRuntimeProtocolVersion,
 	createAgentSessionId,
 	createAgentSubmissionId,
+	createAgentTaskId,
 	createAgentTurnId,
 } from 'cs/platform/agentHost/common/identities';
 import { AgentHostOperationOutcomeRegistry } from 'cs/platform/agentHost/common/operations';
@@ -387,7 +391,25 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 			payloadDigest,
 			state: 'completed',
 			user: { text: 'Question', attachments: [], interactionTargets: [] },
-			response: [{ kind: 'text', text: 'Answer' }],
+			behaviors: [
+				{ kind: 'text', text: 'Answer' },
+				{ kind: 'nativeTool', activity: createAgentBehaviorActivityId('activity-1'), name: 'Shell', category: 'command', state: 'completed', input: { command: 'pwd' }, output: { exitCode: 0 } },
+				{ kind: 'plan', plan: createAgentPlanId('plan-1'), title: 'Plan', state: 'completed', steps: [{ task: createAgentTaskId('task-1'), title: 'Step', state: 'completed' }] },
+				{ kind: 'usage', inputTokens: 10, outputTokens: 5, cachedInputTokens: 2 },
+				{ kind: 'context', usedTokens: 17, maximumTokens: 100, compaction: 'none' },
+			],
+			interactions: [{
+				request: {
+					id: createAgentInteractionId('permission-1'),
+					kind: 'permission',
+					title: 'Run command',
+					description: 'Allow execution',
+					metadata: {},
+					options: [{ id: 'allow', label: 'Allow' }, { id: 'deny', label: 'Deny' }],
+				},
+				state: 'resolved',
+				response: { kind: 'selected', option: 'allow' },
+			}],
 		};
 		const chat = {
 			id: createAgentChatId('chat-1'),
@@ -415,7 +437,20 @@ suite('Agent Host protocol core', { concurrency: false }, () => {
 
 		assert.doesNotThrow(() => assertAgentHostChatState(chat));
 		assert.throws(
-			() => assertAgentHostChatState({ ...chat, turns: [{ ...turn, response: [{ text: 'untyped' }] }] }),
+			() => assertAgentHostChatState({ ...chat, turns: [{ ...turn, behaviors: [{ text: 'untyped' }] }] }),
+			error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
+		);
+		assert.throws(
+			() => assertAgentHostChatState({
+				...chat,
+				turns: [{
+					...turn,
+					interactions: [{
+						...turn.interactions[0],
+						response: { kind: 'selected', option: 'missing' },
+					}],
+				}],
+			}),
 			error => assertErrorCode(error, AgentHostErrorCode.InvalidProtocolValue),
 		);
 	});

@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { URI } from 'cs/base/common/uri';
 import type {
 	IAgentBackingIdentity,
-	AgentTurnResponsePart,
+	AgentTurnBehavior,
 	AgentSessionConfigurationUpdateDecision,
 	IAgentResumeState,
 	IAgentWorkspace,
@@ -187,7 +187,7 @@ export interface IAgentHostLegacyCatalogSource {
 export interface IAgentHostLegacyAssistantPresentationSource {
 	readonly id: string;
 	readonly turn: AgentTurnId;
-	readonly responsePartIndex: number;
+	readonly behaviorIndex: number;
 	readonly value: AgentHostProtocolValue;
 }
 
@@ -205,7 +205,7 @@ export interface IAgentHostLegacyTurnEnrichment {
 	readonly chat: AgentChatId;
 	readonly turn: AgentTurnId;
 	readonly interactionTargets: readonly IAgentHostInteractionTarget[];
-	readonly response: readonly Extract<AgentTurnResponsePart, { readonly kind: 'toolCall' | 'toolResult' }>[];
+	readonly behaviors: readonly Extract<AgentTurnBehavior, { readonly kind: 'contributedToolCall' | 'contributedToolResult' }>[];
 }
 
 export interface IAgentHostLegacyCatalogMigrationCompanion {
@@ -274,7 +274,7 @@ interface ILegacySessionMigrationPlan {
 		readonly id: AgentTurnId;
 		readonly submission: ReturnType<typeof createAgentSubmissionId>;
 		readonly user: IAgentHostTurn['user'];
-		readonly response: readonly AgentTurnResponsePart[];
+		readonly behaviors: readonly AgentTurnBehavior[];
 	}[];
 }
 
@@ -588,7 +588,7 @@ function createLegacySessionMigrationPlans(
 			id: AgentTurnId;
 			submission: ReturnType<typeof createAgentSubmissionId>;
 			user: IAgentHostTurn['user'];
-			response: AgentTurnResponsePart[];
+			behaviors: AgentTurnBehavior[];
 		}> = [];
 		for (const message of session.messages) {
 			if (message.role === 'user') {
@@ -602,7 +602,7 @@ function createLegacySessionMigrationPlans(
 						),
 						interactionTargets: Object.freeze([]),
 					}),
-					response: [],
+					behaviors: [],
 				});
 				continue;
 			}
@@ -610,12 +610,12 @@ function createLegacySessionMigrationPlans(
 			if (message.images.length !== 0 || !turn) {
 				throw new Error('Legacy assistant message cannot be represented in canonical Host history');
 			}
-			const responsePartIndex = turn.response.length;
-			turn.response.push(Object.freeze({ kind: 'text', text: message.content }));
+			const behaviorIndex = turn.behaviors.length;
+			turn.behaviors.push(Object.freeze({ kind: 'text', text: message.content }));
 			assistantMessages.push(Object.freeze({
 				id: message.id,
 				turn: turn.id,
-				responsePartIndex,
+				behaviorIndex,
 				value: message.value,
 			}));
 		}
@@ -630,7 +630,7 @@ function createLegacySessionMigrationPlans(
 			source,
 			turns: Object.freeze(turns.map(turn => Object.freeze({
 				...turn,
-				response: Object.freeze(turn.response),
+				behaviors: Object.freeze(turn.behaviors),
 			}))),
 		});
 	}));
@@ -655,7 +655,7 @@ function validateLegacyTurnEnrichments(
 		if (!knownTurns.has(key) || result.has(key)) {
 			throw new Error(`Legacy presentation enrichment '${key}' is unmatched or duplicated`);
 		}
-		if (enrichment.interactionTargets.length === 0 || enrichment.response.length === 0) {
+		if (enrichment.interactionTargets.length === 0 || enrichment.behaviors.length === 0) {
 			throw new Error(`Legacy presentation enrichment '${key}' is empty`);
 		}
 		const targetIds = new Set<string>();
@@ -666,8 +666,8 @@ function validateLegacyTurnEnrichments(
 			}
 			targetIds.add(target.id);
 		}
-		for (const part of enrichment.response) {
-			if (part.kind !== 'toolCall' && part.kind !== 'toolResult') {
+		for (const part of enrichment.behaviors) {
+			if (part.kind !== 'contributedToolCall' && part.kind !== 'contributedToolResult') {
 				throw new Error(`Legacy presentation enrichment '${key}' contains a non-Tool response`);
 			}
 			assertAgentHostProtocolValue(part);
@@ -677,7 +677,7 @@ function validateLegacyTurnEnrichments(
 			chat,
 			turn,
 			interactionTargets: Object.freeze([...enrichment.interactionTargets]),
-			response: Object.freeze([...enrichment.response]),
+			behaviors: Object.freeze([...enrichment.behaviors]),
 		}));
 	}
 	return result;
@@ -702,17 +702,18 @@ function createMigratedTurns(
 			...turn.user,
 			interactionTargets: enrichment?.interactionTargets ?? Object.freeze([]),
 		});
-		const response = Object.freeze([
-			...turn.response,
-			...(enrichment?.response ?? []),
+		const behaviors = Object.freeze([
+			...turn.behaviors,
+			...(enrichment?.behaviors ?? []),
 		]);
 		return Object.freeze({
 			id: turn.id,
 			submission: turn.submission,
-			payloadDigest: computeMigratedPayloadDigest({ user, response }),
+			payloadDigest: computeMigratedPayloadDigest({ user, behaviors }),
 			state: failed ? 'failed' : 'completed',
 			user,
-			response,
+			behaviors,
+			interactions: Object.freeze([]),
 			...(failure === undefined ? {} : { failure }),
 		});
 	}));

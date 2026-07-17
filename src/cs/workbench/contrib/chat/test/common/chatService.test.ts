@@ -164,7 +164,8 @@ function createHostChatState(title: string): IAgentHostChatState {
 				attachments: [],
 				interactionTargets: [],
 			},
-			response: [{ kind: 'text', text: 'Answer' }],
+			behaviors: [{ kind: 'text', text: 'Answer' }],
+			interactions: [],
 		}],
 	};
 }
@@ -240,7 +241,7 @@ test('ChatService owner applies authoritative Host state only to its exact immut
 	assert.equal(acquiredReference.object.getSnapshot().hostState?.title, 'Updated Host title');
 });
 
-test('ChatService resolves an imported presentation by exact canonical response-part identity', t => {
+test('ChatService resolves an imported presentation by exact canonical behavior identity', t => {
 	const storage = createTestChatStorageService();
 	storage.store(
 		ChatPersistenceStorageKey,
@@ -260,7 +261,7 @@ test('ChatService resolves an imported presentation by exact canonical response-
 					session: testHostSessionId,
 					chat: testHostChatId,
 					turn: createAgentTurnId('turn-1'),
-					responsePartIndex: 0,
+					behaviorIndex: 0,
 					type: testPresentationType,
 					value: { label: 'exact' },
 				}],
@@ -282,26 +283,26 @@ test('ChatService resolves an imported presentation by exact canonical response-
 		session: testHostSessionId,
 		chat: testHostChatId,
 		turn: createAgentTurnId('turn-1'),
-		responsePartIndex: 0,
+		behaviorIndex: 0,
 	});
 	assert.deepEqual(presentation?.value, { label: 'exact' });
 	assert.equal(owner.object.getHostPresentation({
 		session: testHostSessionId,
 		chat: testHostChatId,
 		turn: createAgentTurnId('turn-1'),
-		responsePartIndex: 1,
+		behaviorIndex: 1,
 	}), undefined);
 	assert.equal(owner.object.getHostPresentation({
 		session: createAgentSessionId('session-other'),
 		chat: testHostChatId,
 		turn: createAgentTurnId('turn-1'),
-		responsePartIndex: 0,
+		behaviorIndex: 0,
 	}), undefined);
 	assert.throws(() => owner.object.getHostPresentation({
 		session: testHostSessionId,
 		chat: testHostChatId,
 		turn: createAgentTurnId('turn-1'),
-		responsePartIndex: -1,
+		behaviorIndex: -1,
 	}), /non-negative safe integer/);
 });
 
@@ -684,7 +685,7 @@ test('ChatService compare-and-set presentation updates persist only the exact ex
 		session: testHostSessionId,
 		chat: testHostChatId,
 		turn: createAgentTurnId('turn-1'),
-		responsePartIndex: 0,
+		behaviorIndex: 0,
 	};
 	owner.replaceHostState(
 		{ session: testHostSessionId, chat: testHostChatId },

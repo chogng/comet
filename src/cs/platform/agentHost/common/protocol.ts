@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IAgentDescriptor, IAgentExecutionProfile, IAgentRuntimeRegistration, IAgentWorkspace, AgentChatOrigin, AgentTurnResponsePart } from './agent.js';
+import { IAgentDescriptor, IAgentExecutionProfile, IAgentRuntimeRegistration, IAgentWorkspace, AgentChatOrigin, AgentInteractionRequest, AgentInteractionResponse, AgentTurnBehavior } from './agent.js';
 import { IAgentHostAttachment, IAgentHostInteractionTarget, assertAgentHostAttachment, assertAgentHostInteractionTarget } from './attachments.js';
 import { IAgentHostChannelAction, IAgentHostChannelSnapshot } from './channelState.js';
 import {
@@ -27,6 +27,7 @@ import {
 	AgentHostProtocolVersion,
 	AgentHostSequence,
 	AgentId,
+	AgentInteractionId,
 	AgentConfigurationPropertyId,
 	AgentConfigurationSchemaRevision,
 	AgentConfigurationStateRevision,
@@ -39,11 +40,15 @@ import {
 	AgentToolId,
 	AgentTurnId,
 	createAgentHostChannelId,
+	createAgentBehaviorActivityId,
 	createAgentChatId,
 	createAgentHostPayloadDigest,
+	createAgentInteractionId,
 	createAgentModelId,
+	createAgentPlanId,
 	createAgentSessionId,
 	createAgentSubmissionId,
+	createAgentTaskId,
 	createAgentToolCallId,
 	createAgentToolId,
 	createAgentTurnId,
@@ -286,8 +291,15 @@ export interface IAgentHostTurn {
 	readonly payloadDigest: AgentHostPayloadDigest;
 	readonly state: AgentHostTurnState;
 	readonly user: IAgentHostUserMessage;
-	readonly response: readonly AgentTurnResponsePart[];
+	readonly behaviors: readonly AgentTurnBehavior[];
+	readonly interactions: readonly IAgentHostTurnInteraction[];
 	readonly failure?: IAgentHostOperationFailure;
+}
+
+export interface IAgentHostTurnInteraction {
+	readonly request: AgentInteractionRequest;
+	readonly state: 'pending' | 'resolved' | 'cancelled';
+	readonly response?: AgentInteractionResponse;
 }
 
 export interface IAgentHostChatState extends IAgentHostChatSummary {
@@ -722,6 +734,14 @@ export type AgentHostMutationPayload =
 		readonly turn: AgentTurnId;
 	}
 	| {
+		readonly kind: 'respondInteraction';
+		readonly session: AgentSessionId;
+		readonly chat: AgentChatId;
+		readonly turn: AgentTurnId;
+		readonly interaction: AgentInteractionId;
+		readonly response: AgentInteractionResponse;
+	}
+	| {
 		readonly kind: 'authenticateAgent';
 		readonly packageId: AgentPackageId;
 		readonly agentId: AgentId;
@@ -814,6 +834,13 @@ export type AgentHostMutationResult = IAgentHostMutationCommit & (
 		readonly session: AgentSessionId;
 		readonly chat: AgentChatId;
 		readonly turn: AgentTurnId;
+	}
+	| {
+		readonly kind: 'respondInteraction';
+		readonly session: AgentSessionId;
+		readonly chat: AgentChatId;
+		readonly turn: AgentTurnId;
+		readonly interaction: AgentInteractionId;
 	}
 	| {
 		readonly kind: 'authenticateAgent';
@@ -968,56 +995,284 @@ function assertOperationFailure(value: unknown, field: string): void {
 	}
 }
 
-function assertResponseParts(value: unknown, field: string): void {
+const activityStates = Object.freeze(['pending', 'running', 'completed', 'cancelled', 'failed']);
+
+function assertOptionalProtocolValue(record: Readonly<Record<string, unknown>>, key: string): void {
+	if (record[key] !== undefined) {
+		assertAgentHostProtocolValue(record[key]);
+	}
+}
+
+function assertActivityState(value: unknown, field: string): void {
+	if (!activityStates.includes(String(value))) {
+		invalidChatState(field, value);
+	}
+}
+
+function assertTurnBehaviors(value: unknown, field: string): void {
 	if (!Array.isArray(value)) {
 		invalidChatState(field, value);
 	}
 	const toolCalls = new Set<string>();
 	const toolResults = new Set<string>();
-	for (const [index, partValue] of value.entries()) {
-		const partField = `${field}.${index}`;
-		const part = chatStateRecord(partValue, partField);
-		if (part.kind === 'text' || part.kind === 'reasoning') {
-			assertChatStateKeys(part, ['kind', 'text'], [], partField);
-			assertChatStateString(part.text, `${partField}.text`, 1024 * 1024, true);
+	for (const [index, behaviorValue] of value.entries()) {
+		const behaviorField = `${field}.${index}`;
+		const behavior = chatStateRecord(behaviorValue, behaviorField);
+		if (behavior.kind === 'text' || behavior.kind === 'reasoning') {
+			assertChatStateKeys(behavior, ['kind', 'text'], [], behaviorField);
+			assertChatStateString(behavior.text, `${behaviorField}.text`, 1024 * 1024, true);
 			continue;
 		}
-		if (part.kind === 'toolCall') {
-			assertChatStateKeys(part, ['kind', 'call', 'tool', 'input'], [], partField);
-			assertChatStateString(part.call, `${partField}.call`, 128);
-			assertChatStateString(part.tool, `${partField}.tool`, 128);
-			createAgentToolCallId(part.call);
-			createAgentToolId(part.tool);
-			assertAgentHostProtocolValue(part.input);
-			if (toolCalls.has(part.call)) {
-				invalidChatState(`${partField}.call`, part.call);
+		if (behavior.kind === 'contributedToolCall') {
+			assertChatStateKeys(behavior, ['kind', 'call', 'tool', 'input'], [], behaviorField);
+			assertChatStateString(behavior.call, `${behaviorField}.call`, 128);
+			assertChatStateString(behavior.tool, `${behaviorField}.tool`, 128);
+			createAgentToolCallId(behavior.call);
+			createAgentToolId(behavior.tool);
+			assertAgentHostProtocolValue(behavior.input);
+			if (toolCalls.has(behavior.call)) {
+				invalidChatState(`${behaviorField}.call`, behavior.call);
 			}
-			toolCalls.add(part.call);
+			toolCalls.add(behavior.call);
 			continue;
 		}
-		if (part.kind === 'toolResult') {
-			assertChatStateKeys(part, ['kind', 'call', 'status'], ['output'], partField);
-			assertChatStateString(part.call, `${partField}.call`, 128);
-			createAgentToolCallId(part.call);
-			if (!toolCalls.has(part.call) || toolResults.has(part.call)) {
-				invalidChatState(`${partField}.call`, part.call);
+		if (behavior.kind === 'contributedToolResult') {
+			assertChatStateKeys(behavior, ['kind', 'call', 'status'], ['output'], behaviorField);
+			assertChatStateString(behavior.call, `${behaviorField}.call`, 128);
+			createAgentToolCallId(behavior.call);
+			if (!toolCalls.has(behavior.call) || toolResults.has(behavior.call)) {
+				invalidChatState(`${behaviorField}.call`, behavior.call);
 			}
-			if (!['completed', 'denied', 'cancelled', 'timedOut', 'failed'].includes(String(part.status))) {
-				invalidChatState(`${partField}.status`, part.status);
+			if (!['completed', 'denied', 'cancelled', 'timedOut', 'failed'].includes(String(behavior.status))) {
+				invalidChatState(`${behaviorField}.status`, behavior.status);
 			}
-			if (part.output !== undefined) {
-				assertAgentHostProtocolValue(part.output);
-			}
-			toolResults.add(part.call);
+			assertOptionalProtocolValue(behavior, 'output');
+			toolResults.add(behavior.call);
 			continue;
 		}
-		invalidChatState(`${partField}.kind`, part.kind);
+		if (behavior.kind === 'nativeTool') {
+			assertChatStateKeys(behavior, ['kind', 'activity', 'name', 'category', 'state'], ['input', 'output', 'parentActivity'], behaviorField);
+			assertChatStateString(behavior.activity, `${behaviorField}.activity`, 128);
+			assertChatStateString(behavior.name, `${behaviorField}.name`, 1_024);
+			createAgentBehaviorActivityId(behavior.activity);
+			if (!['command', 'file', 'search', 'mcp', 'other'].includes(String(behavior.category))) {
+				invalidChatState(`${behaviorField}.category`, behavior.category);
+			}
+			assertActivityState(behavior.state, `${behaviorField}.state`);
+			assertOptionalProtocolValue(behavior, 'input');
+			assertOptionalProtocolValue(behavior, 'output');
+			if (behavior.parentActivity !== undefined) {
+				assertChatStateString(behavior.parentActivity, `${behaviorField}.parentActivity`, 128);
+				createAgentBehaviorActivityId(behavior.parentActivity);
+			}
+			continue;
+		}
+		if (behavior.kind === 'plan') {
+			assertChatStateKeys(behavior, ['kind', 'plan', 'title', 'state', 'steps'], [], behaviorField);
+			assertChatStateString(behavior.plan, `${behaviorField}.plan`, 128);
+			assertChatStateString(behavior.title, `${behaviorField}.title`, 1_024, true);
+			createAgentPlanId(behavior.plan);
+			assertActivityState(behavior.state, `${behaviorField}.state`);
+			if (!Array.isArray(behavior.steps)) {
+				invalidChatState(`${behaviorField}.steps`, behavior.steps);
+			}
+			const tasks = new Set<string>();
+			for (const [stepIndex, stepValue] of behavior.steps.entries()) {
+				const stepField = `${behaviorField}.steps.${stepIndex}`;
+				const step = chatStateRecord(stepValue, stepField);
+				assertChatStateKeys(step, ['task', 'title', 'state'], [], stepField);
+				assertChatStateString(step.task, `${stepField}.task`, 128);
+				assertChatStateString(step.title, `${stepField}.title`, 1_024);
+				createAgentTaskId(step.task);
+				assertActivityState(step.state, `${stepField}.state`);
+				if (tasks.has(step.task)) {
+					invalidChatState(`${stepField}.task`, step.task);
+				}
+				tasks.add(step.task);
+			}
+			continue;
+		}
+		if (behavior.kind === 'task') {
+			assertChatStateKeys(behavior, ['kind', 'task', 'title', 'state'], ['parentTask', 'childChat', 'detail'], behaviorField);
+			assertChatStateString(behavior.task, `${behaviorField}.task`, 128);
+			assertChatStateString(behavior.title, `${behaviorField}.title`, 1_024);
+			createAgentTaskId(behavior.task);
+			assertActivityState(behavior.state, `${behaviorField}.state`);
+			if (behavior.parentTask !== undefined) {
+				assertChatStateString(behavior.parentTask, `${behaviorField}.parentTask`, 128);
+				createAgentTaskId(behavior.parentTask);
+			}
+			if (behavior.childChat !== undefined) {
+				assertChatStateString(behavior.childChat, `${behaviorField}.childChat`, 128);
+				createAgentChatId(behavior.childChat);
+			}
+			assertOptionalProtocolValue(behavior, 'detail');
+			continue;
+		}
+		if (behavior.kind === 'background') {
+			assertChatStateKeys(behavior, ['kind', 'activity', 'title', 'state'], ['detail'], behaviorField);
+			assertChatStateString(behavior.activity, `${behaviorField}.activity`, 128);
+			assertChatStateString(behavior.title, `${behaviorField}.title`, 1_024);
+			createAgentBehaviorActivityId(behavior.activity);
+			assertActivityState(behavior.state, `${behaviorField}.state`);
+			assertOptionalProtocolValue(behavior, 'detail');
+			continue;
+		}
+		if (behavior.kind === 'terminal') {
+			assertChatStateKeys(behavior, ['kind', 'activity', 'terminal', 'stream', 'text'], [], behaviorField);
+			assertChatStateString(behavior.activity, `${behaviorField}.activity`, 128);
+			assertChatStateString(behavior.terminal, `${behaviorField}.terminal`, 128);
+			assertChatStateString(behavior.text, `${behaviorField}.text`, 1024 * 1024, true);
+			createAgentBehaviorActivityId(behavior.activity);
+			if (behavior.stream !== 'stdout' && behavior.stream !== 'stderr') {
+				invalidChatState(`${behaviorField}.stream`, behavior.stream);
+			}
+			continue;
+		}
+		if (behavior.kind === 'fileChange') {
+			assertChatStateKeys(behavior, ['kind', 'activity', 'resource', 'operation'], ['data'], behaviorField);
+			assertChatStateString(behavior.activity, `${behaviorField}.activity`, 128);
+			assertChatStateString(behavior.resource, `${behaviorField}.resource`, 8_192);
+			createAgentBehaviorActivityId(behavior.activity);
+			if (!['create', 'modify', 'delete', 'rename'].includes(String(behavior.operation))) {
+				invalidChatState(`${behaviorField}.operation`, behavior.operation);
+			}
+			assertOptionalProtocolValue(behavior, 'data');
+			continue;
+		}
+		if (behavior.kind === 'usage') {
+			assertChatStateKeys(behavior, ['kind', 'inputTokens', 'outputTokens', 'cachedInputTokens'], ['data'], behaviorField);
+			for (const key of ['inputTokens', 'outputTokens', 'cachedInputTokens']) {
+				assertChatStateTimestamp(behavior[key], `${behaviorField}.${key}`);
+			}
+			assertOptionalProtocolValue(behavior, 'data');
+			continue;
+		}
+		if (behavior.kind === 'context') {
+			assertChatStateKeys(behavior, ['kind', 'usedTokens', 'maximumTokens', 'compaction'], ['data'], behaviorField);
+			assertChatStateTimestamp(behavior.usedTokens, `${behaviorField}.usedTokens`);
+			assertChatStateTimestamp(behavior.maximumTokens, `${behaviorField}.maximumTokens`);
+			if (behavior.usedTokens > behavior.maximumTokens || !['none', 'running', 'completed'].includes(String(behavior.compaction))) {
+				invalidChatState(`${behaviorField}.context`, behavior.maximumTokens);
+			}
+			assertOptionalProtocolValue(behavior, 'data');
+			continue;
+		}
+		if (behavior.kind === 'retry') {
+			assertChatStateKeys(behavior, ['kind', 'attempt', 'reason'], ['data'], behaviorField);
+			assertChatStateTimestamp(behavior.attempt, `${behaviorField}.attempt`);
+			assertChatStateString(behavior.reason, `${behaviorField}.reason`, 4_096);
+			assertOptionalProtocolValue(behavior, 'data');
+			continue;
+		}
+		if (behavior.kind === 'status') {
+			assertChatStateKeys(behavior, ['kind', 'state', 'message'], ['data'], behaviorField);
+			if (!['working', 'waiting', 'paused'].includes(String(behavior.state))) {
+				invalidChatState(`${behaviorField}.state`, behavior.state);
+			}
+			assertChatStateString(behavior.message, `${behaviorField}.message`, 4_096, true);
+			assertOptionalProtocolValue(behavior, 'data');
+			continue;
+		}
+		invalidChatState(`${behaviorField}.kind`, behavior.kind);
+	}
+}
+
+function assertTurnInteractions(value: unknown, field: string): void {
+	if (!Array.isArray(value)) {
+		invalidChatState(field, value);
+	}
+	const identities = new Set<string>();
+	for (const [index, interactionValue] of value.entries()) {
+		const interactionField = `${field}.${index}`;
+		const interaction = chatStateRecord(interactionValue, interactionField);
+		assertChatStateKeys(interaction, ['request', 'state'], ['response'], interactionField);
+		const request = chatStateRecord(interaction.request, `${interactionField}.request`);
+		assertChatStateKeys(request, ['id', 'kind', 'title', 'description', 'metadata'], request.kind === 'input' ? ['activity', 'input'] : ['activity', 'options'], `${interactionField}.request`);
+		assertChatStateString(request.id, `${interactionField}.request.id`, 128);
+		assertChatStateString(request.title, `${interactionField}.request.title`, 1_024);
+		assertChatStateString(request.description, `${interactionField}.request.description`, 8_192, true);
+		createAgentInteractionId(request.id);
+		if (identities.has(request.id)) {
+			invalidChatState(`${interactionField}.request.id`, request.id);
+		}
+		identities.add(request.id);
+		if (request.activity !== undefined) {
+			assertChatStateString(request.activity, `${interactionField}.request.activity`, 128);
+			createAgentBehaviorActivityId(request.activity);
+		}
+		assertAgentHostProtocolValue(request.metadata);
+		if (request.kind === 'permission' || request.kind === 'confirmation') {
+			if (!Array.isArray(request.options) || request.options.length === 0) {
+				invalidChatState(`${interactionField}.request.options`, request.options);
+			}
+			const options = new Set<string>();
+			for (const [optionIndex, optionValue] of request.options.entries()) {
+				const optionField = `${interactionField}.request.options.${optionIndex}`;
+				const option = chatStateRecord(optionValue, optionField);
+				assertChatStateKeys(option, ['id', 'label'], ['description'], optionField);
+				assertChatStateString(option.id, `${optionField}.id`, 128);
+				assertChatStateString(option.label, `${optionField}.label`, 1_024);
+				if (option.description !== undefined) {
+					assertChatStateString(option.description, `${optionField}.description`, 4_096, true);
+				}
+				if (options.has(option.id)) {
+					invalidChatState(`${optionField}.id`, option.id);
+				}
+				options.add(option.id);
+			}
+		} else if (request.kind === 'input') {
+			const input = chatStateRecord(request.input, `${interactionField}.request.input`);
+			assertChatStateKeys(input, ['shape', 'schema'], ['initialValue'], `${interactionField}.request.input`);
+			if (!['text', 'choice', 'form'].includes(String(input.shape))) {
+				invalidChatState(`${interactionField}.request.input.shape`, input.shape);
+			}
+			assertAgentHostProtocolValue(input.schema);
+			assertOptionalProtocolValue(input, 'initialValue');
+		} else {
+			invalidChatState(`${interactionField}.request.kind`, request.kind);
+		}
+		if (!['pending', 'resolved', 'cancelled'].includes(String(interaction.state))) {
+			invalidChatState(`${interactionField}.state`, interaction.state);
+		}
+		if (interaction.state === 'pending') {
+			if (interaction.response !== undefined) {
+				invalidChatState(`${interactionField}.response`, interaction.response);
+			}
+			continue;
+		}
+		const response = chatStateRecord(interaction.response, `${interactionField}.response`);
+		if (response.kind === 'selected') {
+			assertChatStateKeys(response, ['kind', 'option'], ['data'], `${interactionField}.response`);
+			assertChatStateString(response.option, `${interactionField}.response.option`, 128);
+			assertOptionalProtocolValue(response, 'data');
+			if (
+				(request.kind !== 'permission' && request.kind !== 'confirmation')
+				|| interaction.state !== 'resolved'
+				|| !(request.options as readonly Readonly<Record<string, unknown>>[]).some(option => option.id === response.option)
+			) {
+				invalidChatState(`${interactionField}.response.kind`, response.kind);
+			}
+		} else if (response.kind === 'submitted') {
+			assertChatStateKeys(response, ['kind', 'value'], [], `${interactionField}.response`);
+			assertAgentHostProtocolValue(response.value);
+			if (request.kind !== 'input' || interaction.state !== 'resolved') {
+				invalidChatState(`${interactionField}.response.kind`, response.kind);
+			}
+		} else if (response.kind === 'cancelled') {
+			assertChatStateKeys(response, ['kind'], [], `${interactionField}.response`);
+			if (interaction.state !== 'cancelled') {
+				invalidChatState(`${interactionField}.response.kind`, response.kind);
+			}
+		} else {
+			invalidChatState(`${interactionField}.response.kind`, response.kind);
+		}
 	}
 }
 
 function assertTurn(value: unknown, field: string): { readonly id: string; readonly state: AgentHostTurnState } {
 	const turn = chatStateRecord(value, field);
-	assertChatStateKeys(turn, ['id', 'submission', 'payloadDigest', 'state', 'user', 'response'], ['failure'], field);
+	assertChatStateKeys(turn, ['id', 'submission', 'payloadDigest', 'state', 'user', 'behaviors', 'interactions'], ['failure'], field);
 	assertChatStateString(turn.id, `${field}.id`, 128);
 	assertChatStateString(turn.submission, `${field}.submission`, 128);
 	assertChatStateString(turn.payloadDigest, `${field}.payloadDigest`, 71);
@@ -1043,7 +1298,8 @@ function assertTurn(value: unknown, field: string): { readonly id: string; reado
 	for (const target of user.interactionTargets) {
 		assertAgentHostInteractionTarget(target);
 	}
-	assertResponseParts(turn.response, `${field}.response`);
+	assertTurnBehaviors(turn.behaviors, `${field}.behaviors`);
+	assertTurnInteractions(turn.interactions, `${field}.interactions`);
 	if (turn.state === 'failed') {
 		if (turn.failure === undefined) {
 			invalidChatState(`${field}.failure`, 'missing');

@@ -11,7 +11,7 @@ import {
 	parseWritingEditorDocument,
 	type WritingEditorDocument,
 } from 'cs/editor/common/writingEditorDocument';
-import type { AgentTurnResponsePart } from 'cs/platform/agentHost/common/agent';
+import type { AgentTurnBehavior } from 'cs/platform/agentHost/common/agent';
 import type { IAgentHostInteractionTarget } from 'cs/platform/agentHost/common/attachments';
 import {
 	createAgentHostClientConnectionId,
@@ -70,8 +70,8 @@ interface IPreparedLegacyPatch {
 	readonly target: IAgentHostInteractionTarget;
 	readonly proposal: IDraftEditorPatchProposal;
 	readonly applyState: DraftEditorPatchApplyState;
-	readonly toolCall: Extract<AgentTurnResponsePart, { readonly kind: 'toolCall' }>;
-	readonly toolResult: Extract<AgentTurnResponsePart, { readonly kind: 'toolResult' }>;
+	readonly toolCall: Extract<AgentTurnBehavior, { readonly kind: 'contributedToolCall' }>;
+	readonly toolResult: Extract<AgentTurnBehavior, { readonly kind: 'contributedToolResult' }>;
 }
 
 interface IPreparedLegacyChat {
@@ -389,7 +389,7 @@ function parseLegacyTurnPresentation(
 		session: chat.session,
 		chat: chat.chat,
 		turn: message.turn,
-		responsePartIndex: message.responsePartIndex,
+		behaviorIndex: message.behaviorIndex,
 		type: ArticleHistoryChatPresentationType,
 		value: protocolValue(createArticleHistoryChatPresentation(
 			articleIds ?? [],
@@ -424,7 +424,7 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 			readonly source: IAgentHostLegacyChatPresentationSource;
 			readonly turn: IPreparedLegacyPatch['turn'];
 			readonly targets: Map<string, IAgentHostInteractionTarget>;
-			readonly response: AgentTurnResponsePart[];
+			readonly behaviors: AgentTurnBehavior[];
 		}>();
 		for (const chat of prepared) {
 			for (const patch of chat.patches) {
@@ -435,7 +435,7 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 						source: chat.source,
 						turn: patch.turn,
 						targets: new Map(),
-						response: [],
+						behaviors: [],
 					};
 					groups.set(key, group);
 				}
@@ -444,7 +444,7 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 					throw new Error(`Legacy patch target '${patch.target.id}' conflicts within one Host Turn.`);
 				}
 				group.targets.set(patch.target.id, patch.target);
-				group.response.push(patch.toolCall, patch.toolResult);
+				group.behaviors.push(patch.toolCall, patch.toolResult);
 			}
 		}
 		return Object.freeze([...groups.values()].map(group => Object.freeze({
@@ -452,11 +452,11 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 			chat: group.source.chat,
 			turn: group.turn,
 			interactionTargets: Object.freeze([...group.targets.values()]),
-			response: Object.freeze(group.response.map(part => {
-				if (part.kind !== 'toolCall' && part.kind !== 'toolResult') {
+			behaviors: Object.freeze(group.behaviors.map(behavior => {
+				if (behavior.kind !== 'contributedToolCall' && behavior.kind !== 'contributedToolResult') {
 					throw new Error('Legacy patch preparation emitted a non-Tool response.');
 				}
-				return part;
+				return behavior;
 			})),
 		})));
 	}
@@ -540,13 +540,13 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 					patch: parsed.patchInput,
 				}))}`);
 				const toolCall = Object.freeze({
-					kind: 'toolCall' as const,
+					kind: 'contributedToolCall' as const,
 					call,
 					tool: DraftEditorProposeEditorPatchToolId,
 					input: parsed.patchInput,
 				});
 				const toolResult = Object.freeze({
-					kind: 'toolResult' as const,
+					kind: 'contributedToolResult' as const,
 					call,
 					status: 'completed' as const,
 					output: protocolValue({
@@ -596,19 +596,19 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 			const turnMatches = hostState.turns.filter(turn => turn.id === presentation.turn);
 			const sourceMatches = prepared.source.assistantMessages.filter(message =>
 				message.turn === presentation.turn
-				&& message.responsePartIndex === presentation.responsePartIndex,
+				&& message.behaviorIndex === presentation.behaviorIndex,
 			);
 			if (turnMatches.length !== 1 || sourceMatches.length !== 1) {
 				throw new Error(`Migrated Host Turn '${presentation.turn}' is unavailable.`);
 			}
-			const part = turnMatches[0]!.response[presentation.responsePartIndex];
+			const part = turnMatches[0]!.behaviors[presentation.behaviorIndex];
 			const raw = requireRecord(
 				sourceMatches[0]!.value,
 				`Legacy assistant message '${sourceMatches[0]!.id}'`,
 			);
 			if (part?.kind !== 'text' || part.text !== raw.content) {
 				throw new Error(
-					`Migrated Host response part '${presentation.responsePartIndex}' conflicts.`,
+					`Migrated Host behavior '${presentation.behaviorIndex}' conflicts.`,
 				);
 			}
 		}
@@ -619,11 +619,11 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 				throw new Error(`Migrated Host patch Turn '${patch.turn}' is unavailable.`);
 			}
 			const turn = turnMatches[0]!;
-			const callMatches = turn.response.filter(part =>
-				part.kind === 'toolCall' && part.call === patch.call,
+			const callMatches = turn.behaviors.filter(behavior =>
+				behavior.kind === 'contributedToolCall' && behavior.call === patch.call,
 			);
-			const resultMatches = turn.response.filter(part =>
-				part.kind === 'toolResult' && part.call === patch.call,
+			const resultMatches = turn.behaviors.filter(behavior =>
+				behavior.kind === 'contributedToolResult' && behavior.call === patch.call,
 			);
 			if (callMatches.length !== 1
 				|| resultMatches.length !== 1
@@ -634,10 +634,10 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 				).length !== 1) {
 				throw new Error(`Migrated Host patch Tool history '${patch.call}' conflicts.`);
 			}
-			const responsePartIndex = turn.response.findIndex(part =>
-				part.kind === 'toolResult' && part.call === patch.call,
+			const behaviorIndex = turn.behaviors.findIndex(behavior =>
+				behavior.kind === 'contributedToolResult' && behavior.call === patch.call,
 			);
-			if (responsePartIndex < 0) {
+			if (behaviorIndex < 0) {
 				throw new Error(`Migrated Host patch Tool result '${patch.call}' is unavailable.`);
 			}
 			presentations.push(parseChatHostPresentation({
@@ -645,7 +645,7 @@ export class LegacyChatMigrationCompanion implements IAgentHostLegacyCatalogMigr
 				session: prepared.source.session,
 				chat: prepared.source.chat,
 				turn: patch.turn,
-				responsePartIndex,
+				behaviorIndex,
 				type: DraftEditorPatchPresentationType,
 				value: createDraftEditorPatchPresentationValue(
 					patch.target,

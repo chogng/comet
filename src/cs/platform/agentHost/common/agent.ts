@@ -14,6 +14,7 @@ import {
 } from './configuration.js';
 import {
 	AgentCapabilityRevision,
+	AgentBehaviorActivityId,
 	AgentCancellationId,
 	AgentChatId,
 	AgentConfigurationPropertyId,
@@ -25,15 +26,18 @@ import {
 	AgentHostOperationId,
 	AgentHostPayloadDigest,
 	AgentId,
+	AgentInteractionId,
 	AgentModelDescriptorRevision,
 	AgentModelId,
 	AgentPackageId,
 	AgentPackageOperationId,
+	AgentPlanId,
 	AgentResumeSchemaId,
 	AgentResumeStateDigest,
 	AgentRuntimeRegistrationRevision,
 	AgentSessionId,
 	AgentSubmissionId,
+	AgentTaskId,
 	AgentToolCallId,
 	AgentToolId,
 	AgentToolSchemaProfileId,
@@ -358,6 +362,60 @@ export interface IAgentCancelTurnRequest extends IAgentOperationContext {
 	readonly turn: AgentTurnId;
 }
 
+export interface IAgentInteractionOption {
+	readonly id: string;
+	readonly label: string;
+	readonly description?: string;
+}
+
+interface IAgentInteractionRequestBase {
+	readonly id: AgentInteractionId;
+	readonly title: string;
+	readonly description: string;
+	readonly activity?: AgentBehaviorActivityId;
+	readonly metadata: AgentHostProtocolValue;
+}
+
+export type AgentInteractionRequest =
+	| IAgentInteractionRequestBase & {
+		readonly kind: 'permission' | 'confirmation';
+		readonly options: readonly IAgentInteractionOption[];
+	}
+	| IAgentInteractionRequestBase & {
+		readonly kind: 'input';
+		readonly input: {
+			readonly shape: 'text' | 'choice' | 'form';
+			readonly schema: AgentHostProtocolValue;
+			readonly initialValue?: AgentHostProtocolValue;
+		};
+	};
+
+export type AgentInteractionResponse =
+	| {
+		readonly kind: 'selected';
+		readonly option: string;
+		readonly data?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'submitted';
+		readonly value: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'cancelled';
+	};
+
+export interface IAgentInteractionResponseRequest extends IAgentOperationContext {
+	readonly session: AgentSessionId;
+	readonly chat: AgentChatId;
+	readonly turn: AgentTurnId;
+	readonly interaction: AgentInteractionId;
+	readonly response: AgentInteractionResponse;
+}
+
+export interface IAgentInteractions {
+	respond(request: IAgentInteractionResponseRequest): Promise<void>;
+}
+
 export interface IAgentChats {
 	create(options: IAgentCreateChatOptions): Promise<IAgentChatBacking>;
 	materialize(request: IAgentMaterializeChatRequest): Promise<void>;
@@ -377,7 +435,7 @@ export type AgentTurnProgressState =
 	| 'waitingForInput'
 	| 'cancelling';
 
-export type AgentTurnResponsePart =
+export type AgentTurnBehavior =
 	| {
 		readonly kind: 'text';
 		readonly text: string;
@@ -387,16 +445,93 @@ export type AgentTurnResponsePart =
 		readonly text: string;
 	}
 	| {
-		readonly kind: 'toolCall';
+		readonly kind: 'contributedToolCall';
 		readonly call: AgentToolCallId;
 		readonly tool: AgentToolId;
 		readonly input: AgentHostProtocolValue;
 	}
 	| {
-		readonly kind: 'toolResult';
+		readonly kind: 'contributedToolResult';
 		readonly call: AgentToolCallId;
 		readonly status: 'completed' | 'denied' | 'cancelled' | 'timedOut' | 'failed';
 		readonly output?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'nativeTool';
+		readonly activity: AgentBehaviorActivityId;
+		readonly name: string;
+		readonly category: 'command' | 'file' | 'search' | 'mcp' | 'other';
+		readonly state: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+		readonly input?: AgentHostProtocolValue;
+		readonly output?: AgentHostProtocolValue;
+		readonly parentActivity?: AgentBehaviorActivityId;
+	}
+	| {
+		readonly kind: 'plan';
+		readonly plan: AgentPlanId;
+		readonly title: string;
+		readonly state: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+		readonly steps: readonly {
+			readonly task: AgentTaskId;
+			readonly title: string;
+			readonly state: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+		}[];
+	}
+	| {
+		readonly kind: 'task';
+		readonly task: AgentTaskId;
+		readonly title: string;
+		readonly state: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+		readonly parentTask?: AgentTaskId;
+		readonly childChat?: AgentChatId;
+		readonly detail?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'background';
+		readonly activity: AgentBehaviorActivityId;
+		readonly title: string;
+		readonly state: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+		readonly detail?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'terminal';
+		readonly activity: AgentBehaviorActivityId;
+		readonly terminal: string;
+		readonly stream: 'stdout' | 'stderr';
+		readonly text: string;
+	}
+	| {
+		readonly kind: 'fileChange';
+		readonly activity: AgentBehaviorActivityId;
+		readonly resource: string;
+		readonly operation: 'create' | 'modify' | 'delete' | 'rename';
+		readonly data?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'usage';
+		readonly inputTokens: number;
+		readonly outputTokens: number;
+		readonly cachedInputTokens: number;
+		readonly data?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'context';
+		readonly usedTokens: number;
+		readonly maximumTokens: number;
+		readonly compaction: 'none' | 'running' | 'completed';
+		readonly data?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'retry';
+		readonly attempt: number;
+		readonly reason: string;
+		readonly data?: AgentHostProtocolValue;
+	}
+	| {
+		readonly kind: 'status';
+		readonly state: 'working' | 'waiting' | 'paused';
+		readonly message: string;
+		readonly data?: AgentHostProtocolValue;
 	};
 
 export type AgentTurnProgress =
@@ -405,8 +540,8 @@ export type AgentTurnProgress =
 		readonly state: AgentTurnProgressState;
 	}
 	| {
-		readonly kind: 'response';
-		readonly part: AgentTurnResponsePart;
+		readonly kind: 'behavior';
+		readonly behavior: AgentTurnBehavior;
 	};
 
 export type IAgentAction =
@@ -429,6 +564,21 @@ export type IAgentAction =
 		readonly progress: AgentTurnProgress;
 	}
 	| {
+		readonly kind: 'interactionRequested';
+		readonly session: AgentSessionId;
+		readonly chat: AgentChatId;
+		readonly turn: AgentTurnId;
+		readonly request: AgentInteractionRequest;
+	}
+	| {
+		readonly kind: 'interactionCompleted';
+		readonly session: AgentSessionId;
+		readonly chat: AgentChatId;
+		readonly turn: AgentTurnId;
+		readonly interaction: AgentInteractionId;
+		readonly response: AgentInteractionResponse;
+	}
+	| {
 		readonly kind: 'turnTerminal';
 		readonly session: AgentSessionId;
 		readonly chat: AgentChatId;
@@ -446,5 +596,6 @@ export interface IAgent {
 	readonly executionProfiles: IAgentExecutionProfiles;
 	readonly sessions: IAgentSessions;
 	readonly chats: IAgentChats;
+	readonly interactions: IAgentInteractions;
 	readonly resumeStates: IAgentResumeStates;
 }

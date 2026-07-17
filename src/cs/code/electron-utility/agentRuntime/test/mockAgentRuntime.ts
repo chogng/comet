@@ -91,7 +91,7 @@ import type {
 	IAgentRuntimeConnectionFactory,
 } from 'cs/platform/agentHost/node/packages/agentPackageActivationRegistry';
 
-const mockRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
+const mockRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('3');
 
 export interface IMockAgentRuntimeRetentionLimits {
 	readonly maximumRetainedOperations: number;
@@ -612,8 +612,8 @@ export class MockAgentRuntime extends Disposable implements IAgentRuntimeConnect
 				chat: request.request.chat,
 				turn: request.request.turn,
 				progress: Object.freeze({
-					kind: 'response',
-					part: Object.freeze({
+					kind: 'behavior',
+					behavior: Object.freeze({
 						kind: 'text',
 						text: `${this.definition.displayName} mock runtime completed the turn.`,
 					}),
@@ -657,6 +657,10 @@ export class MockAgentRuntime extends Disposable implements IAgentRuntimeConnect
 			return null;
 		});
 		return Promise.resolve(response(request, null));
+	}
+
+	respondInteraction(_request: Parameters<IAgentRuntimeConnection['respondInteraction']>[0]): ReturnType<IAgentRuntimeConnection['respondInteraction']> {
+		return Promise.reject(new Error('Mock Agent Runtime has no pending interaction'));
 	}
 
 	deleteChat(request: IAgentRuntimeCall<IAgentDeleteChatRequest>): Promise<IAgentRuntimeResponse<null>> {

@@ -21,6 +21,7 @@ import {
 import type { IAgentContentResourceOpenRequest, IAgentContentResourcePort } from 'cs/platform/agentHost/common/contentResources';
 import {
 	AgentPackageOperationId,
+	createAgentBehaviorActivityId,
 	createAgentAttachmentId,
 	createAgentAttachmentProducerTypeId,
 	createAgentCancellationId,
@@ -44,16 +45,19 @@ import {
 	createAgentHostProtocolVersion,
 	createAgentHostSequence,
 	createAgentId,
+	createAgentInteractionId,
 	createAgentModelDescriptorRevision,
 	createAgentModelId,
 	createAgentPackageId,
 	createAgentPackageOperationId,
 	createAgentPackageContentDigest,
 	createAgentPackageRevision,
+	createAgentPlanId,
 	createAgentRuntimeRegistrationRevision,
 	createAgentSessionId,
 	createAgentSessionTypeId,
 	createAgentSubmissionId,
+	createAgentTaskId,
 	createAgentAttachmentRepresentationSchemaId,
 	createAgentToolCallId,
 	createAgentToolId,
@@ -118,7 +122,7 @@ const modelId = createAgentModelId('model-a');
 const modelRevision = createAgentModelDescriptorRevision('model-a.v1');
 const toolSchema = createAgentToolSchemaProfileId('comet.tools.v1');
 const presetId = createAgentExecutionPresetId('automatic');
-const protocolVersion = createAgentHostProtocolVersion('2');
+const protocolVersion = createAgentHostProtocolVersion('3');
 const authorityId = createAgentHostAuthorityId('local');
 const optionalPackageId = createAgentPackageId('optional-agent');
 const optionalAgentId = createAgentId('optional-agent');
@@ -647,6 +651,7 @@ class TestAgent implements IAgent {
 	readonly sends: IAgentChatRequest[] = [];
 	readonly steers: IAgentSteerRequest[] = [];
 	readonly cancels: IAgentCancelTurnRequest[] = [];
+	readonly interactionResponses: Parameters<IAgent['interactions']['respond']>[0][] = [];
 	readonly configurationPrepares: Parameters<IAgent['configuration']['prepareSessionUpdate']>[0][] = [];
 	readonly configurationCommits: Parameters<IAgent['configuration']['commitSessionUpdate']>[0][] = [];
 	readonly configurationRollbacks: Parameters<IAgent['configuration']['rollbackSessionUpdate']>[0][] = [];
@@ -792,6 +797,10 @@ class TestAgent implements IAgent {
 			this.chatDeletes.push(`${request.session}/${request.chat}`);
 			this.sessionsById.get(request.session)?.delete(request.chat);
 		},
+	};
+
+	readonly interactions: IAgent['interactions'] = {
+		respond: async request => { this.interactionResponses.push(request); },
 	};
 
 	readonly resumeStates: IAgent['resumeStates'] = {
@@ -2521,9 +2530,40 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		const steered = await mutate(connection, 'operation-steer', Object.freeze({ kind: 'steerTurn', session, chat, turn, message: 'focus on tests' }));
 		assert.equal(steered.outcome.kind, 'succeeded');
 		assert.deepStrictEqual(agent.steers.map(request => [request.session, request.chat, request.turn, request.message]), [[session, chat, turn, 'focus on tests']]);
-		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'response', part: Object.freeze({ kind: 'toolCall', call: createAgentToolCallId('call-1'), tool: createAgentToolId('test.tool'), input: Object.freeze({}) }) }) });
-		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'response', part: Object.freeze({ kind: 'toolResult', call: createAgentToolCallId('call-1'), status: 'completed', output: Object.freeze({ ok: true }) }) }) });
-		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'response', part: Object.freeze({ kind: 'text', text: 'done' }) }) });
+		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'behavior', behavior: Object.freeze({ kind: 'contributedToolCall', call: createAgentToolCallId('call-1'), tool: createAgentToolId('test.tool'), input: Object.freeze({}) }) }) });
+		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'behavior', behavior: Object.freeze({ kind: 'contributedToolResult', call: createAgentToolCallId('call-1'), status: 'completed', output: Object.freeze({ ok: true }) }) }) });
+		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'behavior', behavior: Object.freeze({ kind: 'nativeTool', activity: createAgentBehaviorActivityId('native-1'), name: 'Shell', category: 'command', state: 'completed', input: Object.freeze({ command: 'pwd' }), output: Object.freeze({ exitCode: 0 }) }) }) });
+		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'behavior', behavior: Object.freeze({ kind: 'plan', plan: createAgentPlanId('plan-1'), title: 'Implement protocol', state: 'running', steps: Object.freeze([Object.freeze({ task: createAgentTaskId('task-1'), title: 'Update contracts', state: 'completed' })]) }) }) });
+		const interaction = createAgentInteractionId('permission-1');
+		agent.emit({
+			kind: 'interactionRequested',
+			session,
+			chat,
+			turn,
+			request: Object.freeze({
+				id: interaction,
+				kind: 'permission',
+				title: 'Run command',
+				description: 'Allow the native command to continue.',
+				metadata: Object.freeze({}),
+				options: Object.freeze([
+					Object.freeze({ id: 'allow', label: 'Allow' }),
+					Object.freeze({ id: 'deny', label: 'Deny' }),
+				]),
+			}),
+		});
+		await authority.flushAgentActions();
+		const responded = await mutate(connection, 'operation-respond-interaction', Object.freeze({
+			kind: 'respondInteraction',
+			session,
+			chat,
+			turn,
+			interaction,
+			response: Object.freeze({ kind: 'selected', option: 'allow' }),
+		}));
+		assert.equal(responded.outcome.kind, 'succeeded');
+		assert.deepStrictEqual(agent.interactionResponses.map(request => request.response), [{ kind: 'selected', option: 'allow' }]);
+		agent.emit({ kind: 'turnProgress', session, chat, turn, progress: Object.freeze({ kind: 'behavior', behavior: Object.freeze({ kind: 'text', text: 'done' }) }) });
 		agent.emit({ kind: 'turnTerminal', session, chat, turn, state: 'completed' });
 		await authority.flushAgentActions();
 		const subscribed = await connection.setSubscriptions({ subscriptions: Object.freeze([getAgentHostChatChannelId(session, chat)]) });
@@ -2532,7 +2572,19 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		assert.equal(snapshot.kind, 'chat');
 		if (snapshot.kind !== 'chat') { throw new Error('Missing Chat snapshot'); }
 		assert.equal(snapshot.state.turns[0].state, 'completed');
-		assert.deepStrictEqual(snapshot.state.turns[0].response.map(part => part.kind), ['toolCall', 'toolResult', 'text']);
+		assert.deepStrictEqual(snapshot.state.turns[0].behaviors.map(behavior => behavior.kind), ['contributedToolCall', 'contributedToolResult', 'nativeTool', 'plan', 'text']);
+		assert.deepStrictEqual(snapshot.state.turns[0].interactions, [{
+			request: {
+				id: interaction,
+				kind: 'permission',
+				title: 'Run command',
+				description: 'Allow the native command to continue.',
+				metadata: {},
+				options: [{ id: 'allow', label: 'Allow' }, { id: 'deny', label: 'Deny' }],
+			},
+			state: 'resolved',
+			response: { kind: 'selected', option: 'allow' },
+		}]);
 		const reused = await mutate(connection, 'operation-reuse-submission', Object.freeze({
 			kind: 'createSession', sessionType: sessionTypeId, configuration: sessionConfigurationCandidate,
 			chats: Object.freeze([Object.freeze({ model: null, origin: Object.freeze({ kind: 'user' }), initialSubmission: prepared })]),
@@ -2991,7 +3043,7 @@ suite('AgentHostAuthority', { concurrency: false }, () => {
 		assert.equal(record?.state.agentId, agentId);
 		assert.deepStrictEqual(record?.chats[0].state.origin, { kind: 'user' });
 		assert.equal(record?.chats[0].state.turns[0].user.attachments[0].content?.kind, 'inline');
-		assert.equal(record?.chats[0].state.turns[0].response[0].kind, 'text');
+		assert.equal(record?.chats[0].state.turns[0].behaviors[0].kind, 'text');
 		assert.equal(record?.resume?.schema, resumeSchema);
 		assert.deepStrictEqual(
 			store.state?.agentDefaults.map(state => state.schema.agent),

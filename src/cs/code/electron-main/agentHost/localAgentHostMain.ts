@@ -117,8 +117,8 @@ import type {
 } from 'cs/platform/agentHost/node/packages/agentPackageProducts';
 
 const localAgentHostAuthority = createAgentHostAuthorityId('local');
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
-const localAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('3');
+const localAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('3');
 const cometSessionType = createAgentSessionTypeId('comet');
 const maximumPreparedToolSets = 4_096;
 const maximumBoundToolTurns = 1_024;

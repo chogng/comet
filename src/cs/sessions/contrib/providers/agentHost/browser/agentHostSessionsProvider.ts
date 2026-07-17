@@ -973,13 +973,13 @@ export class AgentHostSessionsProvider extends Disposable implements ISessionsPr
 		const sessionsChannel = getAgentHostSessionsChannelId();
 		const result = await this.connection.initialize({
 			connection: this.connection.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
 			capabilities: Object.freeze([]),
 			locale: this.options.locale,
 			implementation: this.options.implementation,
 			subscriptions: Object.freeze([rootChannel, sessionsChannel]),
 		});
-		if (result.protocolVersion !== '2') {
+		if (result.protocolVersion !== '3') {
 			throw new Error(`Agent Host selected unsupported protocol version '${result.protocolVersion}'.`);
 		}
 		this.assertNoMissingChannels(result.missingChannels);

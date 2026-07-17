@@ -167,7 +167,8 @@ test('Chat transcript renderer constructs ordered fragments only within its own 
 			attachments: [],
 			interactionTargets: [],
 		},
-		response: [{ kind: 'text', text: 'gamma delta' }],
+		behaviors: [{ kind: 'text', text: 'gamma delta' }],
+		interactions: [],
 	};
 	const disposables = new DisposableStore();
 	const host = document.createElement('div');

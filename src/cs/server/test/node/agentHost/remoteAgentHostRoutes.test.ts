@@ -131,7 +131,7 @@ import {
 
 const authority = createAgentHostAuthorityId('remote-test');
 const agentHostConnectionId = createAgentHostClientConnectionId('remote-client');
-const protocolVersion = createAgentHostProtocolVersion('2');
+const protocolVersion = createAgentHostProtocolVersion('3');
 const sessionsChannel = createAgentHostChannelId('sessions');
 const session = createAgentSessionId('session');
 const chat = createAgentChatId('chat');

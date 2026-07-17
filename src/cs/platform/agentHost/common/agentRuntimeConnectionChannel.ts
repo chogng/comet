@@ -21,6 +21,7 @@ import type {
 	IAgentExecutionProfileRequest,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
+	IAgentInteractionResponseRequest,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentPrepareSessionConfigurationUpdateRequest,
@@ -283,6 +284,13 @@ export class AgentRuntimeConnectionChannel implements IServerChannel<string> {
 					cancellationToken,
 				);
 				break;
+			case 'respondInteraction':
+				result = await this.invokeCall(
+					arg as IAgentRuntimeCall<IAgentInteractionResponseRequest>,
+					request => this.connection.respondInteraction(request),
+					cancellationToken,
+				);
+				break;
 			case 'deleteChat':
 				result = await this.invokeCall(
 					arg as IAgentRuntimeCall<IAgentDeleteChatRequest>,
@@ -473,6 +481,10 @@ export class AgentRuntimeConnectionChannelClient extends Disposable implements I
 
 	cancel(request: IAgentRuntimeCall<IAgentCancelTurnRequest>): Promise<IAgentRuntimeResponse<null>> {
 		return this.invoke('cancel', request);
+	}
+
+	respondInteraction(request: IAgentRuntimeCall<IAgentInteractionResponseRequest>): Promise<IAgentRuntimeResponse<null>> {
+		return this.invoke('respondInteraction', request);
 	}
 
 	deleteChat(request: IAgentRuntimeCall<IAgentDeleteChatRequest>): Promise<IAgentRuntimeResponse<null>> {

@@ -55,6 +55,7 @@ import type {
 	IAgentExecutionProfiles,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
+	IAgentInteractions,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentPrepareSessionConfigurationUpdateRequest,
@@ -72,7 +73,7 @@ import type {
 	IAgentSteerRequest,
 	IAgentChats,
 	IAgentConfiguration,
-	AgentTurnResponsePart,
+	AgentTurnBehavior,
 } from 'cs/platform/agentHost/common/agent';
 import {
 	resolveAgentModelConfigurationCandidate,
@@ -333,9 +334,21 @@ export class ClaudeAgent extends Disposable implements IAgent {
 		delete: request => this.deleteChat(request),
 	};
 
+	readonly interactions: IAgentInteractions = {
+		respond: request => this.respondInteraction(request.interaction),
+	};
+
 	readonly resumeStates: IAgentResumeStates = {
 		migrate: request => this.migrateResumeState(request),
 	};
+
+	private async respondInteraction(interaction: string): Promise<void> {
+		throw new AgentHostError(
+			AgentHostErrorCode.CapabilityUnsupported,
+			`Claude interaction '${interaction}' is not active`,
+			{ capability: 'interaction.respond' },
+		);
+	}
 
 	private readonly sessionStates = new Map<AgentSessionId, IClaudeSessionState>();
 	private readonly operations = new Map<AgentHostOperationId, IClaudeOperationState>();
@@ -1085,9 +1098,9 @@ export class ClaudeAgent extends Disposable implements IAgent {
 		if (message.type === 'assistant' && message.parent_tool_use_id === null) {
 			for (const block of message.message.content) {
 				if (block.type === 'text' && block.text.length > 0) {
-					this.emitResponsePart(request, Object.freeze({ kind: 'text', text: block.text }));
+					this.emitBehavior(request, Object.freeze({ kind: 'text', text: block.text }));
 				} else if (block.type === 'thinking' && block.thinking.length > 0) {
-					this.emitResponsePart(request, Object.freeze({ kind: 'reasoning', text: block.thinking }));
+					this.emitBehavior(request, Object.freeze({ kind: 'reasoning', text: block.thinking }));
 				}
 			}
 			return false;
@@ -1114,8 +1127,8 @@ export class ClaudeAgent extends Disposable implements IAgent {
 	): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
 		assertAgentHostProtocolValue(input);
 		const call = await this.createToolCall(request, registration, input);
-		this.emitResponsePart(request, Object.freeze({
-			kind: 'toolCall',
+		this.emitBehavior(request, Object.freeze({
+			kind: 'contributedToolCall',
 			call: call.id,
 			tool: call.tool,
 			input: call.input,
@@ -1126,16 +1139,16 @@ export class ClaudeAgent extends Disposable implements IAgent {
 			throw new Error('Claude Host Tool result identity changed.');
 		}
 		if (result.status === 'completed') {
-			this.emitResponsePart(request, Object.freeze({
-				kind: 'toolResult',
+			this.emitBehavior(request, Object.freeze({
+				kind: 'contributedToolResult',
 				call: call.id,
 				status: 'completed',
 				output: result.output,
 			}));
 			return { content: [{ type: 'text', text: encodeAgentHostProtocolValue(result.output) }] };
 		}
-		this.emitResponsePart(request, Object.freeze({
-			kind: 'toolResult',
+		this.emitBehavior(request, Object.freeze({
+			kind: 'contributedToolResult',
 			call: call.id,
 			status: result.status,
 			output: result.failure.data,
@@ -1463,13 +1476,13 @@ export class ClaudeAgent extends Disposable implements IAgent {
 		return chat;
 	}
 
-	private emitResponsePart(request: IAgentChatRequest, part: AgentTurnResponsePart): void {
+	private emitBehavior(request: IAgentChatRequest, behavior: AgentTurnBehavior): void {
 		this.emit(request, Object.freeze({
 			kind: 'turnProgress',
 			session: request.session,
 			chat: request.chat,
 			turn: request.turn,
-			progress: Object.freeze({ kind: 'response', part }),
+			progress: Object.freeze({ kind: 'behavior', behavior }),
 		}));
 	}
 

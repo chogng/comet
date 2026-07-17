@@ -447,10 +447,10 @@ class TestAgentHostConnection implements IAgentHostConnection {
 
 	async initialize(request: IAgentHostInitializeRequest): Promise<IAgentHostInitializeResult> {
 		assert.deepStrictEqual(request.subscriptions, [getAgentHostRootChannelId(), getAgentHostSessionsChannelId()]);
-		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('2')]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('3')]);
 		this.replaceActiveSubscriptions(request.subscriptions);
 		return {
-			protocolVersion: createAgentHostProtocolVersion('2'),
+			protocolVersion: createAgentHostProtocolVersion('3'),
 			capabilities: [],
 			implementation: { name: 'test-host', build: '1' },
 			hostSequence: createAgentHostSequence(this.sequence),
@@ -1426,7 +1426,8 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 						payloadDigest: request.payload.chats[0].initialSubmission!.payloadDigest,
 						state: 'completed',
 						user: { text: 'immutable prompt', attachments: [], interactionTargets: [] },
-						response: [{ kind: 'text', text: 'answer' }],
+						behaviors: [{ kind: 'text', text: 'answer' }],
+						interactions: [],
 					}],
 				});
 				const session = withFullChats(createSessionState('committed-session', 'Committed', [chat]), [chat]);
@@ -1606,7 +1607,8 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 								attachments: request.payload.submission.attachments,
 								interactionTargets: request.payload.submission.interactionTargets,
 							}),
-							response: Object.freeze([]),
+							behaviors: Object.freeze([]),
+							interactions: Object.freeze([]),
 						})],
 					});
 					connection.sequence += 1;
@@ -1815,7 +1817,8 @@ suite('AgentHostSessionsProvider', { concurrency: false }, () => {
 				payloadDigest,
 				state: 'running',
 				user: { text: 'prompt', attachments: [], interactionTargets: [] },
-				response: [],
+				behaviors: [],
+				interactions: [],
 			}],
 		});
 		const initial = withFullChats(createSessionState('operation-session', 'Operations', [chat]), [chat]);

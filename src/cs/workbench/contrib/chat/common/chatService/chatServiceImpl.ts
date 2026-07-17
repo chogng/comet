@@ -112,7 +112,7 @@ function captureInteractionTarget(target: IAgentHostInteractionTarget): IAgentHo
 function hostPresentationKey(
 	presentation: IChatHostPresentationIdentity,
 ): string {
-	return `${presentation.session}\0${presentation.chat}\0${presentation.turn}\0${presentation.responsePartIndex}`;
+	return `${presentation.session}\0${presentation.chat}\0${presentation.turn}\0${presentation.behaviorIndex}`;
 }
 
 function hostPresentationContentKey(presentation: IChatHostPresentation): string {
@@ -136,7 +136,7 @@ function validateHostPresentations(
 		if (presentation.session !== identity.session
 			|| presentation.chat !== identity.chat
 			|| !turn
-			|| turn.response[presentation.responsePartIndex] === undefined) {
+			|| turn.behaviors[presentation.behaviorIndex] === undefined) {
 			throw new Error(`Host presentation '${key}' does not match canonical Host history.`);
 		}
 		if (keys.has(key)) {
@@ -260,14 +260,14 @@ class ChatModel extends Disposable implements IChatModel {
 		const session = createAgentSessionId(identity.session);
 		const chat = createAgentChatId(identity.chat);
 		const turn = createAgentTurnId(identity.turn);
-		if (!Number.isSafeInteger(identity.responsePartIndex) || identity.responsePartIndex < 0) {
-			throw new TypeError('Host presentation response-part index must be a non-negative safe integer.');
+		if (!Number.isSafeInteger(identity.behaviorIndex) || identity.behaviorIndex < 0) {
+			throw new TypeError('Host presentation behavior index must be a non-negative safe integer.');
 		}
 		return this.snapshot.hostPresentations.find(presentation =>
 			presentation.session === session
 			&& presentation.chat === chat
 			&& presentation.turn === turn
-			&& presentation.responsePartIndex === identity.responsePartIndex,
+			&& presentation.behaviorIndex === identity.behaviorIndex,
 		);
 	}
 
@@ -1087,50 +1087,50 @@ export class ChatService implements IChatService {
 		]));
 		const presentations: IChatHostPresentation[] = [];
 		for (const turn of state.turns) {
-			const calls = new Map(turn.response.flatMap(part =>
-				part.kind === 'toolCall' ? [[part.call, part] as const] : [],
+			const calls = new Map(turn.behaviors.flatMap(behavior =>
+				behavior.kind === 'contributedToolCall' ? [[behavior.call, behavior] as const] : [],
 			));
-			for (const [responsePartIndex, part] of turn.response.entries()) {
-				if (part.kind === 'toolCall') {
-					calls.set(part.call, part);
+			for (const [behaviorIndex, behavior] of turn.behaviors.entries()) {
+				if (behavior.kind === 'contributedToolCall') {
+					calls.set(behavior.call, behavior);
 					continue;
 				}
-				if (part.kind !== 'toolResult' || part.status !== 'completed') {
+				if (behavior.kind !== 'contributedToolResult' || behavior.status !== 'completed') {
 					continue;
 				}
-				const call = calls.get(part.call);
+				const call = calls.get(behavior.call);
 				if (!call) {
-					throw new Error(`Completed Host Tool result '${part.call}' has no exact call.`);
+					throw new Error(`Completed Host Tool result '${behavior.call}' has no exact call.`);
 				}
 				const provider = this.hostPresentationProviders.get(call.tool);
 				if (!provider) {
 					continue;
 				}
-				if (!Object.hasOwn(part, 'output') || part.output === undefined) {
-					throw new Error(`Completed Host Tool result '${part.call}' has no canonical output.`);
+				if (!Object.hasOwn(behavior, 'output') || behavior.output === undefined) {
+					throw new Error(`Completed Host Tool result '${behavior.call}' has no canonical output.`);
 				}
-				const output = part.output;
+				const output = behavior.output;
 				const presentationIdentity = {
 					session: identity.session,
 					chat: identity.chat,
 					turn: turn.id,
-					responsePartIndex,
+					behaviorIndex,
 				};
 				const persistedPresentation = persistedByKey.get(hostPresentationKey(presentationIdentity));
 				const projection = parseChatHostPresentationProjection(provider.tool, provider.project({
 					session: identity.session,
 					chat: identity.chat,
 					turn,
-					responsePartIndex,
+					behaviorIndex,
 					call,
-					result: { ...part, status: 'completed', output },
+					result: { ...behavior, status: 'completed', output },
 				}, persistedPresentation?.value));
 				presentations.push(parseChatHostPresentation({
 					schemaVersion: ChatHostPresentationSchemaVersion,
 					session: identity.session,
 					chat: identity.chat,
 					turn: turn.id,
-					responsePartIndex,
+					behaviorIndex,
 					type: projection.type,
 					value: projection.value,
 				}));

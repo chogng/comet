@@ -56,7 +56,7 @@ import {
 	type IHostAgentPackageFactory,
 } from 'cs/platform/agentHost/node/packages/agentPackageActivationRegistry';
 
-const protocolVersion = createAgentRuntimeProtocolVersion('2');
+const protocolVersion = createAgentRuntimeProtocolVersion('3');
 const schemaProfile = createAgentToolSchemaProfileId('comet.tool.v1');
 const transportLimits: IAgentRuntimeTransportLimits = Object.freeze({
 	maximumRequestBytes: 32 * 1_024,
@@ -327,6 +327,7 @@ class TestRuntimeConnection extends Disposable implements IAgentRuntimeConnectio
 	send(_request: Parameters<IAgentRuntimeConnection['send']>[0]): ReturnType<IAgentRuntimeConnection['send']> { return this.unexpected('send'); }
 	steer(_request: Parameters<IAgentRuntimeConnection['steer']>[0]): ReturnType<IAgentRuntimeConnection['steer']> { return this.unexpected('steer'); }
 	cancel(_request: Parameters<IAgentRuntimeConnection['cancel']>[0]): ReturnType<IAgentRuntimeConnection['cancel']> { return this.unexpected('cancel'); }
+	respondInteraction(_request: Parameters<IAgentRuntimeConnection['respondInteraction']>[0]): ReturnType<IAgentRuntimeConnection['respondInteraction']> { return this.unexpected('respondInteraction'); }
 	deleteChat(_request: Parameters<IAgentRuntimeConnection['deleteChat']>[0]): ReturnType<IAgentRuntimeConnection['deleteChat']> { return this.unexpected('deleteChat'); }
 	getOperationOutcome(_request: Parameters<IAgentRuntimeConnection['getOperationOutcome']>[0]): ReturnType<IAgentRuntimeConnection['getOperationOutcome']> { return this.unexpected('getOperationOutcome'); }
 	reportHostOperationProgress(_progress: Parameters<IAgentRuntimeConnection['reportHostOperationProgress']>[0]): ReturnType<IAgentRuntimeConnection['reportHostOperationProgress']> { return this.unexpected('reportHostOperationProgress'); }
@@ -387,6 +388,7 @@ class TestHostAgent extends Disposable implements IAgent {
 	readonly executionProfiles: IAgent['executionProfiles'];
 	readonly sessions: IAgent['sessions'];
 	readonly chats: IAgent['chats'];
+	readonly interactions: IAgent['interactions'];
 	readonly resumeStates: IAgent['resumeStates'];
 	private disposedValue = false;
 	disposeCount = 0;
@@ -421,6 +423,7 @@ class TestHostAgent extends Disposable implements IAgent {
 			cancel: () => this.unexpected('cancel'),
 			delete: () => this.unexpected('deleteChat'),
 		};
+		this.interactions = { respond: () => this.unexpected('respondInteraction') };
 		this.resumeStates = { migrate: () => this.unexpected('migrateResumeState') };
 	}
 

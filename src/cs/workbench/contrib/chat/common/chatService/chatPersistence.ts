@@ -177,7 +177,7 @@ export function parseChatPersistedResourceState(
 		chat.presentations.map(parseChatHostPresentation),
 	);
 	const presentationKeys = presentations.map(presentation =>
-		`${presentation.session}\0${presentation.chat}\0${presentation.turn}\0${presentation.responsePartIndex}`,
+		`${presentation.session}\0${presentation.chat}\0${presentation.turn}\0${presentation.behaviorIndex}`,
 	);
 	if (new Set(presentationKeys).size !== presentationKeys.length) {
 		throw new TypeError(`Persisted Chat ${chatIndex} contains duplicate Host presentations.`);

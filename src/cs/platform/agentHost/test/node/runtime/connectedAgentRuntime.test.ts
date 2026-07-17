@@ -106,6 +106,7 @@ import {
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentId,
+	createAgentInteractionId,
 	createAgentModelDescriptorRevision,
 	createAgentModelId,
 	createAgentPackageId,
@@ -149,7 +150,7 @@ import { ManagedAgentRuntimeConnection } from 'cs/platform/agentHost/common/mana
 
 const connectionId = createAgentRuntimeConnectionId('runtime-connection-1');
 const generation = createAgentRuntimeConnectionGeneration(7);
-const protocolVersion = createAgentRuntimeProtocolVersion('2');
+const protocolVersion = createAgentRuntimeProtocolVersion('3');
 const packageId = createAgentPackageId('test.runtime');
 const packageRevision = createAgentPackageRevision('test.runtime.v1');
 const agentId = createAgentId('test.agent');
@@ -451,6 +452,7 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 	readonly sendCalls: IAgentRuntimeCall<IAgentChatRequest>[] = [];
 	readonly steerCalls: IAgentRuntimeCall<IAgentSteerRequest>[] = [];
 	readonly cancelCalls: IAgentRuntimeCall<IAgentCancelTurnRequest>[] = [];
+	readonly respondInteractionCalls: Parameters<IAgentRuntimeConnection['respondInteraction']>[0][] = [];
 	readonly deleteChatCalls: IAgentRuntimeCall<IAgentDeleteChatRequest>[] = [];
 	disposeCount = 0;
 	reportHostOperationProgressHandler = async (_progress: IAgentRuntimeHostOperationProgress): Promise<void> => {};
@@ -662,6 +664,11 @@ class TestRuntimeConnection implements IAgentRuntimeConnection {
 	cancel(request: IAgentRuntimeCall<IAgentCancelTurnRequest>): Promise<IAgentRuntimeResponse<null>> {
 		this.cancelCalls.push(request);
 		return this.cancelHandler(request);
+	}
+
+	respondInteraction(request: Parameters<IAgentRuntimeConnection['respondInteraction']>[0]): ReturnType<IAgentRuntimeConnection['respondInteraction']> {
+		this.respondInteractionCalls.push(request);
+		return Promise.resolve(exactResponse(request, null));
 	}
 
 	deleteChat(request: IAgentRuntimeCall<IAgentDeleteChatRequest>): Promise<IAgentRuntimeResponse<null>> {
@@ -1170,6 +1177,14 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 			turn: turnId,
 			message: 'Use the exact evidence.',
 		});
+		await agent.interactions.respond({
+			...context('respond-interaction-complete', 'e'),
+			session: sessionId,
+			chat: chatId,
+			turn: turnId,
+			interaction: createAgentInteractionId('interaction-complete'),
+			response: { kind: 'selected', option: 'allow' },
+		});
 		await agent.chats.cancel({
 			...context('cancel-turn-complete', '9'),
 			session: sessionId,
@@ -1210,6 +1225,7 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 			connection.sendCalls,
 			connection.steerCalls,
 			connection.cancelCalls,
+			connection.respondInteractionCalls,
 			connection.releaseChatCalls,
 			connection.deleteChatCalls,
 			connection.releaseSessionCalls,
@@ -2536,7 +2552,7 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 				name: 'protocol version',
 				mutate: (_request, result) => ({
 					...result,
-					protocolVersion: createAgentRuntimeProtocolVersion('3'),
+					protocolVersion: createAgentRuntimeProtocolVersion('4'),
 				}),
 			},
 			{
@@ -2609,7 +2625,7 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 				session: call.request.session,
 				chat: call.request.chat,
 				turn: call.request.turn,
-				progress: { kind: 'response', part: { kind: 'text', text: 'Exact output' } },
+				progress: { kind: 'behavior', behavior: { kind: 'text', text: 'Exact output' } },
 			});
 			connection.emitFor(call, 3, {
 				kind: 'turnTerminal',
@@ -2636,7 +2652,7 @@ suite('ConnectedAgentRuntime', { concurrency: false }, () => {
 			session: sessionId,
 			chat: chatId,
 			turn: turnId,
-			progress: { kind: 'response', part: { kind: 'text', text: 'Exact output' } },
+			progress: { kind: 'behavior', behavior: { kind: 'text', text: 'Exact output' } },
 		});
 
 		const pending = new DeferredPromise<IAgentRuntimeResponse<null>>();

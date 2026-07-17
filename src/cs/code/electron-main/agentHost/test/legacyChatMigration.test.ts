@@ -169,15 +169,15 @@ test('legacy migration commits exact Host history and Workbench presentation sta
 		assert.ok(hostChat);
 		assert.equal(hostChat.turns[0]?.user.attachments[0]?.content?.kind, 'inline');
 		assert.equal(hostChat.turns[0]?.user.interactionTargets.length, 1);
-		assert.deepEqual(hostChat.turns[0]?.response.map(part => part.kind), [
+		assert.deepEqual(hostChat.turns[0]?.behaviors.map(behavior => behavior.kind), [
 			'text',
 			'text',
-			'toolCall',
-			'toolResult',
+			'contributedToolCall',
+			'contributedToolResult',
 		]);
-		const call = hostChat.turns[0]?.response[2];
-		assert.equal(call?.kind, 'toolCall');
-		if (call?.kind === 'toolCall') {
+		const call = hostChat.turns[0]?.behaviors[2];
+		assert.equal(call?.kind, 'contributedToolCall');
+		if (call?.kind === 'contributedToolCall') {
 			assert.equal(call.tool, DraftEditorProposeEditorPatchToolId);
 		}
 
@@ -192,13 +192,13 @@ test('legacy migration commits exact Host history and Workbench presentation sta
 				session: articlePresentation.session,
 				chat: articlePresentation.chat,
 				turn: articlePresentation.turn,
-				responsePartIndex: articlePresentation.responsePartIndex,
+				behaviorIndex: articlePresentation.behaviorIndex,
 			},
 			{
 				session: 'legacy-rich',
 				chat: 'legacy-rich',
 				turn: 'legacy-turn-rich',
-				responsePartIndex: 1,
+				behaviorIndex: 1,
 			},
 		);
 		assert.ok(articlePresentation);
@@ -220,12 +220,12 @@ test('legacy migration commits exact Host history and Workbench presentation sta
 			session: patchPresentation.session,
 			chat: patchPresentation.chat,
 			turn: patchPresentation.turn,
-			responsePartIndex: patchPresentation.responsePartIndex,
+			behaviorIndex: patchPresentation.behaviorIndex,
 		}, {
 			session: 'legacy-rich',
 			chat: 'legacy-rich',
 			turn: 'legacy-turn-rich',
-			responsePartIndex: 3,
+			behaviorIndex: 3,
 		});
 		assert.equal(patchValue.applyState.kind, 'pending');
 		assert.equal(patchValue.target.resource, 'comet-draft:/legacy-rich');

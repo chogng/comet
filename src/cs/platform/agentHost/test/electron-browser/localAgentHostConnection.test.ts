@@ -115,7 +115,7 @@ import { AgentToolRegistry } from 'cs/platform/agentHost/node/tools/agentToolReg
 
 const authority = createAgentHostAuthorityId('local');
 const connectionId = createAgentHostClientConnectionId('desktop-renderer');
-const protocolVersion = createAgentHostProtocolVersion('2');
+const protocolVersion = createAgentHostProtocolVersion('3');
 const sessionsChannel = createAgentHostChannelId('sessions');
 const sessionType = createAgentSessionTypeId('comet');
 const sessionId = createAgentSessionId('session-1');

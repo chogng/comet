@@ -71,7 +71,7 @@ import {
 const packageId = createAgentPackageId('comet');
 const agentId = createAgentId('comet');
 const hostAuthority = createAgentHostAuthorityId('remote-test');
-const hostProtocol = createAgentHostProtocolVersion('2');
+const hostProtocol = createAgentHostProtocolVersion('3');
 const descriptorRevision = createAgentDescriptorRevision('remote-test.descriptor.v1');
 const capabilityRevision = createAgentCapabilityRevision('remote-test.capabilities.v1');
 const runtimeRevision = createAgentRuntimeRegistrationRevision('remote-test.runtime.v1');
@@ -158,6 +158,7 @@ const agent: IAgent = {
 		cancel: async () => unusedOperation(),
 		delete: async () => unusedOperation(),
 	},
+	interactions: { respond: async () => unusedOperation() },
 	resumeStates: { migrate: async request => request.source },
 };
 

@@ -30,6 +30,7 @@ import {
 	IAgentExecutionProfileRequest,
 	IAgentExecutionProfiles,
 	IAgentForkChatRequest,
+	IAgentInteractions,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentModelDescriptor,
@@ -1151,9 +1152,21 @@ export class CometAgent extends Disposable implements IAgent {
 		delete: request => this.deleteChat(request),
 	};
 
+	readonly interactions: IAgentInteractions = {
+		respond: request => this.respondInteraction(request.interaction),
+	};
+
 	readonly resumeStates: IAgentResumeStates = {
 		migrate: request => this.migrateResumeState(request),
 	};
+
+	private async respondInteraction(interaction: string): Promise<void> {
+		throw new AgentHostError(
+			AgentHostErrorCode.CapabilityUnsupported,
+			`Comet interaction '${interaction}' is not active`,
+			{ capability: 'interaction.respond' },
+		);
+	}
 
 	private readonly operations = new CometOperationRegistry();
 	private readonly profileResolutions = new Map<AgentSubmissionId, ICometProfileResolutionRecord>();
@@ -2258,8 +2271,8 @@ export class CometAgent extends Disposable implements IAgent {
 						throw new CometTurnError('responseLimitExceeded', 'Comet response exceeded its byte limit');
 					}
 					this.emitTurnProgress(request, {
-						kind: 'response',
-						part: { kind: part.kind, text: part.text },
+						kind: 'behavior',
+						behavior: { kind: part.kind, text: part.text },
 					});
 				} else if (part.kind === 'toolCall') {
 					calls.push(part.call);
@@ -2344,9 +2357,9 @@ export class CometAgent extends Disposable implements IAgent {
 				}),
 			});
 		this.emitTurnProgress(request, {
-			kind: 'response',
-			part: {
-				kind: 'toolCall',
+			kind: 'behavior',
+			behavior: {
+				kind: 'contributedToolCall',
 				call: call.id,
 				tool: call.tool,
 				input: call.input,
@@ -2371,9 +2384,9 @@ export class CometAgent extends Disposable implements IAgent {
 			if (result.status === 'completed') {
 				assertAgentHostProtocolValue(result.output);
 				this.emitTurnProgress(request, {
-					kind: 'response',
-					part: {
-						kind: 'toolResult',
+					kind: 'behavior',
+					behavior: {
+						kind: 'contributedToolResult',
 						call: result.call,
 						status: 'completed',
 						output: result.output,
@@ -2384,9 +2397,9 @@ export class CometAgent extends Disposable implements IAgent {
 					assertAgentHostProtocolValue(result.failure.data);
 				}
 				this.emitTurnProgress(request, {
-					kind: 'response',
-					part: {
-						kind: 'toolResult',
+					kind: 'behavior',
+					behavior: {
+						kind: 'contributedToolResult',
 						call: result.call,
 						status: result.status,
 						output: {

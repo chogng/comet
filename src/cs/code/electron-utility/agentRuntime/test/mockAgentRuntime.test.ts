@@ -92,7 +92,7 @@ async function createInitializedMockRuntime(
 		connection,
 		generation,
 		call: createAgentRuntimeCallId('initialize-retention'),
-		protocolVersions: [createAgentRuntimeProtocolVersion('2')],
+		protocolVersions: [createAgentRuntimeProtocolVersion('3')],
 		transportLimits: {
 			maximumRequestBytes: 1024 * 1024,
 			maximumResponseBytes: 1024 * 1024,
@@ -228,7 +228,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 				connection,
 				generation,
 				call: createAgentRuntimeCallId('initialize'),
-				protocolVersions: [createAgentRuntimeProtocolVersion('2')],
+				protocolVersions: [createAgentRuntimeProtocolVersion('3')],
 				transportLimits: {
 					maximumRequestBytes: 1024 * 1024,
 					maximumResponseBytes: 1024 * 1024,
@@ -521,7 +521,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 				connection: logicalConnection,
 				generation: createAgentRuntimeConnectionGeneration(1),
 				call: createAgentRuntimeCallId('managed-initialize'),
-				protocolVersions: Object.freeze([createAgentRuntimeProtocolVersion('2')]),
+				protocolVersions: Object.freeze([createAgentRuntimeProtocolVersion('3')]),
 				transportLimits: Object.freeze({
 					maximumRequestBytes: 1024 * 1024,
 					maximumResponseBytes: 1024 * 1024,
@@ -617,7 +617,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 				connection: logicalConnection,
 				generation: createAgentRuntimeConnectionGeneration(1),
 				call: createAgentRuntimeCallId('failed-restart-initialize'),
-				protocolVersions: Object.freeze([createAgentRuntimeProtocolVersion('2')]),
+				protocolVersions: Object.freeze([createAgentRuntimeProtocolVersion('3')]),
 				transportLimits: Object.freeze({
 					maximumRequestBytes: 1024 * 1024,
 					maximumResponseBytes: 1024 * 1024,
@@ -681,7 +681,7 @@ suite('MockAgentRuntime', { concurrency: false }, () => {
 			connection: logicalConnection,
 			generation: createAgentRuntimeConnectionGeneration(1),
 			call: createAgentRuntimeCallId('disposed-restart-initialize'),
-			protocolVersions: Object.freeze([createAgentRuntimeProtocolVersion('2')]),
+			protocolVersions: Object.freeze([createAgentRuntimeProtocolVersion('3')]),
 			transportLimits: Object.freeze({
 				maximumRequestBytes: 1024 * 1024,
 				maximumResponseBytes: 1024 * 1024,

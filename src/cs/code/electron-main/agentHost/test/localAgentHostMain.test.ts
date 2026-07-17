@@ -304,7 +304,7 @@ test('production desktop Agent Host exposes Comet and creates its exact automati
 		const identity = await channel.call<{ readonly connection: string }>(context, 'identity', undefined);
 		const initialized = await channel.call<IAgentHostInitializeResult>(context, 'initialize', {
 			connection: identity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
 			capabilities: Object.freeze([]),
 			locale: 'en',
 			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
@@ -533,7 +533,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		const firstIdentity = await firstChannel.call<{ readonly connection: string }>(firstContext, 'identity', undefined);
 		const firstInitialized = await firstChannel.call<IAgentHostInitializeResult>(firstContext, 'initialize', {
 			connection: firstIdentity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
 			capabilities: Object.freeze([]),
 			locale: 'en',
 			implementation: Object.freeze({ name: 'test.renderer', build: '1' }),
@@ -639,7 +639,7 @@ test('desktop Agent Host installs every connected mock product and cold-restores
 		const secondIdentity = await secondChannel.call<{ readonly connection: string }>(secondContext, 'identity', undefined);
 		const secondInitialized = await secondChannel.call<IAgentHostInitializeResult>(secondContext, 'initialize', {
 			connection: secondIdentity.connection,
-			protocolVersions: Object.freeze([createAgentHostProtocolVersion('2')]),
+			protocolVersions: Object.freeze([createAgentHostProtocolVersion('3')]),
 			capabilities: Object.freeze([]),
 			locale: 'en',
 			implementation: Object.freeze({ name: 'test.renderer', build: '2' }),

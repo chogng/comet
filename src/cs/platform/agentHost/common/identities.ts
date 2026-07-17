@@ -39,6 +39,10 @@ export type AgentResumeStateDigest = AgentHostIdentity<'AgentResumeStateDigest'>
 export type AgentSessionId = AgentHostIdentity<'AgentSessionId'>;
 export type AgentChatId = AgentHostIdentity<'AgentChatId'>;
 export type AgentTurnId = AgentHostIdentity<'AgentTurnId'>;
+export type AgentBehaviorActivityId = AgentHostIdentity<'AgentBehaviorActivityId'>;
+export type AgentPlanId = AgentHostIdentity<'AgentPlanId'>;
+export type AgentTaskId = AgentHostIdentity<'AgentTaskId'>;
+export type AgentInteractionId = AgentHostIdentity<'AgentInteractionId'>;
 export type AgentSubmissionId = AgentHostIdentity<'AgentSubmissionId'>;
 export type AgentCancellationId = AgentHostIdentity<'AgentCancellationId'>;
 export type AgentToolSetRevision = AgentHostIdentity<'AgentToolSetRevision'>;
@@ -236,6 +240,22 @@ export function createAgentChatId(value: string): AgentChatId {
 
 export function createAgentTurnId(value: string): AgentTurnId {
 	return createOpaqueIdentity(value, 'AgentTurnId');
+}
+
+export function createAgentBehaviorActivityId(value: string): AgentBehaviorActivityId {
+	return createOpaqueIdentity(value, 'AgentBehaviorActivityId');
+}
+
+export function createAgentPlanId(value: string): AgentPlanId {
+	return createOpaqueIdentity(value, 'AgentPlanId');
+}
+
+export function createAgentTaskId(value: string): AgentTaskId {
+	return createOpaqueIdentity(value, 'AgentTaskId');
+}
+
+export function createAgentInteractionId(value: string): AgentInteractionId {
+	return createOpaqueIdentity(value, 'AgentInteractionId');
 }
 
 export function createAgentSubmissionId(value: string): AgentSubmissionId {

@@ -103,7 +103,7 @@ import { ClientContentResourceChannelClient } from './clientContentResourceChann
 const localAgentHostErrorCode = 'AGENT_HOST_ERROR';
 const localAgentHostCancellationErrorCode = 'AGENT_HOST_CANCELLED';
 const localAgentHostChannelErrorCode = 'AGENT_HOST_CHANNEL_ERROR';
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('3');
 
 type ProtocolRecord = Readonly<Record<string, unknown>>;
 

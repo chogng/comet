@@ -21,6 +21,7 @@ import {
 	IAgentExecutionProfileRequest,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
+	IAgentInteractionResponseRequest,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentPrepareSessionConfigurationUpdateRequest,
@@ -330,6 +331,7 @@ export interface IAgentRuntimeConnection extends IDisposable {
 	send(request: IAgentRuntimeCall<IAgentChatRequest>): Promise<IAgentRuntimeResponse<null>>;
 	steer(request: IAgentRuntimeCall<IAgentSteerRequest>): Promise<IAgentRuntimeResponse<null>>;
 	cancel(request: IAgentRuntimeCall<IAgentCancelTurnRequest>): Promise<IAgentRuntimeResponse<null>>;
+	respondInteraction(request: IAgentRuntimeCall<IAgentInteractionResponseRequest>): Promise<IAgentRuntimeResponse<null>>;
 	deleteChat(request: IAgentRuntimeCall<IAgentDeleteChatRequest>): Promise<IAgentRuntimeResponse<null>>;
 	getOperationOutcome(request: IAgentRuntimeCall<IAgentRuntimeOperationOutcomeRequest>): Promise<IAgentRuntimeResponse<AgentRuntimeOperationOutcome>>;
 	reportHostOperationProgress(progress: IAgentRuntimeHostOperationProgress): Promise<void>;

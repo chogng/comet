@@ -29,6 +29,7 @@ import type {
 	IAgentExecutionProfiles,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
+	IAgentInteractions,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentPrepareSessionConfigurationUpdateRequest,
@@ -44,7 +45,7 @@ import type {
 	IAgentSessionConfigurationCompletionRequest,
 	IAgentSessions,
 	IAgentSteerRequest,
-	AgentTurnResponsePart,
+	AgentTurnBehavior,
 } from 'cs/platform/agentHost/common/agent';
 import {
 	resolveAgentModelConfigurationCandidate,
@@ -304,7 +305,18 @@ export class CodexAgent extends Disposable implements IAgent {
 		cancel: request => this.cancel(request),
 		delete: request => this.deleteChat(request),
 	};
+	readonly interactions: IAgentInteractions = {
+		respond: request => this.respondInteraction(request.interaction),
+	};
 	readonly resumeStates: IAgentResumeStates = { migrate: request => this.migrateResumeState(request) };
+
+	private async respondInteraction(interaction: string): Promise<void> {
+		throw new AgentHostError(
+			AgentHostErrorCode.CapabilityUnsupported,
+			`Codex interaction '${interaction}' is not active`,
+			{ capability: 'interaction.respond' },
+		);
+	}
 
 	private readonly sessionStates = new Map<AgentSessionId, ICodexSessionState>();
 	private readonly operations = new Map<AgentHostOperationId, ICodexOperationState>();
@@ -1122,7 +1134,7 @@ export class CodexAgent extends Disposable implements IAgent {
 			return;
 		}
 		if (value.delta.length > 0) {
-			this.emitResponsePart(active.request, Object.freeze({ kind, text: value.delta }));
+			this.emitBehavior(active.request, Object.freeze({ kind, text: value.delta }));
 		}
 	}
 
@@ -1175,8 +1187,8 @@ export class CodexAgent extends Disposable implements IAgent {
 			throw new Error(`Codex requested Tool '${value.tool}' outside the accepted Host Tool set.`);
 		}
 		const call = await this.createToolCall(active.request, registration, value.arguments);
-		this.emitResponsePart(active.request, Object.freeze({
-			kind: 'toolCall',
+		this.emitBehavior(active.request, Object.freeze({
+			kind: 'contributedToolCall',
 			call: call.id,
 			tool: call.tool,
 			input: call.input,
@@ -1187,8 +1199,8 @@ export class CodexAgent extends Disposable implements IAgent {
 			throw new Error('Codex Host Tool result identity changed.');
 		}
 		if (result.status === 'completed') {
-			this.emitResponsePart(active.request, Object.freeze({
-				kind: 'toolResult',
+			this.emitBehavior(active.request, Object.freeze({
+				kind: 'contributedToolResult',
 				call: call.id,
 				status: 'completed',
 				output: result.output,
@@ -1198,8 +1210,8 @@ export class CodexAgent extends Disposable implements IAgent {
 				success: true,
 			});
 		}
-		this.emitResponsePart(active.request, Object.freeze({
-			kind: 'toolResult',
+		this.emitBehavior(active.request, Object.freeze({
+			kind: 'contributedToolResult',
 			call: call.id,
 			status: result.status,
 			output: result.failure.data,
@@ -1466,13 +1478,13 @@ export class CodexAgent extends Disposable implements IAgent {
 		return state;
 	}
 
-	private emitResponsePart(request: IAgentChatRequest, part: AgentTurnResponsePart): void {
+	private emitBehavior(request: IAgentChatRequest, behavior: AgentTurnBehavior): void {
 		this.emit(Object.freeze({
 			kind: 'turnProgress',
 			session: request.session,
 			chat: request.chat,
 			turn: request.turn,
-			progress: Object.freeze({ kind: 'response', part }),
+			progress: Object.freeze({ kind: 'behavior', behavior }),
 		}));
 	}
 

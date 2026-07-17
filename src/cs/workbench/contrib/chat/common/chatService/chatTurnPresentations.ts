@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See LICENSE.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { AgentTurnResponsePart } from 'cs/platform/agentHost/common/agent';
+import type { AgentTurnBehavior } from 'cs/platform/agentHost/common/agent';
 import {
 	createAgentChatId,
 	createAgentSessionId,
@@ -21,7 +21,7 @@ import {
 	type AgentHostProtocolValue,
 } from 'cs/platform/agentHost/common/protocolValues';
 
-export const ChatHostPresentationSchemaVersion = 1;
+export const ChatHostPresentationSchemaVersion = 2;
 
 declare const chatPresentationTypeIdBrand: unique symbol;
 
@@ -37,13 +37,13 @@ export function createChatPresentationTypeId(value: string): ChatPresentationTyp
 	return value as ChatPresentationTypeId;
 }
 
-/** Persistable opaque presentation associated with one exact canonical Host response part. */
+/** Persistable opaque presentation associated with one exact canonical Host behavior. */
 export interface IChatHostPresentation {
 	readonly schemaVersion: typeof ChatHostPresentationSchemaVersion;
 	readonly session: AgentSessionId;
 	readonly chat: AgentChatId;
 	readonly turn: AgentTurnId;
-	readonly responsePartIndex: number;
+	readonly behaviorIndex: number;
 	readonly type: ChatPresentationTypeId;
 	readonly value: AgentHostProtocolValue;
 }
@@ -52,16 +52,16 @@ export interface IChatHostPresentationIdentity {
 	readonly session: AgentSessionId;
 	readonly chat: AgentChatId;
 	readonly turn: AgentTurnId;
-	readonly responsePartIndex: number;
+	readonly behaviorIndex: number;
 }
 
 export interface IChatHostPresentationProjectionContext {
 	readonly session: AgentSessionId;
 	readonly chat: AgentChatId;
 	readonly turn: IAgentHostTurn;
-	readonly responsePartIndex: number;
-	readonly call: Extract<AgentTurnResponsePart, { readonly kind: 'toolCall' }>;
-	readonly result: Extract<AgentTurnResponsePart, { readonly kind: 'toolResult' }> & {
+	readonly behaviorIndex: number;
+	readonly call: Extract<AgentTurnBehavior, { readonly kind: 'contributedToolCall' }>;
+	readonly result: Extract<AgentTurnBehavior, { readonly kind: 'contributedToolResult' }> & {
 		readonly status: 'completed';
 		readonly output: AgentHostProtocolValue;
 	};
@@ -133,7 +133,7 @@ export function parseChatHostPresentation(value: unknown): IChatHostPresentation
 		'session',
 		'chat',
 		'turn',
-		'responsePartIndex',
+		'behaviorIndex',
 		'type',
 		'value',
 	], 'Host presentation');
@@ -152,9 +152,9 @@ export function parseChatHostPresentation(value: unknown): IChatHostPresentation
 		),
 		chat: createAgentChatId(requireString(presentation.chat, 'Host presentation Chat ID', 128)),
 		turn: createAgentTurnId(requireString(presentation.turn, 'Host presentation Turn ID', 128)),
-		responsePartIndex: requireNonNegativeInteger(
-			presentation.responsePartIndex,
-			'Host presentation response-part index',
+		behaviorIndex: requireNonNegativeInteger(
+			presentation.behaviorIndex,
+			'Host presentation behavior index',
 		),
 		type: createChatPresentationTypeId(
 			requireString(presentation.type, 'Host presentation type', 128),

@@ -307,9 +307,10 @@ function createWidgetHostState(
 			payloadDigest: createAgentHostPayloadDigest(`sha256:${'c'.repeat(64)}`),
 			state: turnState,
 			user: { text, attachments: [], interactionTargets: [] },
-			response: turnState === 'completed'
+			behaviors: turnState === 'completed'
 				? [{ kind: 'text', text: `${text} response` }]
 				: [],
+			interactions: [],
 		}],
 		...(turnState === 'completed' ? {} : { activeTurn: turn }),
 	};
@@ -457,7 +458,7 @@ test('ChatWidget refreshes transcript, composer, and model-picker labels on the 
 		schemaVersion: ChatHostPresentationSchemaVersion,
 		...host.identity,
 		turn: host.state.turns[0].id,
-		responsePartIndex: 0,
+		behaviorIndex: 0,
 		type: ArticleHistoryChatPresentationType,
 		value: articleValue,
 	}]);
@@ -700,22 +701,23 @@ test('ChatWidget renders the authoritative typed Host transcript without seriali
 				attachments: [],
 				interactionTargets: [],
 			},
-			response: [
+			behaviors: [
 				{ kind: 'reasoning', text: 'Typed Host reasoning' },
 				{
-					kind: 'toolCall',
+					kind: 'contributedToolCall',
 					call,
 					tool: createAgentToolId('comet.search'),
 					input: { privateQuery: 'must-not-render' },
 				},
 				{
-					kind: 'toolResult',
+					kind: 'contributedToolResult',
 					call,
 					status: 'completed',
 					output: { privateResult: 'must-not-render' },
 				},
 				{ kind: 'text', text: 'Exact Host answer' },
 			],
+			interactions: [],
 		}],
 	};
 	owner.replaceHostState({ session, chat }, state);
@@ -735,7 +737,7 @@ test('ChatWidget renders the authoritative typed Host transcript without seriali
 	}
 });
 
-test('ChatWidget renders durable Host presentation only after its exact canonical response part', () => {
+test('ChatWidget renders durable Host presentation only after its exact canonical behavior', () => {
 	const owner = chatService.createModel(URI.parse('chat:/widget/host-turn-presentation'));
 	const session = createAgentSessionId('session-host-presentation');
 	const chat = createAgentChatId('chat-host-presentation');
@@ -771,10 +773,11 @@ test('ChatWidget renders durable Host presentation only after its exact canonica
 				attachments: [],
 				interactionTargets: [],
 			},
-			response: [
+			behaviors: [
 				{ kind: 'text', text: 'Repeated canonical answer' },
 				{ kind: 'text', text: 'Repeated canonical answer' },
 			],
+			interactions: [],
 		}],
 	});
 	const result = {
@@ -786,7 +789,7 @@ test('ChatWidget renders durable Host presentation only after its exact canonica
 			publishedAt: null,
 			sourceUrl: 'https://example.com/exact-evidence',
 			score: null,
-			excerpt: 'Evidence attached to response part one.',
+			excerpt: 'Evidence attached to behavior one.',
 		}],
 		provider: 'moark' as const,
 		llmProvider: 'openai' as const,
@@ -802,7 +805,7 @@ test('ChatWidget renders durable Host presentation only after its exact canonica
 		session,
 		chat,
 		turn,
-		responsePartIndex: 1,
+		behaviorIndex: 1,
 		type: ArticleHistoryChatPresentationType,
 		value: articleValue,
 	}]);

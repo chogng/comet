@@ -1544,11 +1544,11 @@ suite('CometAgent', { concurrency: false }, () => {
 			fixture.actions
 				.filter((action): action is Extract<IAgentAction, { kind: 'turnProgress' }> => action.kind === 'turnProgress')
 				.map(action => {
-					return action.progress.kind === 'response'
-						? `response:${action.progress.part.kind}`
+					return action.progress.kind === 'behavior'
+						? `behavior:${action.progress.behavior.kind}`
 						: `${action.progress.kind}:${action.progress.state}`;
 				}),
-			['state:running', 'response:reasoning', 'response:toolCall', 'response:toolResult', 'response:text'],
+			['state:running', 'behavior:reasoning', 'behavior:contributedToolCall', 'behavior:contributedToolResult', 'behavior:text'],
 		);
 		const resumeAction = fixture.actions
 			.filter((action): action is Extract<IAgentAction, { kind: 'chatResumeStateChanged' }> => action.kind === 'chatResumeStateChanged')

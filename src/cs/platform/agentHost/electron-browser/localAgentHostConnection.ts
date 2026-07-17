@@ -70,7 +70,7 @@ import type { IAgentClientToolPublicationSnapshot } from 'cs/platform/agentHost/
 
 const localAgentHostErrorCode = 'AGENT_HOST_ERROR';
 const localAgentHostCancellationErrorCode = 'AGENT_HOST_CANCELLED';
-const localAgentHostProtocolVersion = createAgentHostProtocolVersion('2');
+const localAgentHostProtocolVersion = createAgentHostProtocolVersion('3');
 
 type ErrorRecord = Readonly<Record<string, unknown>>;
 

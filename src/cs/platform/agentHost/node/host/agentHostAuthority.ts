@@ -17,6 +17,7 @@ import type {
 	IAgentChatRequest,
 	IAgentDescriptor,
 	IAgentExecutionProfile,
+	IAgentInteractionResponseRequest,
 	IAgentRuntimeRegistration,
 	IAgentSteerRequest,
 	IAgentWorkspace,
@@ -67,8 +68,6 @@ import {
 	createAgentConfigurationSchemaRevision,
 	createAgentConfigurationStateRevision,
 	createAgentPackageOperationId,
-	createAgentToolCallId,
-	createAgentToolId,
 } from 'cs/platform/agentHost/common/identities';
 import { AgentHostOperationOutcomeRegistry } from 'cs/platform/agentHost/common/operations';
 import { AgentPackageError, AgentPackageErrorCode } from 'cs/platform/agentHost/common/packageErrors';
@@ -388,7 +387,12 @@ function freezeChatState(state: IAgentHostChatState): IAgentHostChatState {
 				attachments: Object.freeze([...turn.user.attachments]),
 				interactionTargets: Object.freeze([...turn.user.interactionTargets]),
 			}),
-			response: Object.freeze([...turn.response]),
+			behaviors: Object.freeze([...turn.behaviors]),
+			interactions: Object.freeze(turn.interactions.map(interaction => Object.freeze({
+				...interaction,
+				request: Object.freeze({ ...interaction.request }),
+				...(interaction.response === undefined ? {} : { response: Object.freeze({ ...interaction.response }) }),
+			}))),
 		}))),
 	});
 	assertAgentHostChatState(frozen);
@@ -2420,6 +2424,7 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				case 'submitTurn': return this.submitTurn(connection, request);
 				case 'steerTurn': return this.steerTurn(request);
 				case 'cancelTurn': return this.cancelTurn(request);
+				case 'respondInteraction': return this.respondInteraction(request);
 				case 'authenticateAgent': return this.authenticateAgent(request);
 			}
 		};
@@ -3563,6 +3568,64 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 		};
 	}
 
+	private async respondInteraction(request: IAgentHostMutationRequest): Promise<IMutationExecution> {
+		const payload = request.payload;
+		if (payload.kind !== 'respondInteraction') {
+			throw new Error('Mismatched respond interaction mutation');
+		}
+		const session = this.requireSession(payload.session);
+		const chat = this.requireChat(session, payload.chat);
+		const agent = this.requireActiveAgent(session.state.agentId, session.state.packageId);
+		const turnIndex = chat.state.turns.findIndex(turn => turn.id === payload.turn);
+		if (turnIndex === -1) {
+			throw operationFailure('missingResource', `Turn '${payload.turn}' does not exist`);
+		}
+		const turn = chat.state.turns[turnIndex];
+		if (terminalTurnStates.has(turn.state)) {
+			throw operationFailure('invalidState', `Turn '${payload.turn}' is terminal`);
+		}
+		const interactionIndex = turn.interactions.findIndex(interaction => interaction.request.id === payload.interaction);
+		if (interactionIndex === -1) {
+			throw operationFailure('missingResource', `Interaction '${payload.interaction}' does not exist`);
+		}
+		if (turn.interactions[interactionIndex].state !== 'pending') {
+			throw operationFailure('invalidState', `Interaction '${payload.interaction}' is terminal`);
+		}
+		const interactions = [...turn.interactions];
+		interactions[interactionIndex] = Object.freeze({
+			...interactions[interactionIndex],
+			state: payload.response.kind === 'cancelled' ? 'cancelled' : 'resolved',
+			response: Object.freeze({ ...payload.response }),
+		});
+		const turns = [...chat.state.turns];
+		turns[turnIndex] = Object.freeze({ ...turn, state: 'running', interactions: Object.freeze(interactions) });
+		const state = freezeChatState({
+			...chat.state,
+			turns: Object.freeze(turns),
+			activeTurn: payload.turn,
+			status: 'running',
+			modifiedAt: this.checkedNow(),
+		});
+		const agentRequest: IAgentInteractionResponseRequest = Object.freeze({
+			operation: request.operation,
+			payloadDigest: request.digest,
+			session: payload.session,
+			chat: payload.chat,
+			turn: payload.turn,
+			interaction: payload.interaction,
+			response: payload.response,
+		});
+		await agent.interactions.respond(agentRequest);
+		const committed = await this.commitChatState(request, session, chat, state);
+		return this.simpleMutationResult(request, committed, {
+			kind: 'respondInteraction',
+			session: payload.session,
+			chat: payload.chat,
+			turn: payload.turn,
+			interaction: payload.interaction,
+		});
+	}
+
 	private requirePreparedSubmission(
 		connection: AgentHostClientConnectionId,
 		submission: IAgentHostPreparedSubmission,
@@ -3603,7 +3666,8 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 				attachments: submission.attachments,
 				interactionTargets: submission.interactionTargets,
 			}),
-			response: Object.freeze([]),
+			behaviors: Object.freeze([]),
+			interactions: Object.freeze([]),
 		});
 	}
 
@@ -3868,9 +3932,40 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 					: undefined;
 				status = progress.state === 'waitingForPermission' || progress.state === 'waitingForInput' ? 'needsInput' : 'running';
 			} else {
-				turns[index] = Object.freeze({ ...current, response: Object.freeze([...current.response, progress.part]) });
+				turns[index] = Object.freeze({ ...current, behaviors: Object.freeze([...current.behaviors, progress.behavior]) });
 			}
+		} else if (action.kind === 'interactionRequested') {
+			if (current.interactions.some(interaction => interaction.request.id === action.request.id)) {
+				throw new Error(`Agent '${agent.id}' emitted duplicate interaction '${action.request.id}'`);
+			}
+			turns[index] = Object.freeze({
+				...current,
+				state: action.request.kind === 'input' ? 'waitingForInput' : 'waitingForPermission',
+				interactions: Object.freeze([...current.interactions, Object.freeze({
+					request: Object.freeze({ ...action.request }),
+					state: 'pending' as const,
+				})]),
+			});
+			activeTurn = action.turn;
+			status = 'needsInput';
+		} else if (action.kind === 'interactionCompleted') {
+			const interactionIndex = current.interactions.findIndex(interaction => interaction.request.id === action.interaction);
+			if (interactionIndex === -1 || current.interactions[interactionIndex].state !== 'pending') {
+				throw new Error(`Agent '${agent.id}' completed a missing or terminal interaction '${action.interaction}'`);
+			}
+			const interactions = [...current.interactions];
+			interactions[interactionIndex] = Object.freeze({
+				...interactions[interactionIndex],
+				state: action.response.kind === 'cancelled' ? 'cancelled' : 'resolved',
+				response: Object.freeze({ ...action.response }),
+			});
+			turns[index] = Object.freeze({ ...current, state: 'running', interactions: Object.freeze(interactions) });
+			activeTurn = action.turn;
+			status = 'running';
 		} else {
+			if (current.interactions.some(interaction => interaction.state === 'pending')) {
+				throw new Error(`Agent '${agent.id}' terminated Turn '${action.turn}' with a pending interaction`);
+			}
 			if (action.state !== 'failed' && action.data !== undefined) {
 				throw new Error(`Agent '${agent.id}' emitted unmodeled terminal data for Turn '${action.turn}'`);
 			}
@@ -3941,55 +4036,16 @@ export class AgentHostAuthority extends Disposable implements IAgentPackageLifec
 			return { kind: 'state', state: record.state as Exclude<AgentHostTurnState, 'completed' | 'cancelled' | 'failed'> };
 		}
 		if (
-			record.kind === 'response'
-			&& hasExactKeys(record, ['kind', 'part'])
-			&& record.part !== null
-			&& typeof record.part === 'object'
-			&& !Array.isArray(record.part)
+			record.kind === 'behavior'
+			&& hasExactKeys(record, ['kind', 'behavior'])
+			&& record.behavior !== null
+			&& typeof record.behavior === 'object'
+			&& !Array.isArray(record.behavior)
 		) {
-			const part = record.part as Readonly<Record<string, AgentHostProtocolValue>>;
-			if (
-				(part.kind === 'text' || part.kind === 'reasoning')
-				&& hasExactKeys(part, ['kind', 'text'])
-				&& typeof part.text === 'string'
-			) {
-				return { kind: 'response', part: Object.freeze({ kind: part.kind, text: part.text }) };
-			}
-			if (
-				part.kind === 'toolCall'
-				&& hasExactKeys(part, ['kind', 'call', 'tool', 'input'])
-				&& typeof part.call === 'string'
-				&& typeof part.tool === 'string'
-			) {
-				return {
-					kind: 'response',
-					part: Object.freeze({
-						kind: 'toolCall',
-						call: createAgentToolCallId(part.call),
-						tool: createAgentToolId(part.tool),
-						input: part.input,
-					}),
-				};
-			}
-			const toolResultStatuses = ['completed', 'denied', 'cancelled', 'timedOut', 'failed'] as const;
-			if (
-				part.kind === 'toolResult'
-				&& hasExactKeys(part, ['kind', 'call', 'status'], ['output'])
-				&& typeof part.call === 'string'
-				&& typeof part.status === 'string'
-				&& toolResultStatuses.includes(part.status as typeof toolResultStatuses[number])
-			) {
-				const output = Object.hasOwn(part, 'output') ? part.output : undefined;
-				return {
-					kind: 'response',
-					part: Object.freeze({
-						kind: 'toolResult',
-						call: createAgentToolCallId(part.call),
-						status: part.status as typeof toolResultStatuses[number],
-						...(output === undefined ? {} : { output }),
-					}),
-				};
-			}
+			return {
+				kind: 'behavior',
+				behavior: Object.freeze({ ...record.behavior }) as Extract<AgentTurnProgress, { kind: 'behavior' }>['behavior'],
+			};
 		}
 		throw new Error('Agent Turn progress has an unsupported typed value');
 	}

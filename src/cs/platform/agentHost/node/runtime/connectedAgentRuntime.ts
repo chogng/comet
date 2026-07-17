@@ -13,8 +13,8 @@ import { Disposable } from 'cs/base/common/lifecycle';
 import { IObservable, observableValue } from 'cs/base/common/observable';
 import type {
 	AgentChatOrigin,
+	AgentTurnBehavior,
 	AgentTurnProgress,
-	AgentTurnResponsePart,
 	IAgent,
 	IAgentAcknowledgeSessionConfigurationUpdateRequest,
 	IAgentAction,
@@ -33,6 +33,8 @@ import type {
 	IAgentExecutionProfiles,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
+	IAgentInteractionResponseRequest,
+	IAgentInteractions,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentModelDescriptor,
@@ -124,6 +126,7 @@ import {
 	createAgentHostOperationId,
 	createAgentHostPayloadDigest,
 	createAgentId,
+	createAgentInteractionId,
 	createAgentModelDescriptorRevision,
 	createAgentModelId,
 	createAgentPackageId,
@@ -163,7 +166,7 @@ const maximumDescriptorModelCount = 256;
 const maximumRetainedHostOperationCount = 4_096;
 const maximumConfigurationCompletionCount = 100;
 const maximumConfigurationCompletionQueryLength = 4_096;
-const connectedAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('2');
+const connectedAgentRuntimeProtocolVersion = createAgentRuntimeProtocolVersion('3');
 const mediaTypePattern = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 
 /** Options authorized by one installed package or bundled composition. */
@@ -203,6 +206,7 @@ type ConnectedAgentCallKind =
 	| 'chat.send'
 	| 'chat.steer'
 	| 'chat.cancel'
+	| 'interaction.respond'
 	| 'chat.delete';
 
 interface IConnectedAgentCallContext {
@@ -368,33 +372,17 @@ function assertExactKeys(
 	}
 }
 
-function assertTurnResponsePart(part: AgentTurnResponsePart, field: string): void {
-	if (part.kind === 'text' || part.kind === 'reasoning') {
-		assertExactKeys(part, ['kind', 'text'], [], field);
-		if (typeof part.text !== 'string') {
-			throwInvalidRuntimeValue(`${field}.text`, part.text);
-		}
-		return;
+function assertTurnBehavior(behavior: AgentTurnBehavior, field: string): void {
+	assertAgentHostProtocolValue(behavior);
+	if (behavior === null || typeof behavior !== 'object' || Array.isArray(behavior)) {
+		throwInvalidRuntimeValue(field, behavior);
 	}
-	if (part.kind === 'toolCall') {
-		assertExactKeys(part, ['kind', 'call', 'tool', 'input'], [], field);
-		createAgentToolCallId(part.call);
-		createAgentToolId(part.tool);
-		assertAgentHostProtocolValue(part.input);
-		return;
+	if (![
+		'text', 'reasoning', 'contributedToolCall', 'contributedToolResult', 'nativeTool', 'plan', 'task',
+		'background', 'terminal', 'fileChange', 'usage', 'context', 'retry', 'status',
+	].includes(behavior.kind)) {
+		throwInvalidRuntimeValue(`${field}.kind`, behavior.kind);
 	}
-	if (part.kind === 'toolResult') {
-		assertExactKeys(part, ['kind', 'call', 'status'], ['output'], field);
-		createAgentToolCallId(part.call);
-		if (!['completed', 'denied', 'cancelled', 'timedOut', 'failed'].includes(part.status)) {
-			throwInvalidRuntimeValue(`${field}.status`, part.status);
-		}
-		if (part.output !== undefined) {
-			assertAgentHostProtocolValue(part.output);
-		}
-		return;
-	}
-	throwInvalidRuntimeValue(`${field}.kind`, (part as { readonly kind?: unknown }).kind);
 }
 
 function assertTurnProgress(progress: AgentTurnProgress, field: string): void {
@@ -412,9 +400,9 @@ function assertTurnProgress(progress: AgentTurnProgress, field: string): void {
 		}
 		return;
 	}
-	if (progress.kind === 'response') {
-		assertExactKeys(progress, ['kind', 'part'], [], field);
-		assertTurnResponsePart(progress.part, `${field}.part`);
+	if (progress.kind === 'behavior') {
+		assertExactKeys(progress, ['kind', 'behavior'], [], field);
+		assertTurnBehavior(progress.behavior, `${field}.behavior`);
 		return;
 	}
 	throwInvalidRuntimeValue(`${field}.kind`, (progress as { readonly kind?: unknown }).kind);
@@ -2336,6 +2324,18 @@ class ConnectedAgentRuntime extends Disposable implements IConnectedAgentRuntime
 			assertTurnProgress(action.progress, 'runtime.action.progress');
 			return;
 		}
+		if (action.kind === 'interactionRequested') {
+			assertExactKeys(action, ['kind', 'session', 'chat', 'turn', 'request'], [], 'runtime.action');
+			createAgentInteractionId(action.request.id);
+			assertAgentHostProtocolValue(action.request);
+			return;
+		}
+		if (action.kind === 'interactionCompleted') {
+			assertExactKeys(action, ['kind', 'session', 'chat', 'turn', 'interaction', 'response'], [], 'runtime.action');
+			createAgentInteractionId(action.interaction);
+			assertAgentHostProtocolValue(action.response);
+			return;
+		}
 		if (action.kind !== 'turnTerminal') {
 			throw invalidRuntimeValue('runtime.action.kind', (action as { readonly kind?: unknown }).kind);
 		}
@@ -2599,6 +2599,7 @@ class ConnectedAgent extends Disposable implements IAgent {
 	readonly executionProfiles: IAgentExecutionProfiles;
 	readonly sessions: IAgentSessions;
 	readonly chats: IAgentChats;
+	readonly interactions: IAgentInteractions;
 	readonly resumeStates: IAgentResumeStates;
 
 	private readonly sessionConfigurationSchemas = new Map<AgentConfigurationSchemaRevision, IAgentConfigurationSchema>();
@@ -2639,6 +2640,9 @@ class ConnectedAgent extends Disposable implements IAgent {
 			steer: request => this.steer(request),
 			cancel: request => this.cancel(request),
 			delete: request => this.deleteChat(request),
+		};
+		this.interactions = {
+			respond: request => this.respondInteraction(request),
 		};
 		this.resumeStates = {
 			migrate: request => this.migrateResumeState(request),
@@ -3319,6 +3323,23 @@ class ConnectedAgent extends Disposable implements IAgent {
 			request,
 			turnContext('chat.cancel', request.operation, request.session, request.chat, request.turn),
 			call => this.runtime.connection.cancel(call),
+			validateNullResponse,
+			() => {},
+		);
+	}
+
+	private async respondInteraction(request: IAgentInteractionResponseRequest): Promise<void> {
+		validateOperationContext(request.operation, request.payloadDigest);
+		createAgentSessionId(request.session);
+		createAgentChatId(request.chat);
+		createAgentTurnId(request.turn);
+		createAgentInteractionId(request.interaction);
+		assertAgentHostProtocolValue(request.response);
+		await this.runtime.invoke(
+			this.connected,
+			request,
+			turnContext('interaction.respond', request.operation, request.session, request.chat, request.turn),
+			call => this.runtime.connection.respondInteraction(call),
 			validateNullResponse,
 			() => {},
 		);

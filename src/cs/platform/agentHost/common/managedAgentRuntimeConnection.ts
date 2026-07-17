@@ -19,6 +19,7 @@ import type {
 	IAgentExecutionProfileRequest,
 	IAgentFinalizeSessionConfigurationUpdateRequest,
 	IAgentForkChatRequest,
+	IAgentInteractionResponseRequest,
 	IAgentMaterializeChatRequest,
 	IAgentMaterializeSessionRequest,
 	IAgentPrepareSessionConfigurationUpdateRequest,
@@ -243,6 +244,10 @@ export class ManagedAgentRuntimeConnection extends Disposable implements IAgentR
 
 	cancel(request: IAgentRuntimeCall<IAgentCancelTurnRequest>): Promise<IAgentRuntimeResponse<null>> {
 		return this.invokeCurrent(request, connection => connection.cancel(request));
+	}
+
+	respondInteraction(request: IAgentRuntimeCall<IAgentInteractionResponseRequest>): Promise<IAgentRuntimeResponse<null>> {
+		return this.invokeCurrent(request, connection => connection.respondInteraction(request));
 	}
 
 	deleteChat(request: IAgentRuntimeCall<IAgentDeleteChatRequest>): Promise<IAgentRuntimeResponse<null>> {

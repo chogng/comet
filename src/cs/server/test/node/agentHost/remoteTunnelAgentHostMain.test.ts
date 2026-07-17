@@ -76,7 +76,7 @@ import {
 const packageId = createAgentPackageId('comet');
 const agentId = createAgentId('comet');
 const hostAuthority = createAgentHostAuthorityId('remote-tunnel-test');
-const hostProtocol = createAgentHostProtocolVersion('2');
+const hostProtocol = createAgentHostProtocolVersion('3');
 const descriptorRevision = createAgentDescriptorRevision('remote-tunnel-test.descriptor.v1');
 const capabilityRevision = createAgentCapabilityRevision('remote-tunnel-test.capabilities.v1');
 const runtimeRevision = createAgentRuntimeRegistrationRevision('remote-tunnel-test.runtime.v1');
@@ -164,6 +164,7 @@ const agent: IAgent = {
 		cancel: async () => unusedOperation(),
 		delete: async () => unusedOperation(),
 	},
+	interactions: { respond: async () => unusedOperation() },
 	resumeStates: { migrate: async request => request.source },
 };
 

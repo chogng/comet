@@ -380,10 +380,10 @@ class TestTunnelConnection extends Disposable implements IRemoteTunnelConnection
 			return encodeRemoteAgentHostProtocolError(this.initializeFailure);
 		}
 		assert.equal(request.connection, agentHostConnection);
-		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('2')]);
+		assert.deepStrictEqual(request.protocolVersions, [createAgentHostProtocolVersion('3')]);
 		assert.deepStrictEqual(request.subscriptions, [rootChannel, sessionsChannel]);
 		const result: IAgentHostInitializeResult = Object.freeze({
-			protocolVersion: createAgentHostProtocolVersion('2'),
+			protocolVersion: createAgentHostProtocolVersion('3'),
 			capabilities: Object.freeze([]),
 			implementation: Object.freeze({ name: 'remote-tunnel-test-host', build: '1' }),
 			hostSequence,

@@ -110,36 +110,40 @@ export class ChatListRenderer {
 
 		const assistant = $<HTMLElementTagNameMap['div']>('div.comet-chat-message.comet-chat-message-assistant');
 		const assistantBody = $<HTMLElementTagNameMap['div']>('div.comet-chat-message-body.comet-chat-host-response');
-		for (const [responsePartIndex, part] of turn.response.entries()) {
-			if (part.kind === 'text') {
-				const rendered = disposables.add(this.markdownRenderer.render(new MarkdownString(part.text)));
+		for (const [behaviorIndex, behavior] of turn.behaviors.entries()) {
+			if (behavior.kind === 'text') {
+				const rendered = disposables.add(this.markdownRenderer.render(new MarkdownString(behavior.text)));
 				assistantBody.append(rendered.element);
 				this.selectableRegions.push({
 					element: rendered.element,
 					message: turn.id,
 					role: 'assistant',
 				});
-			} else if (part.kind === 'reasoning') {
+			} else if (behavior.kind === 'reasoning') {
 				const reasoning = $<HTMLElementTagNameMap['details']>('details.comet-chat-host-reasoning');
 				const summary = $<HTMLElementTagNameMap['summary']>('summary');
 				summary.textContent = ui.chatHostReasoning;
 				const content = $<HTMLElementTagNameMap['p']>('p');
-				content.textContent = part.text;
+				content.textContent = behavior.text;
 				reasoning.append(summary, content);
 				assistantBody.append(reasoning);
-			} else {
+			} else if (behavior.kind === 'contributedToolCall' || behavior.kind === 'contributedToolResult') {
 				const tool = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-tool');
-				tool.textContent = part.kind === 'toolCall'
-					? `${ui.chatHostToolCall}: ${part.tool} (${part.call})`
-					: `${ui.chatHostToolResult}: ${part.call} — ${part.status}`;
+				tool.textContent = behavior.kind === 'contributedToolCall'
+					? `${ui.chatHostToolCall}: ${behavior.tool} (${behavior.call})`
+					: `${ui.chatHostToolResult}: ${behavior.call} — ${behavior.status}`;
 				assistantBody.append(tool);
+			} else {
+				const activity = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-tool');
+				activity.textContent = this.renderBehaviorText(behavior);
+				assistantBody.append(activity);
 			}
 
 			const presentation = presentations.find(candidate =>
 				candidate.session === identity.session
 				&& candidate.chat === identity.chat
 				&& candidate.turn === turn.id
-				&& candidate.responsePartIndex === responsePartIndex,
+				&& candidate.behaviorIndex === behaviorIndex,
 			);
 			if (presentation) {
 				assistantBody.append(this.options.presentationService.render({
@@ -161,13 +165,28 @@ export class ChatListRenderer {
 			const failure = $<HTMLElementTagNameMap['div']>('div.comet-chat-error');
 			failure.textContent = `${ui.chatHostTurnFailed}: ${turn.failure.message}`;
 			assistantBody.append(failure);
-		} else if (turn.response.length === 0 || !['completed', 'cancelled'].includes(turn.state)) {
+		} else if (turn.behaviors.length === 0 || !['completed', 'cancelled'].includes(turn.state)) {
 			const status = $<HTMLElementTagNameMap['div']>('div.comet-chat-host-turn-status');
 			status.textContent = ui.chatHostTurnStatus.replace('{0}', turn.state);
 			assistantBody.append(status);
 		}
 		assistant.append(assistantBody);
 		return [user, assistant];
+	}
+
+	private renderBehaviorText(behavior: Exclude<IAgentHostTurn['behaviors'][number], { kind: 'text' | 'reasoning' | 'contributedToolCall' | 'contributedToolResult' }>): string {
+		switch (behavior.kind) {
+			case 'nativeTool': return `${behavior.name} — ${behavior.state}`;
+			case 'plan': return `${behavior.title} — ${behavior.state}`;
+			case 'task': return `${behavior.title} — ${behavior.state}`;
+			case 'background': return `${behavior.title} — ${behavior.state}`;
+			case 'terminal': return behavior.text;
+			case 'fileChange': return `${behavior.operation}: ${behavior.resource}`;
+			case 'usage': return `${behavior.inputTokens} / ${behavior.outputTokens}`;
+			case 'context': return `${behavior.usedTokens} / ${behavior.maximumTokens}`;
+			case 'retry': return behavior.reason;
+			case 'status': return behavior.message;
+		}
 	}
 
 	renderFeaturePresentation(

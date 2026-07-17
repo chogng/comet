@@ -169,7 +169,7 @@ function samePresentationIdentity(
 	return left.session === right.session
 		&& left.chat === right.chat
 		&& left.turn === right.turn
-		&& left.responsePartIndex === right.responsePartIndex;
+		&& left.behaviorIndex === right.behaviorIndex;
 }
 
 class TestChatModelReference extends Disposable implements IChatModelReference {
@@ -333,7 +333,7 @@ function createProjectionContext(
 	const turnId = createAgentTurnId('turn-presentation');
 	const callId = createAgentToolCallId('call-presentation');
 	const call = Object.freeze({
-		kind: 'toolCall' as const,
+		kind: 'contributedToolCall' as const,
 		call: callId,
 		tool: DraftEditorProposeEditorPatchToolId,
 		input,
@@ -341,7 +341,7 @@ function createProjectionContext(
 	const output = Object.freeze({ target, proposal });
 	assertAgentHostProtocolValue(output);
 	const result = Object.freeze({
-		kind: 'toolResult' as const,
+		kind: 'contributedToolResult' as const,
 		call: callId,
 		status: 'completed' as const,
 		output,
@@ -359,9 +359,10 @@ function createProjectionContext(
 				attachments: Object.freeze([]),
 				interactionTargets: Object.freeze([target]),
 			}),
-			response: Object.freeze([call, result]),
+			behaviors: Object.freeze([call, result]),
+			interactions: Object.freeze([]),
 		}),
-		responsePartIndex: 1,
+		behaviorIndex: 1,
 		call,
 		result,
 	});
@@ -376,7 +377,7 @@ function createHostPresentation(
 		session: context.session,
 		chat: context.chat,
 		turn: context.turn.id,
-		responsePartIndex: context.responsePartIndex,
+		behaviorIndex: context.behaviorIndex,
 		type: DraftEditorPatchPresentationType,
 		value,
 	});
