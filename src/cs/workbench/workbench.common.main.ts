@@ -52,6 +52,7 @@ import 'cs/platform/contextview/browser/contextViewService';
 import 'cs/platform/contextview/browser/contextMenuService';
 import 'cs/platform/hover/browser/hoverService';
 import 'cs/editor/browser/services/openerService';
+import 'cs/editor/browser/services/identityService';
 import 'cs/workbench/services/keybinding/browser/keybindingService';
 import 'cs/workbench/services/language/common/languageService';
 import 'cs/workbench/services/lifecycle/browser/lifecycleService';
